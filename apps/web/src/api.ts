@@ -769,3 +769,78 @@ export async function fetchAuditLogs(params?: {
   }
   return await res.json();
 }
+
+
+// ==========================================
+// PROJECT STRUCTURAL INDEX
+// ==========================================
+
+export type IndexJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface ProjectIndexJob {
+  readonly id: string;
+  readonly status: IndexJobStatus;
+  readonly ref?: string;
+  readonly commitSha?: string;
+  readonly progress: {
+    readonly phase: string;
+    readonly done: number;
+    readonly total: number;
+    readonly message?: string;
+  };
+  readonly startedAt: string;
+  readonly finishedAt?: string;
+  readonly error?: string;
+}
+
+export interface ProjectIndexSummary {
+  readonly ref: string;
+  readonly commitSha: string;
+  readonly createdAt: string;
+  readonly stats: {
+    readonly indexedFilesCount: number;
+    readonly skippedFilesCount: number;
+    readonly reusedFilesCount: number;
+    readonly downloadedFilesCount: number;
+    readonly totalSymbols: number;
+    readonly totalBytes: number;
+    readonly durationMs: number;
+    readonly countsByLanguage: Readonly<Record<string, number>>;
+  };
+  readonly workspaces: readonly { readonly name: string; readonly rootPath: string }[];
+  readonly pathAliases: Readonly<Record<string, readonly string[]>>;
+  readonly topImportedFiles: readonly { readonly file: string; readonly importedByCount: number }[];
+}
+
+export interface ProjectIndexResponse {
+  readonly job: ProjectIndexJob | null;
+  readonly index: ProjectIndexSummary | null;
+}
+
+async function indexRequest<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await authFetch(url, init);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data as T;
+}
+
+export function fetchProjectIndex(projectId: string): Promise<ProjectIndexResponse> {
+  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index`);
+}
+
+export function startProjectIndex(
+  projectId: string,
+  ref?: string,
+): Promise<{ job: ProjectIndexJob }> {
+  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ref ? { ref } : {}),
+  });
+}
+
+export function cancelProjectIndex(projectId: string): Promise<{ cancelled: boolean }> {
+  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index/job`, {
+    method: "DELETE",
+  });
+}

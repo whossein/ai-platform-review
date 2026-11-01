@@ -21,6 +21,7 @@
     "@ai-review/git": "*",
     "@ai-review/llm": "*",
     "@ai-review/orchestrator": "*",
+    "@ai-review/project-index": "*",
     "@ai-review/shared": "*",
     "@ai-review/context-engine": "*",
     "@ai-review/agent-runtime": "*",

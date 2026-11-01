@@ -48,7 +48,11 @@ import {
   updateProjectMemberRoleHandler,
   removeProjectMemberHandler,
   getAuditLogsHandler,
+  startProjectIndexHandler,
+  cancelProjectIndexHandler,
+  getProjectIndexHandler,
 } from "./apps/api/src/handlers/index.js";
+import { ProjectIndexStore, IndexJobManager } from "@ai-review/project-index";
 import { ProjectStore } from "./apps/api/src/project-store.js";
 import { SecurityContext } from "./apps/api/src/security/index.js";
 
@@ -88,6 +92,9 @@ async function startServer() {
   const memoryStore = new PersistentMemoryStore("./.data/memory");
   const projectStore = new ProjectStore("./.data");
   const security = new SecurityContext("./.data");
+  const indexStore = new ProjectIndexStore("./.data/index");
+  const indexJobs = new IndexJobManager(indexStore);
+  const indexDeps = { projectStore, security, indexStore, indexJobs };
 
   app.use(express.json({ limit: "50mb" }));
 
@@ -451,9 +458,37 @@ async function startServer() {
     try {
       const user = (req as any).user;
       const result = await deleteProjectHandler(projectStore, req.params.id, security, user);
+      indexJobs.cancelJob(req.params.id);
+      await indexStore.deleteProjectIndex(req.params.id).catch(() => undefined);
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to delete project" });
+    }
+  });
+
+  // Project Structural Index
+  app.get("/api/projects/:id/index", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await getProjectIndexHandler(indexDeps, req.params.id, (req as any).user));
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to read project index" });
+    }
+  });
+
+  app.post("/api/projects/:id/index", requireAuth, async (req, res) => {
+    try {
+      const result = await startProjectIndexHandler(indexDeps, req.params.id, (req as any).user, req.body || {});
+      res.status(202).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to start indexing" });
+    }
+  });
+
+  app.delete("/api/projects/:id/index/job", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await cancelProjectIndexHandler(indexDeps, req.params.id, (req as any).user));
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to cancel indexing" });
     }
   });
 

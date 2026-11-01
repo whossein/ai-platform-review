@@ -58,3 +58,10 @@ export * from "./credential-handlers.js";
 export * from "./project-member-handlers.js";
 export * from "./audit-handlers.js";
 
+
+export {
+  startProjectIndexHandler,
+  cancelProjectIndexHandler,
+  getProjectIndexHandler,
+  type IndexHandlerDeps,
+} from "./index-handlers.js";

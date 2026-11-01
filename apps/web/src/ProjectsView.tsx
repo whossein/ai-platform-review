@@ -18,6 +18,7 @@ import {
   X,
   FileText,
   Users,
+  Network,
 } from "lucide-react";
 import {
   fetchProjects,
@@ -30,6 +31,7 @@ import {
 } from "./api.js";
 import { parseRepositoryUrl } from "./url-helper.js";
 import { ProjectMembersTab } from "./ProjectMembersTab.js";
+import { ProjectIndexTab } from "./ProjectIndexTab.js";
 
 interface ProjectsViewProps {
   initialProjectId?: string | null | undefined;
@@ -58,7 +60,7 @@ export function ProjectsView({
     }
   }, [initialProjectId]);
   const [projectDetails, setProjectDetails] = useState<ProjectDetailsResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<"mrs" | "reviews" | "identity" | "instructions" | "members">("mrs");
+  const [activeTab, setActiveTab] = useState<"mrs" | "reviews" | "identity" | "instructions" | "members" | "index">("mrs");
 
   // Create Project Modal state
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -774,6 +776,25 @@ export function ProjectsView({
             >
               <Users size={16} />
               <span>Team & Members</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("index")}
+              style={{
+                background: activeTab === "index" ? "var(--panel)" : "transparent",
+                border: activeTab === "index" ? "1px solid var(--border)" : "1px solid transparent",
+                color: activeTab === "index" ? "var(--text)" : "var(--muted)",
+                padding: "0.5rem 1rem",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <Network size={16} />
+              <span>Index</span>
             </button>
           </div>
 
@@ -1578,6 +1599,13 @@ export function ProjectsView({
           )}
 
           {/* Subtab 5: Team Members & Access */}
+          {activeTab === "index" && (
+            <ProjectIndexTab
+              projectId={projectDetails.project.id}
+              userRole={projectDetails.userRole}
+            />
+          )}
+
           {activeTab === "members" && (
             <ProjectMembersTab
               projectId={projectDetails.project.id}
