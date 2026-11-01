@@ -1,6 +1,6 @@
 {
   "name": "ai-review-platform",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "private": true,
   "description": "Modular, plugin-based, event-driven, provider-agnostic Multi-Agent AI Code Review Platform.",
   "type": "module",
@@ -17,6 +17,7 @@
     "test": "turbo run test",
     "lint": "turbo run typecheck",
     "eval": "turbo run test --filter=@ai-review/eval",
+    "e2e": "node scripts/e2e.mjs",
     "eval:mock": "tsx packages/eval/src/cli.ts",
     "start": "node dist/server.cjs",
     "clean": "turbo run clean && rm -rf node_modules",

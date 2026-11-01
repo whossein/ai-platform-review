@@ -91,6 +91,8 @@ export interface RunOptions {
   readonly customInstructions?: string;
   /** Optional project name for branding guidelines. */
   readonly projectName?: string;
+  /** Optional structural context (e.g. from the project index) appended to every reviewer's input. */
+  readonly projectContext?: string;
 }
 
 export class ReviewOrchestrator {
@@ -130,13 +132,17 @@ export class ReviewOrchestrator {
       ? `\n\n--- PROJECT-SPECIFIC SYSTEM INSTRUCTIONS & GUIDELINES (${opts.projectName || "Active Project"}) ---\n${opts.customInstructions.trim()}\nIMPORTANT: The above project-specific instructions MUST be strictly respected and prioritized by all reviewers.\n`
       : "";
 
+    const structureSection = opts.projectContext?.trim()
+      ? `\n\n${opts.projectContext.trim()}\n`
+      : "";
+
     if (built.ok) {
       const sliceRes = await contextEngine.slice({
         handle: built.value.handle,
         tokenBudget: budget.tokenBudget,
       });
       const structural = sliceRes.ok ? sliceRes.value.rendered : "";
-      const rendered = `${opts.diff}${instructionsSection}\n\n--- context ---\n${structural}`;
+      const rendered = `${opts.diff}${instructionsSection}${structureSection}\n\n--- context ---\n${structural}`;
       slice = {
         handle: built.value.handle,
         version: built.value.version,
@@ -146,7 +152,7 @@ export class ReviewOrchestrator {
         compressed: sliceRes.ok ? sliceRes.value.compressed : false,
       };
     } else {
-      const rendered = `${opts.diff}${instructionsSection}`;
+      const rendered = `${opts.diff}${instructionsSection}${structureSection}`;
       slice = {
         handle: "ctx.local" as ContextSlice["handle"],
         version: 1,

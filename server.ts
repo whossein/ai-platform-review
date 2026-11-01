@@ -51,6 +51,8 @@ import {
   startProjectIndexHandler,
   cancelProjectIndexHandler,
   getProjectIndexHandler,
+  ensureProjectIndexed,
+  buildProjectReviewContext,
 } from "./apps/api/src/handlers/index.js";
 import { ProjectIndexStore, IndexJobManager } from "@ai-review/project-index";
 import { ProjectStore } from "./apps/api/src/project-store.js";
@@ -625,6 +627,14 @@ async function startServer() {
         }
       }
 
+      // Keep the structural index fresh in the background and feed it to reviewers
+      if (preProject && user) {
+        void ensureProjectIndexed(indexDeps, preProject, user);
+      }
+      const projectContextProvider = preProject
+        ? (paths: readonly string[]) => buildProjectReviewContext(indexDeps, preProject.id, paths)
+        : undefined;
+
       const customInstructions =
         req.body?.customInstructions || preProject?.customInstructions;
       const projectName = req.body?.projectName || preProject?.name;
@@ -652,6 +662,7 @@ async function startServer() {
           selectedSpecialists: req.body?.selectedSpecialists,
           customInstructions,
           projectName,
+          ...(projectContextProvider ? { projectContextProvider } : {}),
         },
         agentRegistry,
         undefined,

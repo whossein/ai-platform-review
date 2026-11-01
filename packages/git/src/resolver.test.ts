@@ -141,3 +141,17 @@ describe("resolveDiffInput", () => {
     expect(resolved).toContain("-1\n+2");
   });
 });
+
+describe("resolveDiffInput latest MR", () => {
+  it("fails loudly instead of fabricating a diff when the latest MR cannot be resolved", async () => {
+    const failingFetch = (async () =>
+      new Response("{}", { status: 404 })) as unknown as typeof fetch;
+    await expect(
+      resolveDiffInput(
+        "https://gitlab.example.com/team/app/-/merge_requests/latest",
+        {},
+        failingFetch,
+      ),
+    ).rejects.toThrow(/latest open merge request/);
+  });
+});

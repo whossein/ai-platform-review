@@ -11,6 +11,8 @@ import {
   startProjectIndexHandler,
   cancelProjectIndexHandler,
   getProjectIndexHandler,
+  ensureProjectIndexed,
+  buildProjectReviewContext,
   type IndexHandlerDeps,
 } from "./index-handlers.js";
 
@@ -112,5 +114,50 @@ describe("project index handlers", () => {
     await deps.indexJobs.waitForJob(projectId);
     const { logs } = await deps.security.auditStore.query({ action: "PROJECT_INDEX_STARTED" } as never);
     expect(logs.length).toBe(1);
+  });
+
+  it("auto-index starts once for an unindexed project and is a no-op while a job is active", async () => {
+    const { project } = (await deps.projectStore.getProject(projectId))!;
+    await ensureProjectIndexed(deps, project, owner);
+    const first = await deps.indexJobs.getJobStatus(projectId);
+    expect(first).toBeDefined();
+    await ensureProjectIndexed(deps, project, owner);
+    const second = await deps.indexJobs.getJobStatus(projectId);
+    expect(second?.id).toBe(first?.id);
+    await deps.indexJobs.waitForJob(projectId);
+  });
+
+  it("auto-index backs off after a recent failure", async () => {
+    const { project } = (await deps.projectStore.getProject(projectId))!;
+    await ensureProjectIndexed(deps, project, owner);
+    const failed = await deps.indexJobs.waitForJob(projectId);
+    expect(failed?.status).toBe("failed");
+    await ensureProjectIndexed(deps, project, owner);
+    expect((await deps.indexJobs.getJobStatus(projectId))?.id).toBe(failed?.id);
+  });
+
+  it("builds review context only when a snapshot exists", async () => {
+    expect(await buildProjectReviewContext(deps, projectId, ["src/a.ts"])).toBeUndefined();
+    await deps.indexStore.saveSnapshot({
+      schemaVersion: 1,
+      projectId: projectId as never,
+      ref: "main",
+      commitSha: "b".repeat(40),
+      createdAt: new Date().toISOString(),
+      stats: {} as never,
+      files: [
+        { path: "src/a.ts", lang: "ts", size: 1, lineCount: 1, contentHash: "h", symbols: [], imports: [], exports: ["a"] },
+        { path: "src/b.ts", lang: "ts", size: 1, lineCount: 1, contentHash: "h", symbols: [], imports: [], exports: [] },
+      ],
+      graph: {
+        importsByFile: { "src/b.ts": ["src/a.ts"] },
+        importedByFile: { "src/a.ts": ["src/b.ts"] },
+        externalImportsByFile: {},
+        workspaces: [],
+        pathAliases: {},
+      },
+    });
+    const ctx = await buildProjectReviewContext(deps, projectId, ["src/a.ts"]);
+    expect(ctx).toContain("src/a.ts: exports a; imported by 1 file(s): src/b.ts");
   });
 });

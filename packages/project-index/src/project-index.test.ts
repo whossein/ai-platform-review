@@ -711,3 +711,44 @@ describe("@ai-review/project-index (Sub-Phase 2A)", () => {
     });
   });
 });
+
+describe("buildReviewContext", async () => {
+  const { buildReviewContext } = await import("./review-context.js");
+  const snapshot = {
+    schemaVersion: 1,
+    projectId: "p",
+    ref: "main",
+    commitSha: "a".repeat(40),
+    createdAt: "2026-01-01T00:00:00.000Z",
+    stats: {},
+    files: [
+      { path: "src/db.ts", exports: ["q"], imports: [], symbols: [] },
+      { path: "src/app.ts", exports: [], imports: [], symbols: [] },
+      { path: "src/lonely.ts", exports: [], imports: [], symbols: [] },
+    ],
+    graph: {
+      importsByFile: { "src/app.ts": ["src/db.ts"] },
+      importedByFile: { "src/db.ts": ["src/app.ts"] },
+      externalImportsByFile: {},
+      workspaces: [],
+      pathAliases: {},
+    },
+  } as never;
+
+  it("describes changed files and flags dependants outside the change", () => {
+    const text = buildReviewContext(snapshot, ["b/src/db.ts"]);
+    expect(text).toContain("src/db.ts: exports q; imported by 1 file(s): src/app.ts");
+    expect(text).toContain("not part of this change");
+    expect(text).toContain("src/app.ts");
+  });
+
+  it("does not flag dependants that are in the change itself", () => {
+    const text = buildReviewContext(snapshot, ["src/db.ts", "src/app.ts"]);
+    expect(text).not.toContain("not part of this change");
+  });
+
+  it("returns empty for unindexed files and handles files with no importers", () => {
+    expect(buildReviewContext(snapshot, ["src/new.ts"])).toBe("");
+    expect(buildReviewContext(snapshot, ["src/lonely.ts"])).toContain("not imported by other indexed files");
+  });
+});

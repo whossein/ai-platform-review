@@ -109,7 +109,17 @@ export async function runReview(
   const toolRegistry = createDefaultToolRegistry(process.cwd());
   const skillRegistry = createDefaultSkillRegistry();
   const runtime = new DefaultAgentRuntime(registry, toolRegistry, skillRegistry);
-  const pricing = new Map();
+  // Price table from the configured providers' model descriptors, so dollar
+  // budgets and reported costs reflect real per-model rates.
+  const pricing = new Map<string, { inputCostPer1M: number; outputCostPer1M: number }>();
+  for (const provider of envProviders) {
+    for (const m of provider.models()) {
+      pricing.set(m.id, {
+        inputCostPer1M: m.inputCostPer1M,
+        outputCostPer1M: m.outputCostPer1M,
+      });
+    }
+  }
 
   const ctx: OrchestratorContext = {
     contextEngine,
@@ -124,5 +134,9 @@ export async function runReview(
     ) => new DagWorkflowEngine(executor, makeBudgetGuard as any),
   };
   const orchestrator = new ReviewOrchestrator(ctx);
-  return orchestrator.review(opts);
+  const result = await orchestrator.review(opts);
+  return {
+    ...result,
+    metrics: { ...result.metrics, cacheHits: llm.hits, cacheMisses: llm.misses },
+  };
 }

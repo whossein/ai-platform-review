@@ -22,3 +22,4 @@ export * from "./sources/source.js";
 export * from "./sources/gitlab-source.js";
 export * from "./sources/github-source.js";
 export * from "./sources/local-source.js";
+export * from "./review-context.js";

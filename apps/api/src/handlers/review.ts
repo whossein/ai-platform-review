@@ -28,6 +28,13 @@ export interface ReviewRequest {
   readonly projectId?: string;
   readonly projectName?: string;
   readonly customInstructions?: string;
+  /**
+   * Called with the changed file paths once the diff is resolved; may return
+   * extra structural context (e.g. from the project index) for the reviewers.
+   */
+  readonly projectContextProvider?: (
+    paths: readonly string[],
+  ) => Promise<string | undefined>;
 }
 
 export interface ReviewResponse {
@@ -67,6 +74,18 @@ export async function reviewHandler(
   const rawDiff = await resolveDiffInput(diff, mergedEnv);
   const parsedFiles = parseDiffToFiles(rawDiff);
 
+  let projectContext: string | undefined;
+  if (request.projectContextProvider) {
+    try {
+      projectContext = await request.projectContextProvider(
+        parsedFiles.map((f) => f.path),
+      );
+    } catch (err) {
+      // Structural context is an enhancement; never fail a review because of it.
+      console.warn("Project context unavailable:", err);
+    }
+  }
+
   const result = await runReview(
     agentRegistry,
     {
@@ -78,6 +97,7 @@ export async function reviewHandler(
       ...(effectiveMemoryStore ? { memoryStore: effectiveMemoryStore } : {}),
       ...(customInstructions ? { customInstructions } : {}),
       ...(projectName ? { projectName } : {}),
+      ...(projectContext ? { projectContext } : {}),
     },
     extraProviders
   );

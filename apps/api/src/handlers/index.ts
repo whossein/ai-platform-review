@@ -63,5 +63,7 @@ export {
   startProjectIndexHandler,
   cancelProjectIndexHandler,
   getProjectIndexHandler,
+  ensureProjectIndexed,
+  buildProjectReviewContext,
   type IndexHandlerDeps,
 } from "./index-handlers.js";

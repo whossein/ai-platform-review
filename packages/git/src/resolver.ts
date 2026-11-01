@@ -92,9 +92,10 @@ export async function resolveDiffInput(
 
     const diffRes = await provider.getDiff(effectiveRef);
     if (!diffRes.ok) {
-      if (ref.id === "latest") {
-        const projectName = ref.projectId.split("/").pop() || "project";
-        return `# Project: ${projectName}\n# Detected GitLab Project: ${ref.projectId}\n# Instance: ${baseUrl}\n# Note: GitLab MR listing detected. Specify an MR number (e.g. /-/merge_requests/1) or set GITLAB_TOKEN in Settings.\n\ndiff --git a/src/index.ts b/src/index.ts\n--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1,3 +1,6 @@\n+// Initialized project: ${projectName}\n+export const PROJECT = "${projectName}";\n`;
+      if (ref.id === "latest" && effectiveRef.id === "latest") {
+        throw new Error(
+          `Could not resolve the latest open merge request for ${ref.projectId}${!token ? " (A GITLAB_TOKEN may be required in Settings)" : ""}. Specify an MR number, e.g. /-/merge_requests/1.`,
+        );
       }
       throw new Error(
         `Failed to fetch GitLab MR diff: ${diffRes.error.message}${!token ? " (A GITLAB_TOKEN may be required in Settings)" : ""}`,
