@@ -9,6 +9,7 @@ import {
 } from "@ai-review/shared";
 import { MapAgentRegistry } from "@ai-review/agent-runtime";
 import { PersistentMemoryStore } from "@ai-review/memory";
+import type { GitCredentialProvider, ProjectId } from "@ai-review/core";
 import {
   estimateHandler,
   reviewHandler,
@@ -23,8 +24,33 @@ import {
   findOrCreateProjectHandler,
   recordReviewHandler,
   deleteProjectHandler,
+  getAuthStatusHandler,
+  setupFirstAdminHandler,
+  loginHandler,
+  logoutHandler,
+  updateProfileHandler,
+  changePasswordHandler,
+  listSessionsHandler,
+  revokeSessionHandler,
+  listUsersHandler,
+  getUserHandler,
+  createUserHandler,
+  updateUserHandler,
+  setUserStatusHandler,
+  setUserRoleHandler,
+  resetUserPasswordHandler,
+  deleteUserHandler,
+  getGitCredentialsHandler,
+  setGitCredentialHandler,
+  deleteGitCredentialHandler,
+  listProjectMembersHandler,
+  addProjectMemberHandler,
+  updateProjectMemberRoleHandler,
+  removeProjectMemberHandler,
+  getAuditLogsHandler,
 } from "./apps/api/src/handlers/index.js";
 import { ProjectStore } from "./apps/api/src/project-store.js";
+import { SecurityContext } from "./apps/api/src/security/index.js";
 
 loadDotEnv();
 
@@ -57,38 +83,319 @@ async function startServer() {
     });
   }
 
-  // Phase 5: Persistent memory store injected at composition root
+  // Persistent storage injection at composition root
   const memoryStore = new PersistentMemoryStore("./.data/memory");
   const projectStore = new ProjectStore("./.data");
+  const security = new SecurityContext("./.data");
 
   app.use(express.json({ limit: "50mb" }));
 
+  // Helper middleware for optional authentication (populates req.user if token valid)
+  const populateAuth = async (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    try {
+      const auth = await security.authenticateRequest(req);
+      if (auth) {
+        (req as any).user = auth.user;
+        (req as any).session = auth.session;
+      }
+    } catch {
+      // Ignored for optional auth
+    }
+    next();
+  };
+
+  const requireAuth = security.requireAuth();
+  const requireAdmin = security.requireAdmin();
+
+  // Public Health Endpoint
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  // Project Registry Endpoints
-  app.get("/api/projects", async (_req, res) => {
+  // ==========================================
+  // AUTHENTICATION & SESSION ROUTES
+  // ==========================================
+
+  app.get("/api/auth/status", async (req, res) => {
     try {
-      const result = await listProjectsHandler(projectStore);
+      const result = await getAuthStatusHandler(security, req);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to check auth status" });
+    }
+  });
+
+  app.post("/api/auth/setup", async (req, res) => {
+    try {
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      const result = await setupFirstAdminHandler(security, req.body || {}, ip);
+      res.status(201).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({
+        error: err.message || "First-run setup failed",
+        code: err.code,
+      });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      const userAgent = req.headers["user-agent"] || "";
+      const result = await loginHandler(security, req.body || {}, ip, userAgent);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 401).json({
+        error: err.message || "Login failed",
+        code: err.code,
+      });
+    }
+  });
+
+  app.post("/api/auth/logout", populateAuth, async (req, res) => {
+    try {
+      const token = security.extractToken(req);
+      const user = (req as any).user;
+      const result = await logoutHandler(security, token, user);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Logout failed" });
+    }
+  });
+
+  app.get("/api/auth/me", requireAuth, (req, res) => {
+    res.status(200).json({ user: (req as any).user });
+  });
+
+  app.patch("/api/auth/me", requireAuth, async (req, res) => {
+    try {
+      const updated = await updateProfileHandler(security, (req as any).user, req.body || {});
+      res.status(200).json({ user: updated });
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to update profile" });
+    }
+  });
+
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const result = await changePasswordHandler(security, (req as any).user, req.body || {});
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 400).json({
+        error: err.message || "Failed to change password",
+        code: err.code,
+      });
+    }
+  });
+
+  app.get("/api/auth/sessions", requireAuth, async (req, res) => {
+    try {
+      const token = security.extractToken(req) || undefined;
+      const sessions = await listSessionsHandler(security, (req as any).user, token);
+      res.status(200).json({ sessions });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to list sessions" });
+    }
+  });
+
+  app.delete("/api/auth/sessions/:id", requireAuth, async (req, res) => {
+    try {
+      const result = await revokeSessionHandler(security, (req as any).user, req.params.id);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to revoke session" });
+    }
+  });
+
+  // ==========================================
+  // USER MANAGEMENT ROUTES (ADMIN ONLY)
+  // ==========================================
+
+  app.get("/api/users", requireAdmin, async (_req, res) => {
+    try {
+      const users = await listUsersHandler(security);
+      res.status(200).json({ users });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to list users" });
+    }
+  });
+
+  app.post("/api/users", requireAdmin, async (req, res) => {
+    try {
+      const created = await createUserHandler(security, (req as any).user, req.body || {});
+      res.status(201).json({ user: created });
+    } catch (err: any) {
+      res.status(err.status || 500).json({
+        error: err.message || "Failed to create user",
+        code: err.code,
+      });
+    }
+  });
+
+  app.get("/api/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const user = await getUserHandler(security, req.params.id);
+      res.status(200).json({ user });
+    } catch (err: any) {
+      res.status(err.status || 404).json({ error: err.message || "User not found" });
+    }
+  });
+
+  app.patch("/api/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const updated = await updateUserHandler(security, (req as any).user, req.params.id, req.body || {});
+      res.status(200).json({ user: updated });
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to update user" });
+    }
+  });
+
+  app.patch("/api/users/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const updated = await setUserStatusHandler(
+        security,
+        (req as any).user,
+        req.params.id,
+        req.body?.status
+      );
+      res.status(200).json({ user: updated });
+    } catch (err: any) {
+      res.status(err.status || 400).json({
+        error: err.message || "Failed to change user status",
+        code: err.code,
+      });
+    }
+  });
+
+  app.patch("/api/users/:id/role", requireAdmin, async (req, res) => {
+    try {
+      const updated = await setUserRoleHandler(
+        security,
+        (req as any).user,
+        req.params.id,
+        req.body?.role
+      );
+      res.status(200).json({ user: updated });
+    } catch (err: any) {
+      res.status(err.status || 400).json({
+        error: err.message || "Failed to change user role",
+        code: err.code,
+      });
+    }
+  });
+
+  app.post("/api/users/:id/reset-password", requireAdmin, async (req, res) => {
+    try {
+      const result = await resetUserPasswordHandler(
+        security,
+        (req as any).user,
+        req.params.id,
+        req.body || {}
+      );
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: err.message || "Failed to reset password" });
+    }
+  });
+
+  app.delete("/api/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const result = await deleteUserHandler(security, (req as any).user, req.params.id);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 400).json({
+        error: err.message || "Failed to delete user",
+        code: err.code,
+      });
+    }
+  });
+
+  // ==========================================
+  // GIT CREDENTIALS ROUTES (USER SCOPED)
+  // ==========================================
+
+  app.get("/api/me/git-credentials", requireAuth, async (req, res) => {
+    try {
+      const credentials = await getGitCredentialsHandler(security, (req as any).user);
+      res.status(200).json({ credentials });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to list credentials" });
+    }
+  });
+
+  app.post("/api/me/git-credentials/:provider", requireAuth, async (req, res) => {
+    try {
+      const provider = req.params.provider.toLowerCase() as GitCredentialProvider;
+      if (provider !== "github" && provider !== "gitlab") {
+        return res.status(400).json({ error: "Unsupported provider. Must be 'github' or 'gitlab'." });
+      }
+      const summary = await setGitCredentialHandler(
+        security,
+        (req as any).user,
+        provider,
+        req.body || {}
+      );
+      res.status(200).json({ credential: summary });
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to save credential" });
+    }
+  });
+
+  app.delete("/api/me/git-credentials/:provider", requireAuth, async (req, res) => {
+    try {
+      const provider = req.params.provider.toLowerCase() as GitCredentialProvider;
+      const result = await deleteGitCredentialHandler(
+        security,
+        (req as any).user,
+        provider
+      );
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to revoke credential" });
+    }
+  });
+
+  // ==========================================
+  // AUDIT LOGS ROUTE (ADMIN ONLY)
+  // ==========================================
+
+  app.get("/api/audit-logs", requireAdmin, async (req, res) => {
+    try {
+      const result = await getAuditLogsHandler(security, req.query);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to fetch audit logs" });
+    }
+  });
+
+  // ==========================================
+  // PROJECT REGISTRY & TEAM MEMBERS ROUTES
+  // ==========================================
+
+  app.get("/api/projects", populateAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await listProjectsHandler(projectStore, security, user);
       res.status(200).json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to list projects" });
     }
   });
 
-  app.get("/api/projects/:id", async (req, res) => {
+  app.get("/api/projects/:id", populateAuth, async (req, res) => {
     try {
-      const result = await getProjectDetailsHandler(projectStore, req.params.id);
+      const user = (req as any).user;
+      const result = await getProjectDetailsHandler(projectStore, req.params.id, security, user);
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to fetch project" });
     }
   });
 
-  app.post("/api/projects", async (req, res) => {
+  app.post("/api/projects", populateAuth, async (req, res) => {
     try {
-      const result = await createProjectHandler(projectStore, req.body || {});
+      const user = (req as any).user;
+      const result = await createProjectHandler(projectStore, req.body || {}, security, user);
       res.status(201).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({
@@ -99,52 +406,121 @@ async function startServer() {
     }
   });
 
-  app.post("/api/projects/find-or-create", async (req, res) => {
+  app.post("/api/projects/find-or-create", populateAuth, async (req, res) => {
     try {
-      const result = await findOrCreateProjectHandler(projectStore, req.body || {});
+      const user = (req as any).user;
+      const result = await findOrCreateProjectHandler(projectStore, req.body || {}, security, user);
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 400).json({ error: err.message || "Failed to resolve project" });
     }
   });
 
-  app.post("/api/projects/:id/reviews", async (req, res) => {
+  app.post("/api/projects/:id/reviews", populateAuth, async (req, res) => {
     try {
-      const result = await recordReviewHandler(projectStore, req.params.id, req.body || {});
+      const user = (req as any).user;
+      const result = await recordReviewHandler(projectStore, req.params.id, req.body || {}, security, user);
       res.status(200).json(result);
     } catch (err: any) {
-      res.status(500).json({ error: err.message || "Failed to record review" });
+      res.status(err.status || 500).json({ error: err.message || "Failed to record review" });
     }
   });
 
-  app.patch("/api/projects/:id", async (req, res) => {
+  app.patch("/api/projects/:id", populateAuth, async (req, res) => {
     try {
-      const result = await updateProjectHandler(projectStore, req.params.id, req.body || {});
-      res.status(200).json(result);
-    } catch (err: any) {
-      res.status(err.status || 500).json({ error: err.message || "Failed to update project" });
-    }
-  });
-
-  app.put("/api/projects/:id", async (req, res) => {
-    try {
-      const result = await updateProjectHandler(projectStore, req.params.id, req.body || {});
+      const user = (req as any).user;
+      const result = await updateProjectHandler(projectStore, req.params.id, req.body || {}, security, user);
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to update project" });
     }
   });
 
-  app.delete("/api/projects/:id", async (req, res) => {
+  app.put("/api/projects/:id", populateAuth, async (req, res) => {
     try {
-      const result = await deleteProjectHandler(projectStore, req.params.id);
+      const user = (req as any).user;
+      const result = await updateProjectHandler(projectStore, req.params.id, req.body || {}, security, user);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to update project" });
+    }
+  });
+
+  app.delete("/api/projects/:id", populateAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await deleteProjectHandler(projectStore, req.params.id, security, user);
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to delete project" });
     }
   });
 
-  app.post("/api/estimate", async (req, res) => {
+  // Project Members
+  app.get("/api/projects/:id/members", requireAuth, async (req, res) => {
+    try {
+      const members = await listProjectMembersHandler(
+        security,
+        req.params.id as ProjectId,
+        (req as any).user
+      );
+      res.status(200).json({ members });
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to list members" });
+    }
+  });
+
+  app.post("/api/projects/:id/members", requireAuth, async (req, res) => {
+    try {
+      const member = await addProjectMemberHandler(
+        security,
+        req.params.id as ProjectId,
+        (req as any).user,
+        req.body || {}
+      );
+      res.status(201).json({ member });
+    } catch (err: any) {
+      res.status(err.status || 500).json({
+        error: err.message || "Failed to add member",
+        code: err.code,
+      });
+    }
+  });
+
+  app.patch("/api/projects/:id/members/:userId", requireAuth, async (req, res) => {
+    try {
+      const member = await updateProjectMemberRoleHandler(
+        security,
+        req.params.id as ProjectId,
+        (req as any).user,
+        req.params.userId,
+        req.body || {}
+      );
+      res.status(200).json({ member });
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to update member" });
+    }
+  });
+
+  app.delete("/api/projects/:id/members/:userId", requireAuth, async (req, res) => {
+    try {
+      const result = await removeProjectMemberHandler(
+        security,
+        req.params.id as ProjectId,
+        (req as any).user,
+        req.params.userId
+      );
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to remove member" });
+    }
+  });
+
+  // ==========================================
+  // CODE REVIEW & PIPELINE ROUTES
+  // ==========================================
+
+  app.post("/api/estimate", populateAuth, async (req, res) => {
     try {
       const result = await estimateHandler(
         {
@@ -161,9 +537,10 @@ async function startServer() {
     }
   });
 
-  app.post("/api/review", async (req, res) => {
+  app.post("/api/review", populateAuth, async (req, res) => {
     try {
       const diffStr = (req.body?.diff || "").trim();
+      const user = (req as any).user;
 
       // Pre-resolve project to inject custom system instructions and guidelines into AI context
       let preProject: any = undefined;
@@ -181,15 +558,62 @@ async function startServer() {
         console.warn("Pre-review project resolution notice:", e);
       }
 
+      // Check project review permission if project identified and user authenticated
+      if (preProject && user) {
+        const canReview = await security.canAccessProject(user, preProject.id, "project:review");
+        if (!canReview) {
+          return res.status(403).json({
+            error: "Access denied: You do not have permission to run reviews on this project.",
+            code: "FORBIDDEN",
+          });
+        }
+      }
+
+      // Automatically inject user's decrypted Git credentials if available for this review
+      const reviewEnv = { ...(req.body?.env || req.body?.envOverrides || {}) };
+      if (user) {
+        try {
+          if (diffStr.includes("gitlab") || preProject?.gitHost?.includes("gitlab")) {
+            const gitlabToken = await security.credentialStore.getDecryptedToken(user.id, "gitlab");
+            if (gitlabToken && !reviewEnv.GITLAB_TOKEN) {
+              reviewEnv.GITLAB_TOKEN = gitlabToken;
+            }
+          }
+          if (diffStr.includes("github") || preProject?.gitHost?.includes("github")) {
+            const githubToken = await security.credentialStore.getDecryptedToken(user.id, "github");
+            if (githubToken && !reviewEnv.GITHUB_TOKEN) {
+              reviewEnv.GITHUB_TOKEN = githubToken;
+            }
+          }
+        } catch (credErr) {
+          console.warn("Credential injection notice:", credErr);
+        }
+      }
+
       const customInstructions =
         req.body?.customInstructions || preProject?.customInstructions;
       const projectName = req.body?.projectName || preProject?.name;
+
+      if (user) {
+        await security.auditStore.log({
+          actorUserId: user.id,
+          actorName: user.name,
+          actorEmail: user.email,
+          action: "REVIEW_STARTED",
+          entityType: "review",
+          entityId: preProject?.id || "ad-hoc",
+          metadata: {
+            projectName,
+            hasCustomInstructions: Boolean(customInstructions),
+          },
+        });
+      }
 
       const result = await reviewHandler(
         {
           diff: req.body?.diff,
           threshold: req.body?.threshold,
-          env: req.body?.env || req.body?.envOverrides,
+          env: reviewEnv,
           selectedSpecialists: req.body?.selectedSpecialists,
           customInstructions,
           projectName,
@@ -198,6 +622,22 @@ async function startServer() {
         undefined,
         memoryStore
       );
+
+      if (user) {
+        await security.auditStore.log({
+          actorUserId: user.id,
+          actorName: user.name,
+          actorEmail: user.email,
+          action: "REVIEW_COMPLETED",
+          entityType: "review",
+          entityId: preProject?.id || "ad-hoc",
+          metadata: {
+            projectName,
+            issuesCount: result.total,
+            acceptedCount: result.accepted,
+          },
+        });
+      }
 
       // Auto-associate review with project if diff is a URL or if projectId is supplied
       let associatedProject: any = preProject;
@@ -212,7 +652,7 @@ async function startServer() {
           await projectStore.recordReview({
             projectId: associatedProject.id,
             mergeRequestId: associatedMr?.id,
-            model: req.body?.env?.AI_REVIEW_LLM_MODEL || req.body?.env?.AI_REVIEW_LLM_PROVIDER,
+            model: reviewEnv?.AI_REVIEW_LLM_MODEL || reviewEnv?.AI_REVIEW_LLM_PROVIDER,
             target: diffStr,
             inputMode: "pr",
             result,
@@ -221,7 +661,7 @@ async function startServer() {
           await projectStore.recordReview({
             projectId: req.body.projectId,
             mergeRequestId: req.body.mergeRequestId,
-            model: req.body?.env?.AI_REVIEW_LLM_MODEL || req.body?.env?.AI_REVIEW_LLM_PROVIDER,
+            model: reviewEnv?.AI_REVIEW_LLM_MODEL || reviewEnv?.AI_REVIEW_LLM_PROVIDER,
             target: req.body.target || "Diff snippet",
             inputMode: req.body.inputMode || "diff",
             result,
@@ -284,7 +724,7 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
-    // We must point vite to the apps/web directory
+    // Vite middleware for development
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

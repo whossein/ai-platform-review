@@ -865,6 +865,171 @@
     </div>
   </section>
 
+  <!-- SECTION: USER MANAGEMENT, RBAC & SECURITY (BILINGUAL v0.2.0) -->
+  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="user-access-control">
+    <div class="max-w-6xl mx-auto space-y-16 reveal">
+      <!-- English Section (dir="ltr") -->
+      <div dir="ltr" class="text-left space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
+          <span>ENTERPRISE RBAC, ENCRYPTED GIT CREDENTIALS & AUDIT LOGS (v0.2.0)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">
+          Comprehensive User Management, Project Access Control & Zero-Trust Security
+        </h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
+          The platform features a complete multi-user access control foundation designed for engineering teams. It provides <strong>PBKDF2 (SHA-512) password hashing</strong>, 256-bit cryptographically secure sessions with revocation, rate-limited login protection, and an automated <strong>First-Run Admin Setup Wizard</strong>. Security is enforced through system-level RBAC (<code>ADMIN</code>, <code>MEMBER</code>) and project-level roles (<code>OWNER</code>, <code>MANAGER</code>, <code>REVIEWER</code>, <code>VIEWER</code>), complemented by <strong>AES-256-GCM encrypted Git credentials</strong> and immutable audit trails.
+        </p>
+        <div class="grid md:grid-cols-4 gap-6 pt-4 font-mono text-xs">
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-emerald-400 font-bold text-sm">First-Run & Cryptography</div>
+            <p class="text-zinc-400 font-sans text-xs">Dedicated initial setup creates the first administrator and permanently deactivates; passwords hashed with PBKDF2 and random 16-byte salt.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-blue-400 font-bold text-sm">Multi-Tier RBAC</div>
+            <p class="text-zinc-400 font-sans text-xs">Backend-enforced system and project roles with permissions checking, project membership management, and last-admin deletion safety.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-purple-400 font-bold text-sm">Encrypted Git Tokens</div>
+            <p class="text-zinc-400 font-sans text-xs">Per-user GitHub and GitLab PATs encrypted via AES-256-GCM authenticated cipher; masked in UI and never returned in API payloads.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-amber-400 font-bold text-sm">Audit Trail & Rate Limiting</div>
+            <p class="text-zinc-400 font-sans text-xs">Sliding-window rate limiter prevents credential stuffing; queryable audit logs record security and membership events with automated redaction.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Persian Section (dir="rtl") -->
+      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
+          <span>سیستم جامع مدیریت کاربران، سطوح دسترسی RBAC، رمزنگاری و ثبت رویدادها (نسخه ۰.۲.۰)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">
+          احراز هویت سازمانی، مدیریت دسترسی پروژه‌ها و امنیت Zero-Trust با رمزنگاری پیشرفته
+        </h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
+          پلتفرم مجهز به زیرساخت کامل مدیریت کاربران چندسطحی و دسترسی پروژه‌محور شد. این سیستم شامل <strong>هش ایمن گذرواژه با PBKDF2 (SHA-512)</strong>، سشن‌های تصادفی رمزنگاری‌شده ۲۵۶ بیتی با قابلیت ابطال، محافظت در برابر حملات Brute-force با Rate Limiting و صفحه <strong>راه‌اندازی اولیه اولین ادمین سیستم (First-Run Setup)</strong> است. تفکیک نقش‌های سیستمی (<code>ADMIN</code> و <code>MEMBER</code>) و نقش‌های پروژه (<code>OWNER</code>، <code>MANAGER</code>، <code>REVIEWER</code>، <code>VIEWER</code>)، ذخیره‌سازی <strong>رمزنگاری‌شده AES-256-GCM برای دسترسی‌های GitHub و GitLab</strong> و ثبت تغییرناپذیر لاگ‌های امنیتی (Audit Logs) با حذف خودکار اطلاعات حساس پیاده‌سازی شده است.
+        </p>
+        <div class="grid md:grid-cols-4 gap-6 pt-4 text-xs font-sans">
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-emerald-400 font-bold text-sm">راه‌اندازی اولیه و رمزنگاری</div>
+            <p class="text-zinc-400 text-xs leading-normal">صفحه اختصاصی ایجاد اولین مدیر سیستم که پس از تعریف غیرفعال می‌شود؛ هش PBKDF2 با سالت تصادفی و مقایسه زمان‌ثابت.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-blue-400 font-bold text-sm">کنترل دسترسی دولایه (RBAC)</div>
+            <p class="text-zinc-400 text-xs leading-normal">اعتبارسنجی دقیق سمت سرور برای نقش‌های سیستمی و پروژه‌ای، مدیریت اعضای پروژه و محافظت از حذف آخرین ادمین سیستم.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-purple-400 font-bold text-sm">توکن‌های رمزنگاری‌شده گیت</div>
+            <p class="text-zinc-400 text-xs leading-normal">ذخیره‌سازی امن PATهای گیت‌هاب و گیت‌لب هر کاربر با رمزنگاری AES-256-GCM، نمایش ماسک‌شده و تضمین عدم نشت در API.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-amber-400 font-bold text-sm">لاگ‌های امنیتی و Rate Limit</div>
+            <p class="text-zinc-400 text-xs leading-normal">محدودکننده نرخ ورود برای جلوگیری از حملات Brute-force، و ثبت تغییرناپذیر رویدادهای احراز هویت و دسترسی با حذف داده‌های محرمانه.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: BENCHMARK DATASET & EVALUATION HARNESS (BILINGUAL v0.2.1) -->
+  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="evaluation-harness">
+    <div class="max-w-6xl mx-auto space-y-16 reveal">
+      <!-- English Section (dir="ltr") -->
+      <div dir="ltr" class="text-left space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-900/60 bg-blue-950/40 text-xs font-mono text-blue-400">
+          <span>DETERMINISTIC BENCHMARK HARNESS & KUHN-MUNKRES MATCHING (v0.2.2)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">
+          Benchmark Dataset & Deterministic Evaluation Harness
+        </h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
+          The <code>@ai-review/eval</code> subsystem introduces an empirical evaluation harness designed to objectively measure code review quality against verified ground truth. Hardened in <strong>v0.2.2</strong> with zero-cost Quadrant III unmatched expected slots, $O((m+n)^3)$ equality-subgraph Reverse-BFS lexicographic tie-breaking, strict (<code>&gt;</code>) dual-match quarantine, and complete <code>UAR</code> and <code>filteredRecallLoss</code> accounting.
+        </p>
+        <div class="grid md:grid-cols-4 gap-6 pt-4 font-mono text-xs">
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-blue-400 font-bold text-sm">Kuhn-Munkres Matcher</div>
+            <p class="text-zinc-400 font-sans text-xs">Maximum-weight partial matching with safe forbidden edge penalties and canonical two-stage lexicographic tie-breaking.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-amber-400 font-bold text-sm">Dual-Match Quarantine</div>
+            <p class="text-zinc-400 font-sans text-xs">Candidates triggering both expected findings and anti-findings are quarantined into Q to prevent silent metric inflation.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-emerald-400 font-bold text-sm">Dataset Provenance</div>
+            <p class="text-zinc-400 font-sans text-xs">Full lineage tracking for benchmark cases: origin tagging (synthetic, MRs, human feed) and peer-review verification states.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
+            <div class="text-purple-400 font-bold text-sm">Unbiased Quality Metrics</div>
+            <p class="text-zinc-400 font-sans text-xs">Conservative and confirmed bounds, Hopcroft-Karp UQ matching, AFTR trap capture rate, and False Discovery Penalty Cost.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Persian Section (dir="rtl") -->
+      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-900/60 bg-blue-950/40 text-xs font-mono text-blue-400">
+          <span>سامانه ارزیابی قطعی و مجموعه داده‌های بنچ‌مارک (نسخه ۰.۲.۲)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">
+          مجموعه داده‌های استاندارد، تطبیق دوبخشی مجارستانی و سنجه‌های ارزیابی بدون سوگیری
+        </h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
+          زیرسیستم ارزیابی <code>@ai-review/eval</code> در <strong>نسخه ۰.۲.۲</strong> با اصلاح ماتریس هزینه افزوده (هزینه صفر در ربع سوم)، الگوریتم شکست تساوی $O((m+n)^3)$ مبتنی بر BFS معکوس روی زیرگراف برابری، سیاست قرنطینه اکید (<code>&gt;</code>) و افزودن شاخص‌های <code>UAR</code> و <code>filteredRecallLoss</code> بهینه‌سازی و مقاوم‌سازی شد.
+        </p>
+        <div class="grid md:grid-cols-4 gap-6 pt-4 text-xs font-sans">
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-blue-400 font-bold text-sm">تطبیق بیشینه‌وزن مجارستانی</div>
+            <p class="text-zinc-400 text-xs leading-normal">محاسبه تطبیق دوبخشی قطعی با هزینه‌های جریمه ایمن برای یال‌های نامعتبر و حل تساوی‌ها به شکل قطعی و متقارن.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-amber-400 font-bold text-sm">قرنطینه یافته‌های متناقض</div>
+            <p class="text-zinc-400 text-xs leading-normal">تفکیک یافته‌های همپوشان با Anti-Finding در مجموعه Q جهت بازبینی انسانی و جلوگیری از تایید کاذب خطاها.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-emerald-400 font-bold text-sm">شناسنامه و اصالت داده‌ها</div>
+            <p class="text-zinc-400 text-xs leading-normal">رهگیری شجره‌نامه موارد آزمون (تست ساختگی، MR تاریخی، فید بازبینی انسانی) و مدیریت نسخه‌های برچسب‌گذاری.</p>
+          </div>
+          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
+            <div class="text-purple-400 font-bold text-sm">شاخص‌های محافظه‌کارانه و تجاری</div>
+            <p class="text-zinc-400 text-xs leading-normal">محاسبه کران‌های قطعی و محافظه‌کارانه Precision و Recall، ضریب حساسیت به تله (AFTR) و جریمه تجاری خطا (FDPC).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: STRUCTURAL PROJECT INDEX (BILINGUAL v0.2.3) -->
+  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="project-intelligence-index">
+    <div class="max-w-6xl mx-auto space-y-16 reveal">
+      <!-- English Section (dir="ltr") -->
+      <div dir="ltr" class="text-left space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
+          <span>PROJECT INTELLIGENCE 2A • STRUCTURAL REPOSITORY INDEX (v0.2.3)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">
+          Multi-Source Structural Repository Indexing & Dependency Graph Engine
+        </h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
+          The <code>@ai-review/project-index</code> package enables deep structural comprehension of registered repositories across <strong>GitLab REST v4, GitHub Trees/Blobs APIs, and local checkouts</strong>. It enforces <code>.gitignore</code> and size filters, extracts TypeScript/JS AST symbols and imports via <code>@ai-review/context-engine</code>, resolves monorepo workspaces and <code>tsconfig</code> path aliases into a bidirectional dependency graph, and persists snapshots atomically with incremental <code>gitBlobSha</code> and <code>contentHash</code> reuse.
+        </p>
+      </div>
+
+      <!-- Persian Section (dir="rtl") -->
+      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
+          <span>هوشمندی پروژه (فاز 2A) • ایندکس ساختاری مخازن و گراف وابستگی (نسخه ۰.۲.۳)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">
+          ایندکس ساختاری چندمنبعی، گراف وابستگی ماژول‌ها و ذخیره‌سازی افزایشی اسنپ‌شات‌ها
+        </h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
+          پکیج جدید <code>@ai-review/project-index</code> امکان واکشی و تحلیل ساختاری مخازن را از <strong>GitLab، GitHub و پوشه‌های محلی (Local)</strong> فراهم می‌سازد. این موتور با اعمال قوانین <code>.gitignore</code>، استخراج AST برای فایل‌های TypeScript/JS، تشخیص پکیج‌های Monorepo و <code>tsconfig paths</code>، بازاستفاده افزایشی بدون دانلود مجدد فایل‌های تغییرنیافته (<code>gitBlobSha</code>) و مدیریت Job با قابلیت لغو و رعایت <code>Retry-After</code>، زیربنای هوشمندی پروژه را فراهم می‌کند.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- SECTION 14 / FINAL CTA -->
   <section class="py-32 px-6 bg-zinc-950 border-t border-zinc-900 text-center relative overflow-hidden">
     <div class="absolute inset-0 bg-grid opacity-30 z-0 pointer-events-none"></div>
@@ -893,7 +1058,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.1.19</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.2.3</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

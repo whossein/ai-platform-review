@@ -5,6 +5,19 @@
  * vite.config.ts) and which a reverse proxy handles in production.
  */
 
+import type {
+  SafeUser,
+  SafeSession,
+  UserRole,
+  UserStatus,
+  ProjectRole,
+  ProjectMemberWithUser,
+  GitCredentialProvider,
+  GitCredentialSummary,
+  AuditLogEntry,
+  AuditAction,
+} from "@ai-review/core";
+
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
 export interface ReviewIssue {
@@ -52,11 +65,62 @@ export interface EstimateResponse {
   readonly deterministicIssues?: readonly ReviewIssue[];
 }
 
+// ==========================================
+// AUTHENTICATION TOKEN STORAGE & WRAPPER
+// ==========================================
+
+const TOKEN_KEY = "ai_review_session_token";
+
+export function getStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredToken(token: string | null): void {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {
+    // Ignore storage issues in private modes
+  }
+}
+
+export async function authFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const token = getStoredToken();
+  const headers = new Headers(init?.headers || {});
+
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(input, { ...init, headers });
+
+  if (response.status === 401) {
+    // If unauthorized, notify listeners
+    window.dispatchEvent(new CustomEvent("ai-review-auth-unauthorized"));
+  }
+
+  return response;
+}
+
+// ==========================================
+// CORE REVIEW PIPELINE CLIENT
+// ==========================================
+
 export async function requestEstimate(
   diff: string,
   env?: Record<string, string>,
 ): Promise<EstimateResponse> {
-  const res = await fetch("/api/estimate", {
+  const res = await authFetch("/api/estimate", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ diff, ...(env ? { env } : {}) }),
@@ -97,7 +161,7 @@ export async function requestReview(
     reqInit.signal = signal;
   }
 
-  const res = await fetch("/api/review", reqInit);
+  const res = await authFetch("/api/review", reqInit);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `review failed (${res.status})`);
@@ -119,7 +183,7 @@ export async function requestPublish(
   issues: readonly ReviewIssue[],
   env?: Record<string, string>,
 ): Promise<unknown> {
-  const res = await fetch("/api/publish", {
+  const res = await authFetch("/api/publish", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ diff, issues, ...(env ? { env } : {}) }),
@@ -135,51 +199,75 @@ export async function requestApplyLocal(
   localPath: string,
   issues: readonly ReviewIssue[],
 ): Promise<unknown> {
-  const res = await fetch("/api/apply-local", {
+  const res = await authFetch("/api/apply-local", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ localPath, issues }),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `apply failed (${res.status})`);
+    throw new Error(body.error ?? `apply-local failed (${res.status})`);
   }
   return await res.json();
 }
 
 export interface TestProviderResult {
-  readonly ok: boolean;
-  readonly message?: string;
-  readonly error?: string;
-  readonly latencyMs?: number;
-  readonly model?: string;
+  ok: boolean;
+  latencyMs?: number | undefined;
+  model?: string | undefined;
+  error?: string | undefined;
 }
 
-export async function requestTestProvider(config: {
-  provider: string;
-  apiKey?: string | undefined;
-  baseUrl?: string | undefined;
-  model?: string | undefined;
-  customAuthHeaderName?: string | undefined;
-  customAuthHeaderPrefix?: string | undefined;
-}): Promise<TestProviderResult> {
-  const res = await fetch("/api/test-provider", {
+export async function requestTestProvider(
+  params:
+    | string
+    | {
+        provider: string;
+        apiKey?: string | undefined;
+        model?: string | undefined;
+        baseUrl?: string | undefined;
+        customAuthHeaderName?: string | undefined;
+        customAuthHeaderPrefix?: string | undefined;
+        env?: Record<string, string> | undefined;
+      },
+  env?: Record<string, string>,
+): Promise<TestProviderResult> {
+  const body =
+    typeof params === "string"
+      ? { provider: params, ...(env ? { env } : {}) }
+      : {
+          provider: params.provider,
+          apiKey: params.apiKey,
+          model: params.model,
+          baseUrl: params.baseUrl,
+          customAuthHeaderName: params.customAuthHeaderName,
+          customAuthHeaderPrefix: params.customAuthHeaderPrefix,
+          ...(params.env || env ? { env: { ...(params.env || {}), ...(env || {}) } } : {}),
+        };
+  const res = await authFetch("/api/test-provider", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(config),
+    body: JSON.stringify(body),
   });
-  const data = (await res
-    .json()
-    .catch(() => ({
-      ok: false,
-      error: `HTTP ${res.status}`,
-    }))) as TestProviderResult;
-  return data;
+  return await res.json();
 }
 
-// ----------------------------------------------------
-// Project Registry & Management API Client
-// ----------------------------------------------------
+export async function requestFetchModels(
+  provider: string,
+  apiKey?: string,
+  baseUrl?: string,
+): Promise<{ ok: boolean; models?: string[]; error?: string }> {
+  const res = await authFetch("/api/models", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ provider, apiKey, baseUrl }),
+  });
+  return await res.json();
+}
+
+// ==========================================
+// PROJECT REGISTRY CONTRACTS & API
+// ==========================================
 
 export interface Project {
   readonly id: string;
@@ -190,6 +278,7 @@ export interface Project {
   readonly namespace: string;
   readonly description?: string | undefined;
   readonly customInstructions?: string | undefined;
+  readonly userRole?: string | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -239,10 +328,11 @@ export interface ProjectDetailsResponse {
     readonly averageScore?: number | undefined;
     readonly latestReview?: ProjectReviewRecord | undefined;
   };
+  readonly userRole?: string | undefined;
 }
 
 export async function fetchProjects(): Promise<ProjectWithStats[]> {
-  const res = await fetch("/api/projects");
+  const res = await authFetch("/api/projects");
   if (!res.ok) {
     throw new Error(`Failed to fetch projects (${res.status})`);
   }
@@ -253,7 +343,7 @@ export async function fetchProjects(): Promise<ProjectWithStats[]> {
 export async function fetchProjectDetails(
   id: string,
 ): Promise<ProjectDetailsResponse> {
-  const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+  const res = await authFetch(`/api/projects/${encodeURIComponent(id)}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Project not found (${res.status})`);
@@ -267,16 +357,16 @@ export async function createProject(params: {
   description?: string | undefined;
   customInstructions?: string | undefined;
 }): Promise<Project> {
-  const res = await fetch("/api/projects", {
+  const res = await authFetch("/api/projects", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || `Failed to create project (${res.status})`);
-    (err as any).code = data.code;
-    (err as any).existingProject = data.existingProject;
+    const err: any = new Error(data.error || `Failed to create project (${res.status})`);
+    err.code = data.code;
+    err.existingProject = data.existingProject;
     throw err;
   }
   return data.project;
@@ -290,7 +380,7 @@ export async function updateProject(
     customInstructions?: string | undefined;
   },
 ): Promise<Project> {
-  const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
@@ -310,7 +400,7 @@ export async function findOrCreateProjectFromUrl(
   mergeRequest?: ProjectMergeRequest;
   created: boolean;
 }> {
-  const res = await fetch("/api/projects/find-or-create", {
+  const res = await authFetch("/api/projects/find-or-create", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ url, ...(name ? { name } : {}) }),
@@ -323,7 +413,7 @@ export async function findOrCreateProjectFromUrl(
 }
 
 export async function deleteProject(id: string): Promise<boolean> {
-  const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -333,3 +423,349 @@ export async function deleteProject(id: string): Promise<boolean> {
   return true;
 }
 
+// ==========================================
+// AUTHENTICATION & ACCESS CONTROL API
+// ==========================================
+
+export interface AuthStatusResponse {
+  initialized: boolean;
+  authenticated: boolean;
+  user: SafeUser | null;
+}
+
+export async function checkAuthStatus(): Promise<AuthStatusResponse> {
+  const res = await authFetch("/api/auth/status");
+  if (!res.ok) {
+    return { initialized: true, authenticated: false, user: null };
+  }
+  return await res.json();
+}
+
+export async function setupFirstAdmin(params: {
+  name: string;
+  email: string;
+  password: string;
+  passwordConfirmation: string;
+}): Promise<{ user: SafeUser; token: string }> {
+  const res = await fetch("/api/auth/setup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `First-run setup failed (${res.status})`);
+  }
+  setStoredToken(data.token);
+  return data;
+}
+
+export async function login(
+  loginStr: string,
+  passwordStr: string
+): Promise<{ user: SafeUser; token: string }> {
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ login: loginStr, password: passwordStr }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Login failed (${res.status})`);
+  }
+  setStoredToken(data.token);
+  return data;
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await authFetch("/api/auth/logout", { method: "POST" });
+  } finally {
+    setStoredToken(null);
+  }
+}
+
+export async function fetchCurrentUser(): Promise<SafeUser> {
+  const res = await authFetch("/api/auth/me");
+  if (!res.ok) {
+    throw new Error("Failed to load user profile");
+  }
+  const data = await res.json();
+  return data.user;
+}
+
+export async function updateProfile(updates: {
+  name?: string;
+  email?: string;
+  avatar?: string;
+}): Promise<SafeUser> {
+  const res = await authFetch("/api/auth/me", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to update profile");
+  }
+  return data.user;
+}
+
+export async function changePassword(params: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<void> {
+  const res = await authFetch("/api/auth/change-password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to change password");
+  }
+}
+
+export async function fetchSessions(): Promise<SafeSession[]> {
+  const res = await authFetch("/api/auth/sessions");
+  if (!res.ok) {
+    throw new Error("Failed to load sessions");
+  }
+  const data = await res.json();
+  return data.sessions || [];
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  const res = await authFetch(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    throw new Error("Failed to revoke session");
+  }
+}
+
+// ==========================================
+// USER MANAGEMENT (ADMIN)
+// ==========================================
+
+export async function fetchUsers(): Promise<SafeUser[]> {
+  const res = await authFetch("/api/users");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to load users");
+  }
+  const data = await res.json();
+  return data.users || [];
+}
+
+export async function createUser(params: {
+  name: string;
+  email: string;
+  password: string;
+  role?: UserRole;
+  status?: UserStatus;
+}): Promise<SafeUser> {
+  const res = await authFetch("/api/users", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to create user");
+  }
+  return data.user;
+}
+
+export async function updateUser(
+  id: string,
+  params: { name?: string; email?: string }
+): Promise<SafeUser> {
+  const res = await authFetch(`/api/users/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to update user");
+  }
+  return data.user;
+}
+
+export async function setUserStatus(id: string, status: UserStatus): Promise<SafeUser> {
+  const res = await authFetch(`/api/users/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to update user status");
+  }
+  return data.user;
+}
+
+export async function setUserRole(id: string, role: UserRole): Promise<SafeUser> {
+  const res = await authFetch(`/api/users/${encodeURIComponent(id)}/role`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ role }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to update user role");
+  }
+  return data.user;
+}
+
+export async function resetUserPassword(id: string, newPassword: string): Promise<void> {
+  const res = await authFetch(`/api/users/${encodeURIComponent(id)}/reset-password`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to reset password");
+  }
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  const res = await authFetch(`/api/users/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to delete user");
+  }
+}
+
+// ==========================================
+// GIT CREDENTIALS (USER)
+// ==========================================
+
+export async function fetchGitCredentials(): Promise<GitCredentialSummary[]> {
+  const res = await authFetch("/api/me/git-credentials");
+  if (!res.ok) {
+    throw new Error("Failed to load git credentials");
+  }
+  const data = await res.json();
+  return data.credentials || [];
+}
+
+export async function saveGitCredential(
+  provider: GitCredentialProvider,
+  token: string
+): Promise<GitCredentialSummary> {
+  const res = await authFetch(`/api/me/git-credentials/${encodeURIComponent(provider)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to save git credential");
+  }
+  return data.credential;
+}
+
+export async function deleteGitCredential(provider: GitCredentialProvider): Promise<void> {
+  const res = await authFetch(`/api/me/git-credentials/${encodeURIComponent(provider)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    throw new Error("Failed to revoke git credential");
+  }
+}
+
+// ==========================================
+// PROJECT MEMBERS & PERMISSIONS
+// ==========================================
+
+export async function fetchProjectMembers(projectId: string): Promise<ProjectMemberWithUser[]> {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(projectId)}/members`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to fetch project members");
+  }
+  const data = await res.json();
+  return data.members || [];
+}
+
+export async function addProjectMember(
+  projectId: string,
+  userId: string,
+  projectRole: ProjectRole
+): Promise<ProjectMemberWithUser> {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(projectId)}/members`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId, projectRole }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to add project member");
+  }
+  return data.member;
+}
+
+export async function updateProjectMemberRole(
+  projectId: string,
+  userId: string,
+  projectRole: ProjectRole
+): Promise<void> {
+  const res = await authFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ projectRole }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to update project member role");
+  }
+}
+
+export async function removeProjectMember(
+  projectId: string,
+  userId: string
+): Promise<void> {
+  const res = await authFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+    {
+      method: "DELETE",
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to remove project member");
+  }
+}
+
+// ==========================================
+// AUDIT LOGS (ADMIN)
+// ==========================================
+
+export async function fetchAuditLogs(params?: {
+  action?: AuditAction | undefined;
+  actorUserId?: string | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}): Promise<{ logs: AuditLogEntry[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params?.action) query.set("action", params.action);
+  if (params?.actorUserId) query.set("actorUserId", params.actorUserId);
+  if (params?.limit) query.set("limit", params.limit.toString());
+  if (params?.offset) query.set("offset", params.offset.toString());
+
+  const res = await authFetch(`/api/audit-logs?${query.toString()}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to fetch audit logs");
+  }
+  return await res.json();
+}

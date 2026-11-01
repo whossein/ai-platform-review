@@ -71,6 +71,10 @@ export interface Project {
    * specialist reviewers during code review for this project.
    */
   readonly customInstructions?: string | undefined;
+  /** Optional default Git branch (e.g., "main", "master") for indexing. */
+  readonly defaultBranch?: string | undefined;
+  /** Optional local filesystem path when indexing a local checkout. */
+  readonly localPath?: string | undefined;
   readonly createdAt: IsoTimestamp;
   readonly updatedAt: IsoTimestamp;
 }

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "case-01-security-and-cache",
+    "name": "Security and caching regression check",
+    "origin": "synthetic_unit",
+    "status": "verified",
+    "datasetVersion": "v1.0",
+    "annotationVersion": "1.0",
+    "tags": ["security", "performance", "synthetic"],
+    "inputFiles": [
+      {
+        "path": "src/auth.ts",
+        "content": "export function login(token: string) { return verify(token); }"
+      },
+      {
+        "path": "src/api.ts",
+        "content": "export function fetchData() { return db.query(); }"
+      }
+    ],
+    "diff": "--- a/src/auth.ts\n+++ b/src/auth.ts\n@@ -20,6 +20,6 @@\n-function login\n+function login(token: string)\n",
+    "expectedFindings": [
+      {
+        "id": "E1",
+        "file": "src/auth.ts",
+        "lineRange": [20, 25],
+        "category": "security",
+        "severity": "critical",
+        "requiredKeywords": ["sanitize", "token"],
+        "description": "Token must be sanitized"
+      },
+      {
+        "id": "E2",
+        "file": "src/api.ts",
+        "lineRange": [50, 55],
+        "category": "performance",
+        "severity": "high",
+        "requiredKeywords": ["cache"],
+        "description": "Missing caching layer"
+      }
+    ],
+    "antiFindings": [
+      {
+        "id": "A1",
+        "file": "src/api.ts",
+        "lineRange": [50, 55],
+        "triggerKeywords": ["cache", "in-memory"],
+        "explanation": "In-memory cache is intentional"
+      }
+    ]
+  }
+]

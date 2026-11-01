@@ -17,6 +17,7 @@ import {
   Save,
   X,
   FileText,
+  Users,
 } from "lucide-react";
 import {
   fetchProjects,
@@ -28,6 +29,7 @@ import {
   type ProjectDetailsResponse,
 } from "./api.js";
 import { parseRepositoryUrl } from "./url-helper.js";
+import { ProjectMembersTab } from "./ProjectMembersTab.js";
 
 interface ProjectsViewProps {
   initialProjectId?: string | null | undefined;
@@ -56,7 +58,7 @@ export function ProjectsView({
     }
   }, [initialProjectId]);
   const [projectDetails, setProjectDetails] = useState<ProjectDetailsResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<"mrs" | "reviews" | "identity" | "instructions">("mrs");
+  const [activeTab, setActiveTab] = useState<"mrs" | "reviews" | "identity" | "instructions" | "members">("mrs");
 
   // Create Project Modal state
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -752,6 +754,26 @@ export function ProjectsView({
             >
               <BrainCircuit size={16} />
               <span>AI System Guidelines {projectDetails.project.customInstructions ? "✓" : ""}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("members")}
+              style={{
+                background: activeTab === "members" ? "var(--panel)" : "transparent",
+                border: activeTab === "members" ? "1px solid var(--border)" : "1px solid transparent",
+                color: activeTab === "members" ? "var(--text)" : "var(--muted)",
+                padding: "0.5rem 1rem",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <Users size={16} />
+              <span>Team & Members</span>
             </button>
           </div>
 
@@ -1554,6 +1576,14 @@ export function ProjectsView({
               )}
             </div>
           )}
+
+          {/* Subtab 5: Team Members & Access */}
+          {activeTab === "members" && (
+            <ProjectMembersTab
+              projectId={projectDetails.project.id}
+              userRole={projectDetails.userRole}
+            />
+          )}
         </div>
       ) : (
         /* ------------------ Projects List View ------------------ */
@@ -1697,6 +1727,21 @@ export function ProjectsView({
                         >
                           <BrainCircuit size={11} />
                           <span>AI Guidelines</span>
+                        </span>
+                      )}
+                      {project.userRole && (
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "4px",
+                            background: project.userRole === "OWNER" ? "rgba(234, 179, 8, 0.15)" : "rgba(59, 130, 246, 0.15)",
+                            color: project.userRole === "OWNER" ? "#facc15" : "#60a5fa",
+                            border: `1px solid ${project.userRole === "OWNER" ? "rgba(234, 179, 8, 0.3)" : "rgba(59, 130, 246, 0.3)"}`,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {project.userRole}
                         </span>
                       )}
                     </div>

@@ -28,6 +28,9 @@ export type RepositoryId = Branded<string, "RepositoryId">;
 export type ProjectId = Branded<string, "ProjectId">;
 export type OrganizationId = Branded<string, "OrganizationId">;
 export type SessionId = Branded<string, "SessionId">;
+export type UserId = Branded<string, "UserId">;
+export type ProjectMemberId = Branded<string, "ProjectMemberId">;
+export type AuditLogId = Branded<string, "AuditLogId">;
 
 /** A content hash (e.g., sha256 hex). Used pervasively for content-addressed caching. */
 export type ContentHash = Branded<string, "ContentHash">;

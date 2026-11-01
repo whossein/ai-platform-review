@@ -52,3 +52,9 @@ export {
   deleteProjectHandler,
 } from "./projects.js";
 
+export * from "./auth-handlers.js";
+export * from "./user-handlers.js";
+export * from "./credential-handlers.js";
+export * from "./project-member-handlers.js";
+export * from "./audit-handlers.js";
+

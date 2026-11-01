@@ -20,6 +20,7 @@ export interface HttpRequest {
 export interface HttpResponse {
   readonly status: number;
   readonly body: unknown;
+  readonly headers?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface HttpClient {
@@ -62,7 +63,13 @@ export class FetchHttpClient implements HttpClient {
           body = text; // non-JSON response; pass through as text
         }
       }
-      return { ok: true, value: { status: res.status, body } };
+      const headers: Record<string, string> = {};
+      if (res.headers && typeof res.headers.forEach === "function") {
+        res.headers.forEach((value, key) => {
+          headers[key.toLowerCase()] = value;
+        });
+      }
+      return { ok: true, value: { status: res.status, body, headers } };
     } catch (cause) {
       return {
         ok: false,

@@ -30,3 +30,4 @@ export * from "./prompt.js";
 export * from "./review.js";
 export * from "./plugin.js";
 export * from "./events.js";
+export * from "./auth.js";
