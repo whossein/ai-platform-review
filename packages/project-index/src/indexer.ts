@@ -158,7 +158,9 @@ export class ProjectIndexer {
     });
 
     // Load previous snapshot for incremental reuse
-    const previousSnapshot = await this.store.getLatestSnapshot(projectId);
+    const previousSnapshot =
+      (await this.store.getSnapshotForRef(projectId, resolvedRef.ref)) ??
+      (await this.store.getLatestSnapshot(projectId));
     const previousByPath = new Map<string, IndexedFileEntry>();
     if (previousSnapshot) {
       for (const prevFile of previousSnapshot.files) {

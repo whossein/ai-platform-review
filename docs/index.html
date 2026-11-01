@@ -1027,6 +1027,46 @@
           پکیج جدید <code>@ai-review/project-index</code> امکان واکشی و تحلیل ساختاری مخازن را از <strong>GitLab، GitHub و پوشه‌های محلی (Local)</strong> فراهم می‌سازد. این موتور با اعمال قوانین <code>.gitignore</code>، استخراج AST برای فایل‌های TypeScript/JS، تشخیص پکیج‌های Monorepo و <code>tsconfig paths</code>، بازاستفاده افزایشی بدون دانلود مجدد فایل‌های تغییرنیافته (<code>gitBlobSha</code>) و مدیریت Job با قابلیت لغو و رعایت <code>Retry-After</code>، زیربنای هوشمندی پروژه را فراهم می‌کند.
         </p>
       </div>
+      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
+        <h3 class="text-2xl font-bold text-white">Index History (v0.2.16)</h3>
+        <p class="text-zinc-400 leading-relaxed">Every finished indexing job (succeeded, failed or cancelled) is now kept per project &mdash; the last 50 &mdash; with branch, commit, file and symbol counts, reused files and duration. Open <strong>Index history</strong> in the project's Index tab (<code>GET /api/projects/:id/index/history</code>).</p>
+      </div>
+      <div dir="rtl" class="text-right space-y-3 font-sans">
+        <h3 class="text-2xl font-bold text-white">تاریخچه ایندکس (نسخه ۰.۲.۱۶)</h3>
+        <p class="text-zinc-400 leading-relaxed">اکنون هر Job ایندکس پایان‌یافته (موفق، ناموفق یا لغوشده) برای هر پروژه ذخیره می‌شود &mdash; ۵۰ مورد آخر &mdash; همراه با برنچ، commit، تعداد فایل و سیمبل، فایل‌های بازاستفاده‌شده و مدت زمان. در تب Index پروژه بخش <strong>Index history</strong> را باز کنید (<code>GET /api/projects/:id/index/history</code>).</p>
+      </div>
+      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
+        <h3 class="text-2xl font-bold text-white">Fresher Index + Diff Overlay (v0.2.15)</h3>
+        <p class="text-zinc-400 leading-relaxed">The index is now refreshed when the target branch's head commit moves (not just every 24h; at most every 5 minutes). Review context also overlays the change itself on the index: new, renamed and deleted files, newly added imports, relative imports that resolve to nothing, and untouched files that still import a deleted or moved file.</p>
+      </div>
+      <div dir="rtl" class="text-right space-y-3 font-sans">
+        <h3 class="text-2xl font-bold text-white">ایندکس تازه‌تر + اعمال دیف روی ایندکس (نسخه ۰.۲.۱۵)</h3>
+        <p class="text-zinc-400 leading-relaxed">ایندکس اکنون با تغییر commit سر برنچ مقصد به‌روز می‌شود (نه فقط هر ۲۴ ساعت؛ حداکثر هر ۵ دقیقه). کانتکست ریویو خودِ تغییر را هم روی ایندکس اعمال می‌کند: فایل‌های جدید، تغییرنام‌یافته و حذف‌شده، importهای تازه، importهای نسبی بدون مقصد، و فایل‌های دست‌نخورده‌ای که هنوز فایل حذف‌شده یا جابه‌جاشده را import می‌کنند.</p>
+      </div>
+      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
+        <h3 class="text-2xl font-bold text-white">Per-Branch Index for Reviews (v0.2.14)</h3>
+        <p class="text-zinc-400 leading-relaxed">Each branch now keeps its own index. Reviews use the index of the MR/PR <strong>target branch</strong> (falling back to the default branch, then the latest index), so indexing a feature branch no longer changes other reviews. Automatic indexing now also uses the Git token from Settings.</p>
+      </div>
+      <div dir="rtl" class="text-right space-y-3 font-sans">
+        <h3 class="text-2xl font-bold text-white">ایندکس مجزا برای هر برنچ در ریویو (نسخه ۰.۲.۱۴)</h3>
+        <p class="text-zinc-400 leading-relaxed">اکنون هر برنچ ایندکس مخصوص خود را نگه می‌دارد. ریویو از ایندکس <strong>برنچ مقصد</strong> MR/PR استفاده می‌کند (در صورت نبود، برنچ پیش‌فرض و سپس آخرین ایندکس) و ایندکس‌کردن یک فیچر‌برنچ دیگر روی ریویوهای دیگر اثر نمی‌گذارد. ایندکس خودکار هم اکنون از توکن Git تنظیمات استفاده می‌کند.</p>
+      </div>
+      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
+        <h3 class="text-2xl font-bold text-white">Deep Links + Index Token Fix (v0.2.13)</h3>
+        <p class="text-zinc-400 leading-relaxed">The address bar now follows the app: <code>#/projects/&lt;id&gt;/index</code> opens a project's Index tab directly, and back/forward work. The Index tab also uses the matching Git connection from Settings, which fixes <em>404 Project Not Found</em> when no token was stored in Profile.</p>
+      </div>
+      <div dir="rtl" class="text-right space-y-3 font-sans">
+        <h3 class="text-2xl font-bold text-white">لینک مستقیم + رفع خطای توکن در Index (نسخه ۰.۲.۱۳)</h3>
+        <p class="text-zinc-400 leading-relaxed">آدرس مرورگر اکنون با برنامه هماهنگ است: <code>#/projects/&lt;id&gt;/index</code> مستقیم تب Index پروژه را باز می‌کند و دکمه‌های back/forward کار می‌کنند. تب Index از اتصال Git مطابق در Settings استفاده می‌کند و خطای <em>404 Project Not Found</em> را وقتی توکنی در Profile ذخیره نبود رفع می‌کند.</p>
+      </div>
+      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
+        <h3 class="text-2xl font-bold text-white">Multiple Git Connections + Test Connection (v0.2.12)</h3>
+        <p class="text-zinc-400 leading-relaxed">Settings → Git Provider Settings now lets you add any number of GitLab/GitHub connections (each with its own base URL and token). The connection matching the MR/PR host is picked automatically, and a <strong>Test Connection</strong> button verifies each token against the Git host.</p>
+      </div>
+      <div dir="rtl" class="text-right space-y-3 font-sans">
+        <h3 class="text-2xl font-bold text-white">چند اتصال Git + دکمه تست اتصال (نسخه ۰.۲.۱۲)</h3>
+        <p class="text-zinc-400 leading-relaxed">در تنظیمات → Git Provider Settings می‌توانید چندین اتصال GitLab/GitHub (هرکدام با آدرس پایه و توکن مخصوص خود) اضافه کنید. اتصال مطابق با host لینک MR/PR به‌صورت خودکار انتخاب می‌شود و دکمه <strong>Test Connection</strong> اعتبار هر توکن را روی سرور Git بررسی می‌کند.</p>
+      </div>
     </div>
   </section>
 
@@ -1154,7 +1194,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.2.11</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.2.16</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

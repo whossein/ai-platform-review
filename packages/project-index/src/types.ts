@@ -130,6 +130,20 @@ export interface IndexJob {
   readonly error?: string | undefined;
 }
 
+/** A finished (succeeded / failed / cancelled) job kept in the per-project history. */
+export interface IndexHistoryEntry extends IndexJob {
+  /** Present for succeeded jobs. */
+  readonly stats?:
+    | {
+        readonly indexedFilesCount: number;
+        readonly skippedFilesCount: number;
+        readonly reusedFilesCount: number;
+        readonly totalSymbols: number;
+        readonly durationMs: number;
+      }
+    | undefined;
+}
+
 export interface IndexFilterOptions {
   /** Maximum file size in bytes (default: 262_144 = 256 KB). */
   readonly maxFileSizeBytes?: number | undefined;

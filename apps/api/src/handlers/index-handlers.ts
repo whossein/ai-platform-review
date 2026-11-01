@@ -62,11 +62,14 @@ async function launchIndexJob(
   project: Project,
   user: SafeUser,
   ref: string | undefined,
+  tokenOverride?: string,
 ) {
-  const token = await deps.security.credentialStore.getDecryptedToken(
-    user.id,
-    providerForHost(project.gitHost),
-  );
+  const token =
+    tokenOverride ||
+    (await deps.security.credentialStore.getDecryptedToken(
+      user.id,
+      providerForHost(project.gitHost),
+    ));
 
   // Never index local paths through the API: strip any localPath from the project.
   const { localPath: _ignored, ...remoteProject } = project as typeof project & {
@@ -82,21 +85,124 @@ async function launchIndexJob(
 
 const AUTO_INDEX_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const AUTO_INDEX_RETRY_AFTER_FAILURE_MS = 10 * 60 * 1000;
+const DEFAULT_BRANCH_TTL_MS = 60 * 60 * 1000;
+/** An existing index is not re-checked/rebuilt more often than this, even on a busy branch. */
+const MIN_REINDEX_INTERVAL_MS = 5 * 60 * 1000;
+const HEAD_CACHE_TTL_MS = 60 * 1000;
+
+const headCache = new Map<string, { sha: string; at: number }>();
+
+const defaultBranchCache = new Map<string, { branch: string; at: number }>();
+
+async function resolveToken(
+  deps: IndexHandlerDeps,
+  project: Project,
+  user: SafeUser,
+  tokenOverride?: string,
+): Promise<string | undefined> {
+  return (
+    tokenOverride ||
+    (await deps.security.credentialStore.getDecryptedToken(
+      user.id,
+      providerForHost(project.gitHost),
+    )) ||
+    undefined
+  );
+}
+
+/** Default branch of the project (cached for an hour); undefined when it cannot be determined. */
+async function resolveDefaultBranch(
+  deps: IndexHandlerDeps,
+  project: Project,
+  user: SafeUser,
+  tokenOverride?: string,
+): Promise<string | undefined> {
+  if (project.defaultBranch) return project.defaultBranch;
+  const cached = defaultBranchCache.get(project.id);
+  if (cached && Date.now() - cached.at < DEFAULT_BRANCH_TTL_MS) return cached.branch;
+  try {
+    const token = await resolveToken(deps, project, user, tokenOverride);
+    const { localPath: _ignored, ...remoteProject } = project as typeof project & {
+      localPath?: string;
+    };
+    const { defaultBranch } = await deps.indexJobs.listBranches({
+      project: remoteProject,
+      credentials: token ? { token } : undefined,
+    });
+    if (defaultBranch) {
+      defaultBranchCache.set(project.id, { branch: defaultBranch, at: Date.now() });
+      return defaultBranch;
+    }
+  } catch {
+    // fall through: caller falls back to the latest index
+  }
+  return undefined;
+}
+
+export interface EnsureIndexOptions {
+  /** Branch to keep indexed (the MR's target branch); defaults to the project's default branch. */
+  readonly ref?: string | undefined;
+  /** Git token supplied with the request (e.g. from the user's Settings). */
+  readonly tokenOverride?: string | undefined;
+  /** The unified diff under review; overlaid on the index so new/moved/deleted files are covered. */
+  readonly diff?: string | undefined;
+}
+
+/** Current head SHA of `ref` on the git host (cached briefly), or undefined if it cannot be read. */
+async function currentHeadSha(
+  deps: IndexHandlerDeps,
+  project: Project,
+  user: SafeUser,
+  ref: string,
+  tokenOverride?: string,
+): Promise<string | undefined> {
+  const key = `${project.id}:${ref}`;
+  const cached = headCache.get(key);
+  if (cached && Date.now() - cached.at < HEAD_CACHE_TTL_MS) return cached.sha;
+  try {
+    const token = await resolveToken(deps, project, user, tokenOverride);
+    const { localPath: _ignored, ...remoteProject } = project as typeof project & {
+      localPath?: string;
+    };
+    const head = await deps.indexJobs.resolveHead(
+      { project: remoteProject, credentials: token ? { token } : undefined },
+      ref,
+    );
+    headCache.set(key, { sha: head.commitSha, at: Date.now() });
+    return head.commitSha;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
- * Starts a background index job when a project has never been indexed or its
- * index is older than 24h. Never throws and never blocks the caller; a failed
- * attempt is not retried for 10 minutes.
+ * Starts a background index job when the wanted branch has never been indexed
+ * or has moved on since it was indexed (its head SHA differs from the snapshot's;
+ * if the head cannot be read, an index older than 24h counts as stale). A branch
+ * is not rebuilt more often than every 5 minutes. Never throws and never blocks
+ * the caller; a failed attempt is not retried for 10 minutes.
  */
 export async function ensureProjectIndexed(
   deps: IndexHandlerDeps,
   project: Project,
   user: SafeUser,
+  options: EnsureIndexOptions = {},
 ): Promise<void> {
   try {
     const now = Date.now();
-    const pointer = await deps.indexStore.getLatestPointer(project.id);
-    if (pointer && now - Date.parse(pointer.updatedAt) < AUTO_INDEX_MAX_AGE_MS) return;
+    const ref =
+      options.ref ?? (await resolveDefaultBranch(deps, project, user, options.tokenOverride));
+    const pointer = ref
+      ? await deps.indexStore.getRefPointer(project.id, ref)
+      : await deps.indexStore.getLatestPointer(project.id);
+    if (pointer) {
+      const age = now - Date.parse(pointer.updatedAt);
+      if (age < MIN_REINDEX_INTERVAL_MS) return;
+      const head = ref
+        ? await currentHeadSha(deps, project, user, ref, options.tokenOverride)
+        : undefined;
+      if (head ? head === pointer.commitSha : age < AUTO_INDEX_MAX_AGE_MS) return;
+    }
 
     const job = await deps.indexJobs.getJobStatus(project.id);
     if (job?.status === "queued" || job?.status === "running") return;
@@ -108,21 +214,34 @@ export async function ensureProjectIndexed(
       return;
     }
 
-    await launchIndexJob(deps, project, user, undefined);
+    await launchIndexJob(deps, project, user, ref, options.tokenOverride);
   } catch (err) {
     console.warn("Auto-index skipped:", err);
   }
 }
 
-/** Index-derived context for the files changed in a review, or undefined when unavailable. */
+/**
+ * Index-derived context for the files changed in a review, or undefined when
+ * unavailable. Prefers the index of the change's target branch, then the
+ * project's default branch, then whatever was indexed last.
+ */
 export async function buildProjectReviewContext(
   deps: IndexHandlerDeps,
-  projectId: string,
+  project: Project,
+  user: SafeUser,
   paths: readonly string[],
+  options: EnsureIndexOptions = {},
 ): Promise<string | undefined> {
-  const snapshot = await deps.indexStore.getLatestSnapshot(projectId);
+  let snapshot = options.ref
+    ? await deps.indexStore.getSnapshotForRef(project.id, options.ref)
+    : undefined;
+  if (!snapshot) {
+    const def = await resolveDefaultBranch(deps, project, user, options.tokenOverride);
+    if (def) snapshot = await deps.indexStore.getSnapshotForRef(project.id, def);
+  }
+  snapshot ??= await deps.indexStore.getLatestSnapshot(project.id);
   if (!snapshot) return undefined;
-  return buildReviewContext(snapshot, paths) || undefined;
+  return buildReviewContext(snapshot, paths, { diff: options.diff }) || undefined;
 }
 
 export async function startProjectIndexHandler(
@@ -130,6 +249,7 @@ export async function startProjectIndexHandler(
   projectId: string,
   user: SafeUser,
   body: { ref?: unknown },
+  tokenOverride?: string,
 ) {
   const project = await requireProject(deps, projectId, user, "project:manage");
 
@@ -139,7 +259,7 @@ export async function startProjectIndexHandler(
     throw httpError(400, "Invalid ref");
   }
 
-  const job = await launchIndexJob(deps, project, user, ref);
+  const job = await launchIndexJob(deps, project, user, ref, tokenOverride);
 
   await deps.security.auditStore.log({
     actorUserId: user.id,
@@ -158,12 +278,15 @@ export async function listProjectBranchesHandler(
   deps: IndexHandlerDeps,
   projectId: string,
   user: SafeUser,
+  tokenOverride?: string,
 ) {
   const project = await requireProject(deps, projectId, user, "project:manage");
-  const token = await deps.security.credentialStore.getDecryptedToken(
-    user.id,
-    providerForHost(project.gitHost),
-  );
+  const token =
+    tokenOverride ||
+    (await deps.security.credentialStore.getDecryptedToken(
+      user.id,
+      providerForHost(project.gitHost),
+    ));
   const { localPath: _ignored, ...remoteProject } = project as typeof project & {
     localPath?: string;
   };
@@ -186,6 +309,15 @@ export async function cancelProjectIndexHandler(
   await requireProject(deps, projectId, user, "project:manage");
   const cancelled = deps.indexJobs.cancelJob(projectId);
   return { cancelled };
+}
+
+export async function getProjectIndexHistoryHandler(
+  deps: IndexHandlerDeps,
+  projectId: string,
+  user: SafeUser,
+) {
+  await requireProject(deps, projectId, user, "project:view");
+  return { history: await deps.indexStore.getHistory(projectId) };
 }
 
 export async function getProjectIndexHandler(

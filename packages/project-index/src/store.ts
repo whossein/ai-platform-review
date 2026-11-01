@@ -6,8 +6,10 @@
  *
  * Directory layout:
  *   <baseDir>/<projectId>/<commitSha>.json
- *   <baseDir>/<projectId>/latest.json
+ *   <baseDir>/<projectId>/latest.json   (most recently indexed ref, any branch)
+ *   <baseDir>/<projectId>/refs.json     (newest pointer per ref/branch)
  *   <baseDir>/<projectId>/job.json
+ *   <baseDir>/<projectId>/history.json  (finished jobs, newest first, capped)
  */
 
 import { randomBytes } from "node:crypto";
@@ -15,12 +17,19 @@ import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import type { ProjectId } from "@ai-review/core";
 import type {
+  IndexHistoryEntry,
   IndexJob,
   LatestIndexPointer,
   ProjectIndexSnapshot,
 } from "./types.js";
 
 export const DEFAULT_SNAPSHOT_RETENTION = 3;
+/** Maximum distinct refs (branches) that keep their own pointer and snapshot. */
+export const MAX_TRACKED_REFS = 8;
+/** Finished jobs kept per project for the history view. */
+export const MAX_HISTORY_ENTRIES = 50;
+
+const RESERVED_FILES = new Set(["latest.json", "refs.json", "job.json", "history.json"]);
 
 export interface ProjectIndexStoreOptions {
   readonly baseDir?: string | undefined;
@@ -62,6 +71,21 @@ export class ProjectIndexStore {
 
   private latestPointerPath(projectId: ProjectId | string): string {
     return path.join(this.projectDir(projectId), "latest.json");
+  }
+
+  private refsPointerPath(projectId: ProjectId | string): string {
+    return path.join(this.projectDir(projectId), "refs.json");
+  }
+
+  private async readRefs(
+    projectId: ProjectId | string,
+  ): Promise<Record<string, LatestIndexPointer>> {
+    try {
+      const raw = await fs.readFile(this.refsPointerPath(projectId), "utf8");
+      return JSON.parse(raw) as Record<string, LatestIndexPointer>;
+    } catch {
+      return {};
+    }
   }
 
   private jobFilePath(projectId: ProjectId | string): string {
@@ -113,16 +137,27 @@ export class ProjectIndexStore {
         pointer,
       );
 
+      // Per-ref pointer: indexing one branch must not replace another's index.
+      const refs = await this.readRefs(snapshot.projectId);
+      refs[snapshot.ref] = pointer;
+      const kept = Object.entries(refs)
+        .sort((a, b) => Date.parse(b[1].updatedAt) - Date.parse(a[1].updatedAt))
+        .slice(0, MAX_TRACKED_REFS);
+      await this.atomicWriteJson(
+        this.refsPointerPath(snapshot.projectId),
+        Object.fromEntries(kept),
+      );
+
       await this.pruneOldSnapshotsInternal(
         snapshot.projectId,
-        snapshot.commitSha,
+        new Set(kept.map(([, p]) => p.commitSha)),
       );
     });
   }
 
   private async pruneOldSnapshotsInternal(
     projectId: ProjectId | string,
-    keepCommitSha: string,
+    protectedShas: ReadonlySet<string>,
   ): Promise<void> {
     const dir = this.projectDir(projectId);
     let entries: string[];
@@ -132,7 +167,7 @@ export class ProjectIndexStore {
       return;
     }
 
-    const reservedNames = new Set(["latest.json", "job.json"]);
+    const reservedNames = RESERVED_FILES;
     const snapshotFiles: Array<{
       name: string;
       fullPath: string;
@@ -169,22 +204,20 @@ export class ProjectIndexStore {
       }
     }
 
-    if (snapshotFiles.length <= this.retentionCount) {
+    const keepCount = Math.max(this.retentionCount, protectedShas.size);
+    if (snapshotFiles.length <= keepCount) {
       return;
     }
 
-    // Sort newest first; always protect `keepCommitSha`
+    // Sort newest first; snapshots that a ref pointer targets are never pruned
     snapshotFiles.sort((a, b) => {
-      if (a.commitSha === keepCommitSha && b.commitSha !== keepCommitSha) {
-        return -1;
-      }
-      if (b.commitSha === keepCommitSha && a.commitSha !== keepCommitSha) {
-        return 1;
-      }
+      const pa = protectedShas.has(a.commitSha);
+      const pb = protectedShas.has(b.commitSha);
+      if (pa !== pb) return pa ? -1 : 1;
       return b.createdAtMs - a.createdAtMs;
     });
 
-    const toDelete = snapshotFiles.slice(this.retentionCount);
+    const toDelete = snapshotFiles.slice(keepCount);
     for (const item of toDelete) {
       try {
         await fs.unlink(item.fullPath);
@@ -204,6 +237,24 @@ export class ProjectIndexStore {
     } catch {
       return undefined;
     }
+  }
+
+  async getRefPointer(
+    projectId: ProjectId | string,
+    ref: string,
+  ): Promise<LatestIndexPointer | undefined> {
+    await this.writeQueue;
+    return (await this.readRefs(projectId))[ref];
+  }
+
+  /** Latest snapshot indexed for exactly this ref (branch/tag), if any. */
+  async getSnapshotForRef(
+    projectId: ProjectId | string,
+    ref: string,
+  ): Promise<ProjectIndexSnapshot | undefined> {
+    const pointer = await this.getRefPointer(projectId, ref);
+    if (!pointer) return undefined;
+    return this.getSnapshot(projectId, pointer.commitSha);
   }
 
   async getSnapshot(
@@ -237,7 +288,7 @@ export class ProjectIndexStore {
     const dir = this.projectDir(projectId);
     try {
       const entries = await fs.readdir(dir);
-      const reservedNames = new Set(["latest.json", "job.json"]);
+      const reservedNames = RESERVED_FILES;
       return entries
         .filter(
           (name) =>
@@ -258,6 +309,40 @@ export class ProjectIndexStore {
     await this.enqueueWrite(async () => {
       await this.atomicWriteJson(this.jobFilePath(job.projectId), job);
     });
+  }
+
+  /** Records a finished job; replaces an entry with the same id, keeps the newest 50. */
+  async appendHistory(entry: IndexHistoryEntry): Promise<void> {
+    await this.enqueueWrite(async () => {
+      const file = path.join(this.projectDir(entry.projectId), "history.json");
+      let current: IndexHistoryEntry[] = [];
+      try {
+        current = JSON.parse(await fs.readFile(file, "utf8")) as IndexHistoryEntry[];
+      } catch {
+        // no history yet
+      }
+      const next = [entry, ...current.filter((e) => e.id !== entry.id)].slice(
+        0,
+        MAX_HISTORY_ENTRIES,
+      );
+      await this.atomicWriteJson(file, next);
+    });
+  }
+
+  async getHistory(
+    projectId: ProjectId | string,
+    limit = MAX_HISTORY_ENTRIES,
+  ): Promise<readonly IndexHistoryEntry[]> {
+    await this.writeQueue;
+    try {
+      const raw = await fs.readFile(
+        path.join(this.projectDir(projectId), "history.json"),
+        "utf8",
+      );
+      return (JSON.parse(raw) as IndexHistoryEntry[]).slice(0, Math.max(1, limit));
+    } catch {
+      return [];
+    }
   }
 
   async getJob(projectId: ProjectId | string): Promise<IndexJob | undefined> {

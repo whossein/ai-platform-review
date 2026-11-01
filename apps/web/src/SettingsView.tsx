@@ -22,9 +22,14 @@ import {
   X,
   Power,
 } from "lucide-react";
-import { useAppConfig } from "./Settings.js";
-import type { AIProviderConfig, AppConfig } from "./Settings.js";
-import { authFetch, requestTestProvider, type TestProviderResult } from "./api.js";
+import { useAppConfig, defaultGitBaseUrl } from "./Settings.js";
+import type { AIProviderConfig, AppConfig, GitConnection } from "./Settings.js";
+import {
+  authFetch,
+  requestTestProvider,
+  requestTestGitConnection,
+  type TestProviderResult,
+} from "./api.js";
 
 const PRESET_DEFAULTS: Record<
   string,
@@ -206,6 +211,56 @@ export function SettingsView() {
     setLocal(config);
     setEditingProviderId(null);
     setEditForm(null);
+  };
+
+  const updateGitConn = (id: string, patch: Partial<GitConnection>) =>
+    setLocal((prev) => ({
+      ...prev,
+      GIT_CONNECTIONS: (prev.GIT_CONNECTIONS || []).map((c) =>
+        c.id === id ? { ...c, ...patch } : c,
+      ),
+    }));
+
+  const removeGitConn = (id: string) =>
+    setLocal((prev) => ({
+      ...prev,
+      GIT_CONNECTIONS: (prev.GIT_CONNECTIONS || []).filter((c) => c.id !== id),
+    }));
+
+  const addGitConn = () =>
+    setLocal((prev) => ({
+      ...prev,
+      GIT_CONNECTIONS: [
+        ...(prev.GIT_CONNECTIONS || []),
+        {
+          id: `git_${Date.now()}`,
+          name: "",
+          type: "gitlab",
+          baseUrl: "",
+          token: "",
+        },
+      ],
+    }));
+
+  const handleTestGit = async (c: GitConnection) => {
+    const key = `git-${c.id}`;
+    setTestStates((prev) => ({ ...prev, [key]: { loading: true } }));
+    try {
+      const res = await requestTestGitConnection({
+        type: c.type,
+        baseUrl: c.baseUrl,
+        token: c.token,
+      });
+      setTestStates((prev) => ({ ...prev, [key]: { loading: false, result: res } }));
+    } catch (err: any) {
+      setTestStates((prev) => ({
+        ...prev,
+        [key]: {
+          loading: false,
+          result: { ok: false, error: err.message || "Connection test failed" },
+        },
+      }));
+    }
   };
 
   const handleTest = async (
@@ -1738,39 +1793,115 @@ export function SettingsView() {
           review comments.
         </p>
 
-        <div className="form-group">
-          <label>GitLab Base URL</label>
-          <input
-            type="url"
-            value={local.GITLAB_BASE_URL}
-            onChange={(e) =>
-              setLocal({ ...local, GITLAB_BASE_URL: e.target.value })
-            }
-            placeholder="e.g. https://gitlab.com (Usually auto-detected from MR URL)"
-          />
-        </div>
-        <div className="form-group">
-          <label>GitLab Personal Access Token</label>
-          <input
-            type="password"
-            value={local.GITLAB_TOKEN}
-            onChange={(e) =>
-              setLocal({ ...local, GITLAB_TOKEN: e.target.value })
-            }
-            placeholder="glpat-... (Defaults to server env if empty)"
-          />
-        </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>GitHub Personal Access Token (for private repos)</label>
-          <input
-            type="password"
-            value={local.GITHUB_TOKEN || ""}
-            onChange={(e) =>
-              setLocal({ ...local, GITHUB_TOKEN: e.target.value })
-            }
-            placeholder="ghp_... (Optional for public repositories)"
-          />
-        </div>
+        {(local.GIT_CONNECTIONS || []).map((c) => {
+          const t = testStates[`git-${c.id}`];
+          return (
+            <div
+              key={c.id}
+              className="git-conn"
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: "8px",
+                padding: "1rem",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <div className="git-conn-row">
+                <input
+                  type="text"
+                  value={c.name}
+                  onChange={(e) => updateGitConn(c.id, { name: e.target.value })}
+                  placeholder="Name (e.g. Work GitLab)"
+                  style={{ flex: 1 }}
+                />
+                <select
+                  value={c.type}
+                  onChange={(e) =>
+                    updateGitConn(c.id, {
+                      type: e.target.value as "gitlab" | "github",
+                    })
+                  }
+                >
+                  <option value="gitlab">GitLab</option>
+                  <option value="github">GitHub</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeGitConn(c.id)}
+                  title="Remove connection"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--border)",
+                    color: "var(--danger, #ff4757)",
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <input
+                type="url"
+                value={c.baseUrl}
+                onChange={(e) => updateGitConn(c.id, { baseUrl: e.target.value })}
+                placeholder={`Base URL — empty for ${defaultGitBaseUrl(c.type)} (self-hosted: https://git.example.com)`}
+                style={{ marginBottom: "0.5rem" }}
+              />
+              <div className="git-conn-row" style={{ marginBottom: 0 }}>
+                <input
+                  type="password"
+                  value={c.token}
+                  onChange={(e) => updateGitConn(c.id, { token: e.target.value })}
+                  placeholder={c.type === "github" ? "ghp_... / github_pat_..." : "glpat-..."}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleTestGit(c)}
+                  disabled={!c.token || t?.loading}
+                  style={{
+                    background: "var(--panel)",
+                    border: "1px solid var(--border)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                  }}
+                >
+                  <Activity size={14} />
+                  {t?.loading ? "Testing..." : "Test Connection"}
+                </button>
+              </div>
+              {t?.result && (
+                <div
+                  style={{
+                    marginTop: "0.5rem",
+                    fontSize: "0.8rem",
+                    color: t.result.ok ? "#2ed573" : "#ff4757",
+                  }}
+                >
+                  {t.result.ok
+                    ? `✓ Connected${(t.result as any).username ? ` as ${(t.result as any).username}` : ""} (${t.result.latencyMs}ms)`
+                    : `✗ ${t.result.error}`}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <p
+          style={{
+            fontSize: "0.8rem",
+            color: "var(--muted)",
+            margin: "0.5rem 0",
+          }}
+        >
+          The connection whose host matches the MR/PR URL is used
+          automatically.
+        </p>
+        <button
+          type="button"
+          onClick={addGitConn}
+          style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+        >
+          <Plus size={16} /> Add Git Connection
+        </button>
       </div>
 
       {/* Budget & Limits */}

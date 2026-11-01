@@ -119,6 +119,14 @@ export class IndexJobManager {
     return source.listBranches();
   }
 
+  /** Resolves a branch/tag to its current head commit SHA (cheap: one API call). */
+  async resolveHead(
+    input: StartIndexJobInput,
+    ref: string | undefined,
+  ): Promise<{ ref: string; commitSha: string }> {
+    return this.createSourceForProject(input).resolveRef(ref);
+  }
+
   /**
    * Starts an indexing job for a project, or returns the currently running job if one is already active.
    */
@@ -220,6 +228,16 @@ export class IndexJobManager {
       };
       handle.job = completedJob;
       await this.store.saveJob(completedJob);
+      await this.store.appendHistory({
+        ...completedJob,
+        stats: {
+          indexedFilesCount: snapshot.stats.indexedFilesCount,
+          skippedFilesCount: snapshot.stats.skippedFilesCount,
+          reusedFilesCount: snapshot.stats.reusedFilesCount,
+          totalSymbols: snapshot.stats.totalSymbols,
+          durationMs: snapshot.stats.durationMs,
+        },
+      });
       return completedJob;
     } catch (err: unknown) {
       const isCancelled =
@@ -242,6 +260,7 @@ export class IndexJobManager {
       };
       handle.job = terminalJob;
       await this.store.saveJob(terminalJob);
+      await this.store.appendHistory(terminalJob);
       return terminalJob;
     } finally {
       const current = this.activeJobs.get(key);
@@ -287,6 +306,7 @@ export class IndexJobManager {
         error: "Indexing job was interrupted by server restart",
       };
       await this.store.saveJob(interrupted);
+      await this.store.appendHistory(interrupted);
       return interrupted;
     }
     return persisted;

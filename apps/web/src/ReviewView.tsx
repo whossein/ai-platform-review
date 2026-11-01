@@ -19,7 +19,7 @@ import {
   type ProjectMergeRequest,
 } from "./api.js";
 import { parseRepositoryUrl } from "./url-helper.js";
-import { useAppConfig } from "./Settings.js";
+import { useAppConfig, resolveGitEnv } from "./Settings.js";
 
 const SAMPLE_DIFF = `diff --git a/src/UserList.tsx b/src/UserList.tsx
 --- a/src/UserList.tsx
@@ -72,7 +72,7 @@ function IssueCard({ issue }: { issue: ReviewIssue }): JSX.Element {
   );
 }
 
-function buildEnvOverrides(config: any, language: string) {
+function buildEnvOverrides(config: any, language: string, targetUrl?: string) {
   const envOverrides: Record<string, string> = {
     AI_REVIEW_LLM_PROVIDER: config.AI_REVIEW_LLM_PROVIDER || "gemini",
     AI_REVIEW_COMMENT_LANGUAGE: language,
@@ -145,6 +145,7 @@ function buildEnvOverrides(config: any, language: string) {
   if (config.GITLAB_BASE_URL)
     envOverrides.GITLAB_BASE_URL = config.GITLAB_BASE_URL;
   if (config.GITHUB_TOKEN) envOverrides.GITHUB_TOKEN = config.GITHUB_TOKEN;
+  Object.assign(envOverrides, resolveGitEnv(config, targetUrl));
 
   return envOverrides;
 }
@@ -463,7 +464,10 @@ export function ReviewView({
             accepted: true,
           };
         });
-      await requestPublish(diffToPublish, issuesToPublish, config as any);
+      await requestPublish(diffToPublish, issuesToPublish, {
+        ...(config as any),
+        ...resolveGitEnv(config, inputMode === "pr" ? prUrl.trim() : undefined),
+      });
       setPublishSuccess(true);
       setTimeout(() => setPublishSuccess(false), 5000);
     } catch (e: any) {
@@ -497,7 +501,11 @@ export function ReviewView({
     }
 
     try {
-      const envOverrides = buildEnvOverrides(config, language);
+      const envOverrides = buildEnvOverrides(
+        config,
+        language,
+        inputMode === "pr" ? prUrl.trim() : undefined,
+      );
 
       const res = await requestEstimate(diffToEstimate, envOverrides);
       setEstimate(res);
@@ -578,7 +586,11 @@ export function ReviewView({
     abortControllerRef.current = controller;
 
     try {
-      const envOverrides = buildEnvOverrides(config, language);
+      const envOverrides = buildEnvOverrides(
+        config,
+        language,
+        inputMode === "pr" ? prUrl.trim() : undefined,
+      );
 
       const res = await requestReview(
         diffToReview,

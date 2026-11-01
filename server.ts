@@ -17,6 +17,7 @@ import {
   applyLocalHandler,
   modelsHandler,
   testProviderHandler,
+  testGitConnectionHandler,
   listProjectsHandler,
   getProjectDetailsHandler,
   createProjectHandler,
@@ -52,6 +53,7 @@ import {
   cancelProjectIndexHandler,
   listProjectBranchesHandler,
   getProjectIndexHandler,
+  getProjectIndexHistoryHandler,
   ensureProjectIndexed,
   buildProjectReviewContext,
 } from "./apps/api/src/handlers/index.js";
@@ -478,9 +480,17 @@ async function startServer() {
     }
   });
 
+  app.get("/api/projects/:id/index/history", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await getProjectIndexHistoryHandler(indexDeps, req.params.id, (req as any).user));
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to read index history" });
+    }
+  });
+
   app.get("/api/projects/:id/index/branches", requireAuth, async (req, res) => {
     try {
-      res.status(200).json(await listProjectBranchesHandler(indexDeps, req.params.id, (req as any).user));
+      res.status(200).json(await listProjectBranchesHandler(indexDeps, req.params.id, (req as any).user, req.get("x-git-token") || undefined));
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to list branches" });
     }
@@ -488,7 +498,7 @@ async function startServer() {
 
   app.post("/api/projects/:id/index", requireAuth, async (req, res) => {
     try {
-      const result = await startProjectIndexHandler(indexDeps, req.params.id, (req as any).user, req.body || {});
+      const result = await startProjectIndexHandler(indexDeps, req.params.id, (req as any).user, req.body || {}, req.get("x-git-token") || undefined);
       res.status(202).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to start indexing" });
@@ -637,12 +647,18 @@ async function startServer() {
       }
 
       // Keep the structural index fresh in the background and feed it to reviewers
-      if (preProject && user) {
-        void ensureProjectIndexed(indexDeps, preProject, user);
-      }
-      const projectContextProvider = preProject
-        ? (paths: readonly string[]) => buildProjectReviewContext(indexDeps, preProject.id, paths)
-        : undefined;
+      // The index of the MR's target branch is what reviewers need; the diff carries the change itself.
+      const projectContextProvider =
+        preProject && user
+          ? async (paths: readonly string[], ctx: { targetBranch?: string | undefined; diff?: string | undefined }) => {
+              const options = {
+                ref: ctx.targetBranch,
+                tokenOverride: reviewEnv.GITLAB_TOKEN || reviewEnv.GITHUB_TOKEN,
+              };
+              void ensureProjectIndexed(indexDeps, preProject, user, options);
+              return buildProjectReviewContext(indexDeps, preProject, user, paths, { ...options, diff: ctx.diff });
+            }
+          : undefined;
 
       const customInstructions =
         req.body?.customInstructions || preProject?.customInstructions;
@@ -748,6 +764,15 @@ async function startServer() {
         error: err.message || "Internal error",
         latencyMs: err.latencyMs,
       });
+    }
+  });
+
+  app.post("/api/test-git-connection", requireAuth, async (req, res) => {
+    try {
+      const result = await testGitConnectionHandler(req.body || {});
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message || "Internal error" });
     }
   });
 

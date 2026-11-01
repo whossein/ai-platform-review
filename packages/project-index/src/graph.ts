@@ -392,3 +392,26 @@ export function buildImportGraph(
     pathAliases,
   };
 }
+
+/**
+ * Resolves an import specifier found in changed code against an existing index,
+ * optionally treating `extraFiles` (e.g. files added by a diff) as present.
+ * Returns the internal file it points at, or undefined for external/unresolved.
+ */
+export function resolveImportAgainstGraph(
+  importerPath: string,
+  specifier: string,
+  graph: Pick<ProjectImportGraph, "workspaces" | "pathAliases">,
+  knownPaths: Iterable<string>,
+): string | undefined {
+  const knownFiles = new Set<string>(
+    Array.from(knownPaths, (p) => normalizeRepoPath(p)),
+  );
+  return resolveImportSpecifier(
+    importerPath,
+    specifier,
+    knownFiles,
+    new Map(graph.workspaces.map((w) => [w.name, w])),
+    graph.pathAliases,
+  );
+}

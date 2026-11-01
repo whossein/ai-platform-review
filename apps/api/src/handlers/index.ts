@@ -25,6 +25,12 @@ export {
 } from "./test-provider.js";
 
 export {
+  testGitConnectionHandler,
+  type TestGitConnectionRequest,
+  type TestGitConnectionResponse,
+} from "./test-git-connection.js";
+
+export {
   modelsHandler,
   type ModelsRequest,
   type ModelsResponse,
@@ -64,6 +70,7 @@ export {
   cancelProjectIndexHandler,
   listProjectBranchesHandler,
   getProjectIndexHandler,
+  getProjectIndexHistoryHandler,
   ensureProjectIndexed,
   buildProjectReviewContext,
   type IndexHandlerDeps,

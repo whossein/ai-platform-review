@@ -268,7 +268,9 @@ button:disabled {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.git-conn input,
+.git-conn select {
   width: 100%;
   padding: 0.6rem;
   background: var(--panel);
@@ -920,4 +922,19 @@ input[type="text"],
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.git-conn input,
+.git-conn select {
+  box-sizing: border-box;
+}
+
+.git-conn-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.git-conn-row select {
+  width: auto;
 }

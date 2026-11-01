@@ -34,6 +34,10 @@ export interface ReviewRequest {
    */
   readonly projectContextProvider?: (
     paths: readonly string[],
+    context: {
+      readonly targetBranch?: string | undefined;
+      readonly diff?: string | undefined;
+    },
   ) => Promise<string | undefined>;
 }
 
@@ -77,8 +81,11 @@ export async function reviewHandler(
   let projectContext: string | undefined;
   if (request.projectContextProvider) {
     try {
+      // The resolver prefixes MR/PR diffs with a "# Target Branch: <name>" header
+      const targetBranch = /^# Target Branch: (\S+)/m.exec(rawDiff)?.[1];
       projectContext = await request.projectContextProvider(
         parsedFiles.map((f) => f.path),
+        { targetBranch, diff: rawDiff },
       );
     } catch (err) {
       // Structural context is an enhancement; never fail a review because of it.

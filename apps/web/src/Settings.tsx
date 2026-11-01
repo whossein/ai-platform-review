@@ -14,6 +14,53 @@ export interface AIProviderConfig {
   customAuthHeaderPrefix?: string;
 }
 
+export interface GitConnection {
+  id: string;
+  name: string;
+  type: "gitlab" | "github";
+  /** Instance URL, e.g. https://gitlab.example.com. Empty = gitlab.com / github.com. */
+  baseUrl: string;
+  token: string;
+}
+
+export function defaultGitBaseUrl(type: GitConnection["type"]): string {
+  return type === "github" ? "https://github.com" : "https://gitlab.com";
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Pick the git env overrides (token + base URL) for a PR/MR URL. A connection
+ * whose host matches the URL wins; otherwise the first connection of the
+ * same provider type is used.
+ */
+export function resolveGitEnv(
+  config: Pick<AppConfig, "GIT_CONNECTIONS">,
+  url?: string,
+): Record<string, string> {
+  const conns = (config.GIT_CONNECTIONS || []).filter((c) => c.token);
+  if (conns.length === 0) return {};
+  const host = url ? hostOf(url) : "";
+  const byHost = host
+    ? conns.find((c) => hostOf(c.baseUrl || defaultGitBaseUrl(c.type)) === host)
+    : undefined;
+  const type = host.includes("github") ? "github" : "gitlab";
+  const conn = byHost || conns.find((c) => c.type === type);
+  if (!conn) return {};
+  const env: Record<string, string> =
+    conn.type === "github"
+      ? { GITHUB_TOKEN: conn.token }
+      : { GITLAB_TOKEN: conn.token };
+  if (conn.type === "gitlab" && conn.baseUrl) env.GITLAB_BASE_URL = conn.baseUrl;
+  return env;
+}
+
 export interface AppConfig {
   AI_REVIEW_LLM_PROVIDER: string;
   AI_REVIEW_LLM_API_KEY: string;
@@ -23,6 +70,7 @@ export interface AppConfig {
   GITLAB_TOKEN: string;
   GITLAB_BASE_URL: string;
   GITHUB_TOKEN?: string;
+  GIT_CONNECTIONS?: GitConnection[];
   BUDGET_LIMIT: string;
 }
 
@@ -37,11 +85,34 @@ const DEFAULT_CONFIG: AppConfig = {
   BUDGET_LIMIT: "0.5",
 };
 
+/** Convert the legacy single GitLab/GitHub token fields into connections. */
+function migrateGitConnections(cfg: AppConfig): AppConfig {
+  if (cfg.GIT_CONNECTIONS) return cfg;
+  const conns: GitConnection[] = [];
+  if (cfg.GITLAB_TOKEN)
+    conns.push({
+      id: "git_legacy_gitlab",
+      name: "GitLab",
+      type: "gitlab",
+      baseUrl: cfg.GITLAB_BASE_URL || "",
+      token: cfg.GITLAB_TOKEN,
+    });
+  if (cfg.GITHUB_TOKEN)
+    conns.push({
+      id: "git_legacy_github",
+      name: "GitHub",
+      type: "github",
+      baseUrl: "",
+      token: cfg.GITHUB_TOKEN,
+    });
+  return { ...cfg, GIT_CONNECTIONS: conns, GITLAB_TOKEN: "", GITHUB_TOKEN: "" };
+}
+
 export function useAppConfig() {
   const [config, setConfig] = useState<AppConfig>(() => {
     try {
       const stored = localStorage.getItem("ai-review-config");
-      if (stored) return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+      if (stored) return migrateGitConnections({ ...DEFAULT_CONFIG, ...JSON.parse(stored) });
     } catch {
       // ignore
     }

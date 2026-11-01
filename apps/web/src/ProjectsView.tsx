@@ -33,17 +33,22 @@ import { parseRepositoryUrl } from "./url-helper.js";
 import { ProjectMembersTab } from "./ProjectMembersTab.js";
 import { ProjectIndexTab } from "./ProjectIndexTab.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
+import type { ProjectSubTab } from "./route.js";
 
 interface ProjectsViewProps {
   initialProjectId?: string | null | undefined;
   onSelectProject?: ((id: string | null) => void) | undefined;
   onNavigateToReview?: ((mrOrRepoUrl: string) => void) | undefined;
+  subTab?: ProjectSubTab | undefined;
+  onSubTabChange?: ((tab: ProjectSubTab) => void) | undefined;
 }
 
 export function ProjectsView({
   initialProjectId = null,
   onSelectProject,
   onNavigateToReview,
+  subTab,
+  onSubTabChange,
 }: ProjectsViewProps): JSX.Element {
   const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -61,7 +66,12 @@ export function ProjectsView({
     }
   }, [initialProjectId]);
   const [projectDetails, setProjectDetails] = useState<ProjectDetailsResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<"mrs" | "reviews" | "identity" | "instructions" | "members" | "index">("mrs");
+  const [localTab, setLocalTab] = useState<ProjectSubTab>("mrs");
+  const activeTab = subTab ?? localTab;
+  const setActiveTab = (tab: ProjectSubTab) => {
+    setLocalTab(tab);
+    onSubTabChange?.(tab);
+  };
 
   // Create Project Modal state
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -1605,6 +1615,7 @@ export function ProjectsView({
               <ProjectIndexTab
                 projectId={projectDetails.project.id}
                 userRole={projectDetails.userRole}
+                repositoryUrl={projectDetails.project.repositoryUrl}
               />
             </ErrorBoundary>
           )}

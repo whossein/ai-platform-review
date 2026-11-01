@@ -252,6 +252,29 @@ export async function requestTestProvider(
   return await res.json();
 }
 
+export async function requestTestGitConnection(params: {
+  type: "gitlab" | "github";
+  baseUrl?: string;
+  token: string;
+}): Promise<{ ok: boolean; username?: string; latencyMs?: number; error?: string }> {
+  const res = await authFetch("/api/test-git-connection", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => null);
+  if (!data) {
+    return {
+      ok: false,
+      error:
+        res.status === 404
+          ? "Endpoint not found (404) — restart the API server to load the latest version."
+          : `Unexpected server response (HTTP ${res.status})`,
+    };
+  }
+  return data;
+}
+
 export async function requestFetchModels(
   provider: string,
   apiKey?: string,
@@ -793,6 +816,16 @@ export interface ProjectIndexJob {
   readonly error?: string;
 }
 
+export interface ProjectIndexHistoryEntry extends ProjectIndexJob {
+  readonly stats?: {
+    readonly indexedFilesCount: number;
+    readonly skippedFilesCount: number;
+    readonly reusedFilesCount: number;
+    readonly totalSymbols: number;
+    readonly durationMs: number;
+  };
+}
+
 export interface ProjectIndexSummary {
   readonly ref: string;
   readonly commitSha: string;
@@ -831,13 +864,26 @@ export function fetchProjectIndex(projectId: string): Promise<ProjectIndexRespon
   return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index`);
 }
 
+export async function fetchProjectIndexHistory(
+  projectId: string,
+): Promise<ProjectIndexHistoryEntry[]> {
+  const data = await indexRequest<{ history: ProjectIndexHistoryEntry[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/index/history`,
+  );
+  return data.history ?? [];
+}
+
 export function startProjectIndex(
   projectId: string,
   ref?: string,
+  gitToken?: string,
 ): Promise<{ job: ProjectIndexJob }> {
   return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(gitToken ? { "x-git-token": gitToken } : {}),
+    },
     body: JSON.stringify(ref ? { ref } : {}),
   });
 }
@@ -853,6 +899,12 @@ export interface ProjectBranches {
   readonly branches: readonly string[];
 }
 
-export function fetchProjectBranches(projectId: string): Promise<ProjectBranches> {
-  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index/branches`);
+export function fetchProjectBranches(
+  projectId: string,
+  gitToken?: string,
+): Promise<ProjectBranches> {
+  return indexRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/index/branches`,
+    gitToken ? { headers: { "x-git-token": gitToken } } : undefined,
+  );
 }

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseRoute, buildRoute, type ProjectSubTab } from "./route.js";
 import {
   Code,
   Settings,
@@ -31,11 +32,35 @@ import { useAppConfig } from "./Settings.js";
 
 export function App(): JSX.Element {
   const { user, isLoading, isFirstRun, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState("review");
+  const initialRoute = parseRoute(window.location.hash);
+  const [activeTab, setActiveTab] = useState(initialRoute.tab);
+  const [projectSubTab, setProjectSubTab] = useState<ProjectSubTab>(initialRoute.subTab);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [reviewTargetUrl, setReviewTargetUrl] = useState<string | undefined>(undefined);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialRoute.projectId);
   const [config] = useAppConfig();
+
+  // State -> URL
+  useEffect(() => {
+    const next = buildRoute({ tab: activeTab, projectId: selectedProjectId, subTab: projectSubTab });
+    if (window.location.hash !== next) window.history.pushState(null, "", next);
+  }, [activeTab, selectedProjectId, projectSubTab]);
+
+  // URL -> state (back/forward, manual edits)
+  useEffect(() => {
+    const onRoute = () => {
+      const r = parseRoute(window.location.hash);
+      setActiveTab(r.tab);
+      setSelectedProjectId(r.projectId);
+      setProjectSubTab(r.subTab);
+    };
+    window.addEventListener("popstate", onRoute);
+    window.addEventListener("hashchange", onRoute);
+    return () => {
+      window.removeEventListener("popstate", onRoute);
+      window.removeEventListener("hashchange", onRoute);
+    };
+  }, []);
 
   // Loading state
   if (isLoading) {
@@ -245,7 +270,12 @@ export function App(): JSX.Element {
         {activeTab === "projects" && (
           <ProjectsView
             initialProjectId={selectedProjectId}
-            onSelectProject={setSelectedProjectId}
+            onSelectProject={(id) => {
+              setSelectedProjectId(id);
+              setProjectSubTab("mrs");
+            }}
+            subTab={projectSubTab}
+            onSubTabChange={setProjectSubTab}
             onNavigateToReview={handleNavigateToReview}
           />
         )}
