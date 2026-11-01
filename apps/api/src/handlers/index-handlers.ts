@@ -90,9 +90,21 @@ const DEFAULT_BRANCH_TTL_MS = 60 * 60 * 1000;
 const MIN_REINDEX_INTERVAL_MS = 5 * 60 * 1000;
 const HEAD_CACHE_TTL_MS = 60 * 1000;
 
+const MAX_CACHE_ENTRIES = 500;
+
 const headCache = new Map<string, { sha: string; at: number }>();
 
 const defaultBranchCache = new Map<string, { branch: string; at: number }>();
+
+/** Insert with a size cap: the oldest entry (insertion order) is dropped first. */
+function cacheSet<V>(cache: Map<string, V>, key: string, value: V): void {
+  cache.delete(key);
+  cache.set(key, value);
+  if (cache.size > MAX_CACHE_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+}
 
 async function resolveToken(
   deps: IndexHandlerDeps,
@@ -130,7 +142,7 @@ async function resolveDefaultBranch(
       credentials: token ? { token } : undefined,
     });
     if (defaultBranch) {
-      defaultBranchCache.set(project.id, { branch: defaultBranch, at: Date.now() });
+      cacheSet(defaultBranchCache, project.id, { branch: defaultBranch, at: Date.now() });
       return defaultBranch;
     }
   } catch {
@@ -168,7 +180,7 @@ async function currentHeadSha(
       { project: remoteProject, credentials: token ? { token } : undefined },
       ref,
     );
-    headCache.set(key, { sha: head.commitSha, at: Date.now() });
+    cacheSet(headCache, key, { sha: head.commitSha, at: Date.now() });
     return head.commitSha;
   } catch {
     return undefined;

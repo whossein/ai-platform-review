@@ -1,6 +1,6 @@
 {
   "name": "ai-review-platform",
-  "version": "0.2.16",
+  "version": "0.2.18",
   "private": true,
   "description": "Modular, plugin-based, event-driven, provider-agnostic Multi-Agent AI Code Review Platform.",
   "type": "module",
@@ -16,6 +16,7 @@
     "build": "turbo run build && esbuild server.ts --bundle --platform=node --format=cjs --external:vite --external:express --external:fsevents --sourcemap --outfile=dist/server.cjs",
     "test": "turbo run test",
     "lint": "turbo run typecheck",
+    "changelog:check": "node scripts/check-changelog.mjs",
     "eval": "turbo run test --filter=@ai-review/eval",
     "reset-password": "tsx scripts/reset-password.ts",
     "e2e": "node scripts/e2e.mjs",

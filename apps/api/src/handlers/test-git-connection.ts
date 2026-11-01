@@ -24,6 +24,19 @@ function userEndpoint(type: "gitlab" | "github", baseUrl: string): string {
     : `${base}/api/v3/user`;
 }
 
+/**
+ * Rejects hosts that could be used to probe the server's own machine or cloud
+ * metadata with the user's token. Private LAN ranges stay allowed because
+ * self-hosted GitLab/GHE instances commonly live there.
+ */
+function isBlockedHost(hostname: string): boolean {
+  const h = hostname.replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost")) return true;
+  if (h === "::1" || h === "::" || h.startsWith("fe80:")) return true;
+  if (/^(?:::ffff:)?(?:127\.|0\.|169\.254\.)/.test(h)) return true;
+  return h === "metadata.google.internal";
+}
+
 export async function testGitConnectionHandler(
   request: TestGitConnectionRequest,
 ): Promise<TestGitConnectionResponse> {
@@ -38,6 +51,19 @@ export async function testGitConnectionHandler(
     (type === "github" ? "https://github.com" : "https://gitlab.com");
   if (!/^https?:\/\//i.test(baseUrl)) {
     return { ok: false, error: "Base URL must start with http:// or https://" };
+  }
+
+  let hostname: string;
+  try {
+    hostname = new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return { ok: false, error: "Base URL is not a valid URL" };
+  }
+  if (isBlockedHost(hostname)) {
+    return {
+      ok: false,
+      error: "Base URL points to a loopback, link-local or metadata address, which is not allowed",
+    };
   }
 
   const headers: Record<string, string> =

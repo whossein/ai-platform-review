@@ -180,10 +180,13 @@
         <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
         AI_REVIEW_PLATFORM
       </div>
+      <div class="flex items-center gap-6">
+        <a href="#release-notes" class="text-sm font-mono text-zinc-400 hover:text-white transition-colors">Release Notes</a>
       <a href="https://github.com/whossein/ai-platform-review-gemini-2" target="_blank" class="text-sm font-mono text-zinc-400 hover:text-white transition-colors flex items-center gap-2">
         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
         GitHub
       </a>
+      </div>
     </div>
   </nav>
 
@@ -1028,7 +1031,7 @@
         </p>
       </div>
       <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
-        <h3 class="text-2xl font-bold text-white">Index History (v0.2.16)</h3>
+        <h3 class="text-2xl font-bold text-white">Index History (v0.2.18)</h3>
         <p class="text-zinc-400 leading-relaxed">Every finished indexing job (succeeded, failed or cancelled) is now kept per project &mdash; the last 50 &mdash; with branch, commit, file and symbol counts, reused files and duration. Open <strong>Index history</strong> in the project's Index tab (<code>GET /api/projects/:id/index/history</code>).</p>
       </div>
       <div dir="rtl" class="text-right space-y-3 font-sans">
@@ -1166,6 +1169,44 @@
     </div>
   </section>
 
+  <!-- SECTION: RELEASE NOTES (BILINGUAL) — keep in sync with CHANGELOG.md (see AGENTS.md rule 4) -->
+  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="release-notes">
+    <div class="max-w-6xl mx-auto space-y-16 reveal">
+      <div dir="ltr" class="text-left space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
+          <span>RELEASE NOTES</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">What's New</h2>
+        <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2">
+          <li><span class="font-mono text-cyan-400">v0.2.18</span> — Release notes system: bilingual CHANGELOG, this section and an automated version check.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.17</span> — Security: Git tokens are never sent to the wrong host; connection test blocks loopback/metadata addresses.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.16</span> — Per-project index history (last 50 jobs).</li>
+          <li><span class="font-mono text-cyan-400">v0.2.15</span> — Index refreshes when the target branch moves; review context overlays the diff on the index.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.14</span> — Per-branch index; reviews use the MR/PR target branch.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.13</span> — Deep links for tabs and projects; Index tab uses the matching Git connection.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.12</span> — Multiple Git connections with a Test Connection button.</li>
+        </ul>
+        <p class="text-zinc-500 text-sm">Full history: <a class="text-cyan-400 hover:underline" href="https://github.com/whossein/ai-platform-review-gemini-2/blob/main/CHANGELOG.md" target="_blank">CHANGELOG.md</a></p>
+      </div>
+      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
+          <span>یادداشت‌های انتشار</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">تازه‌ها</h2>
+        <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2 font-sans">
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۱۸</span> — سیستم یادداشت‌های انتشار: CHANGELOG دو‌زبانه، همین بخش و بررسی خودکار نسخه.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۱۷</span> — امنیت: توکن Git هرگز به host اشتباه نمی‌رود؛ تست اتصال آدرس‌های loopback و metadata را رد می‌کند.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۱۶</span> — تاریخچه ایندکس هر پروژه (۵۰ Job آخر).</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۱۵</span> — با جابه‌جایی branch مقصد ایندکس به‌روز می‌شود؛ زمینه ریویو دیف را روی ایندکس می‌نشاند.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۱۴</span> — ایندکس جداگانه برای هر branch؛ ریویو از branch مقصد MR/PR استفاده می‌کند.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۱۳</span> — لینک مستقیم برای تب‌ها و پروژه‌ها؛ تب Index از اتصال Git مناسب استفاده می‌کند.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۱۲</span> — چند اتصال Git با دکمه Test Connection.</li>
+        </ul>
+        <p class="text-zinc-500 text-sm font-sans">تاریخچه کامل: <a class="text-cyan-400 hover:underline" href="https://github.com/whossein/ai-platform-review-gemini-2/blob/main/CHANGELOG.md" target="_blank">CHANGELOG.md</a></p>
+      </div>
+    </div>
+  </section>
+
   <!-- SECTION 14 / FINAL CTA -->
   <section class="py-32 px-6 bg-zinc-950 border-t border-zinc-900 text-center relative overflow-hidden">
     <div class="absolute inset-0 bg-grid opacity-30 z-0 pointer-events-none"></div>
@@ -1194,7 +1235,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.2.16</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.2.18</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

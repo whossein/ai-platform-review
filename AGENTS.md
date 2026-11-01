@@ -16,3 +16,9 @@ When interacting with this repository, strictly adhere to the following rules re
 3. **GitHub Pages (`/docs/index.html`)**:
    - The `/docs/index.html` file acts as the standalone presentation/landing page for GitHub Pages.
    - Keep it visually polished (using Tailwind via CDN) and ensure the English section uses `dir="ltr"` and the Persian section uses `dir="rtl"`.
+
+4. **Release Notes (`/CHANGELOG.md`)**:
+   - Every time you bump the version (rule 1), you **MUST** add a matching entry at the top of `/CHANGELOG.md`, under the template comment: `## [x.y.z] - YYYY-MM-DD`, grouped under `### Added | Changed | Fixed | Security`.
+   - Each bullet is bilingual: one `- **EN:** ...` line and one `- **FA:** ...` line. Write what changed for users/operators (behavior, endpoints, commands), not internal refactors.
+   - Mirror the newest entries in the **Release Notes** section of `/docs/index.html` (`id="release-notes"`, English `dir="ltr"` + Persian `dir="rtl"`; keep the latest ~6 versions there).
+   - Before finishing, run `npm run changelog:check`; it must pass.

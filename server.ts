@@ -653,7 +653,10 @@ async function startServer() {
           ? async (paths: readonly string[], ctx: { targetBranch?: string | undefined; diff?: string | undefined }) => {
               const options = {
                 ref: ctx.targetBranch,
-                tokenOverride: reviewEnv.GITLAB_TOKEN || reviewEnv.GITHUB_TOKEN,
+                // Only the token that belongs to the project's own host; never cross hosts.
+                tokenOverride: preProject.gitHost.toLowerCase().includes("github")
+                  ? reviewEnv.GITHUB_TOKEN
+                  : reviewEnv.GITLAB_TOKEN,
               };
               void ensureProjectIndexed(indexDeps, preProject, user, options);
               return buildProjectReviewContext(indexDeps, preProject, user, paths, { ...options, diff: ctx.diff });
