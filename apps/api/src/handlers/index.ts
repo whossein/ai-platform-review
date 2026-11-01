@@ -55,6 +55,7 @@ export {
   updateProjectHandler,
   findOrCreateProjectHandler,
   recordReviewHandler,
+  submitFeedbackHandler,
   deleteProjectHandler,
 } from "./projects.js";
 
@@ -75,3 +76,15 @@ export {
   buildProjectReviewContext,
   type IndexHandlerDeps,
 } from "./index-handlers.js";
+
+export {
+  codeContextHandler,
+  suggestCodeHandler,
+  commitSuggestionHandler,
+  type CodeContextRequest,
+  type CodeContextResponse,
+  type SuggestCodeRequest,
+  type SuggestCodeResponse,
+  type CommitSuggestionRequest,
+  type CommitSuggestionResponse,
+} from "./suggest-code.js";

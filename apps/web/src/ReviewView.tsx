@@ -20,6 +20,7 @@ import {
 } from "./api.js";
 import { parseRepositoryUrl } from "./url-helper.js";
 import { useAppConfig, resolveGitEnv } from "./Settings.js";
+import { PublishIssueCard, snippetFromDiff } from "./PublishIssueCard.js";
 
 const SAMPLE_DIFF = `diff --git a/src/UserList.tsx b/src/UserList.tsx
 --- a/src/UserList.tsx
@@ -183,12 +184,25 @@ export function ReviewView({
   const [associatedProject, setAssociatedProject] = useState<Project | null>(null);
   const [associatedMr, setAssociatedMr] = useState<ProjectMergeRequest | null>(null);
 
-  // Sync initialPrUrl if prop changes
+  const [loadedFromHistory, setLoadedFromHistory] = useState<number | null>(null);
+
+  // Sync initialPrUrl if prop changes. Opening an MR from a project shows its
+  // latest saved review (never another MR's leftover result).
   useEffect(() => {
-    if (initialPrUrl) {
-      setPrUrl(initialPrUrl);
-      setInputMode("pr");
-    }
+    if (!initialPrUrl) return;
+    setPrUrl(initialPrUrl);
+    setInputMode("pr");
+    void import("./history.js").then(({ getHistory }) => {
+      const wanted = initialPrUrl.trim();
+      const saved = getHistory().find(
+        (r) => r.inputMode === "pr" && r.target.trim() === wanted,
+      );
+      setResult(saved ? saved.result : null);
+      setLoadedFromHistory(saved ? saved.timestamp : null);
+      setCodeSnippets({});
+      setCodeLinks({});
+      setSnippetErrors({});
+    });
   }, [initialPrUrl]);
 
   // Real-time parsed repository info
@@ -294,6 +308,13 @@ export function ReviewView({
     return {};
   });
 
+  const [codeSnippets, setCodeSnippets] = useState<
+    Record<string, { startLine: number; lines: readonly string[] }>
+  >({});
+
+  const [codeLinks, setCodeLinks] = useState<Record<string, string>>({});
+  const [snippetErrors, setSnippetErrors] = useState<Record<string, string>>({});
+
   const [applying, setApplying] = useState<boolean>(false);
   const [applySuccess, setApplySuccess] = useState<boolean>(false);
 
@@ -361,6 +382,33 @@ export function ReviewView({
       });
     }
   }, [result]);
+
+  // Load the flagged code from the MR source branch for the Review & Publish tab.
+  useEffect(() => {
+    if (reportMode !== "publish" || inputMode !== "pr" || !prUrl.trim()) return;
+    if (!result || !result.issues || result.issues.length === 0) return;
+    let cancelled = false;
+    void import("./api.js")
+      .then(({ requestCodeContext }) =>
+        requestCodeContext(
+          prUrl.trim(),
+          result.issues.map((i) => ({ file: i.location.file, line: i.location.line })),
+          buildEnvOverrides(config, language, prUrl.trim()),
+        ),
+      )
+      .then(({ snippets, errors, links }) => {
+        if (cancelled) return;
+        setCodeSnippets(snippets);
+        setCodeLinks(links);
+        setSnippetErrors(errors);
+      })
+      .catch((e: any) => {
+        if (!cancelled) setSnippetErrors({ "*": e?.message || "Could not load code" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reportMode, inputMode, prUrl, result]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -518,6 +566,7 @@ export function ReviewView({
   }
 
   async function onReview(): Promise<void> {
+    setLoadedFromHistory(null);
     setLoading(true);
     setError(null);
     setResult(null);
@@ -1887,6 +1936,63 @@ export function ReviewView({
           dir={language === "fa" ? "rtl" : "ltr"}
           style={{ textAlign: language === "fa" ? "right" : "left" }}
         >
+          {loadedFromHistory !== null && (
+            <div
+              dir="ltr"
+              style={{
+                textAlign: "left",
+                background: "rgba(47,129,247,0.1)",
+                border: "1px solid var(--accent)",
+                borderRadius: 8,
+                padding: "0.7rem 1rem",
+                marginBottom: "1.25rem",
+                fontSize: "0.88rem",
+              }}
+            >
+              Showing the saved review from{" "}
+              <strong>{new Date(loadedFromHistory).toLocaleString()}</strong>. Run
+              the review again for fresh results.
+            </div>
+          )}
+          {(result.llmConfigured === false || (result.errors?.length ?? 0) > 0) && (
+            <div
+              dir="ltr"
+              role="alert"
+              style={{
+                textAlign: "left",
+                background: "rgba(210,153,34,0.12)",
+                border: "1px solid var(--medium)",
+                borderRadius: 8,
+                padding: "0.85rem 1rem",
+                marginBottom: "1.25rem",
+                fontSize: "0.9rem",
+                lineHeight: 1.6,
+              }}
+            >
+              {result.llmConfigured === false ? (
+                <>
+                  <strong>⚠️ No AI provider is connected.</strong> Only the built-in
+                  deterministic rules ran, so AI specialists did not review this code
+                  and the result may be incomplete. Add an API key in Settings → AI
+                  Providers and run the review again.
+                </>
+              ) : (
+                <>
+                  <strong>⚠️ {result.errors!.length} AI specialist(s) failed</strong>, so
+                  the result may be incomplete:
+                </>
+              )}
+              {(result.errors?.length ?? 0) > 0 && (
+                <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem" }}>
+                  {result.errors!.slice(0, 6).map((e, i) => (
+                    <li key={i}>
+                      <code>{e.agentId}</code> — {e.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <div
             className="summary"
             style={{
@@ -2286,189 +2392,40 @@ export function ReviewView({
               >
                 {result.issues
                   .filter((i) => prepIssues[i.id] !== undefined)
-                  .map((issue) => {
-                    const prep = prepIssues[issue.id];
-                    return (
-                      <div
-                        key={issue.id}
-                        style={{
-                          background: "var(--panel)",
-                          border: `1px solid ${prep.selected ? "var(--accent)" : "var(--border)"}`,
-                          borderRadius: "8px",
-                          padding: "1rem",
-                          opacity: prep.selected ? 1 : 0.6,
-                          transition: "all 0.2s",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: "1rem",
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={prep.selected}
-                            onChange={(e) =>
-                              setPrepIssues((prev) => ({
-                                ...prev,
-                                [issue.id]: {
-                                  ...prev[issue.id],
-                                  selected: e.target.checked,
-                                },
-                              }))
-                            }
-                            style={{
-                              marginTop: "0.25rem",
-                              width: "18px",
-                              height: "18px",
-                              cursor: "pointer",
-                            }}
-                          />
-                          <div style={{ flex: 1 }}>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                                marginBottom: "0.5rem",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontWeight: 600,
-                                  color: "var(--text)",
-                                }}
-                              >
-                                {issue.title}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  background: "var(--surface)",
-                                  padding: "0.1rem 0.4rem",
-                                  borderRadius: "4px",
-                                }}
-                              >
-                                {issue.category}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  background: "var(--surface)",
-                                  padding: "0.1rem 0.4rem",
-                                  borderRadius: "4px",
-                                  color:
-                                    issue.severity === "critical"
-                                      ? "#ef4444"
-                                      : "inherit",
-                                }}
-                              >
-                                {issue.severity}
-                              </span>
-                            </div>
-
-                            <label
-                              style={{
-                                display: "block",
-                                fontSize: "0.85rem",
-                                fontWeight: 600,
-                                marginBottom: "0.25rem",
-                                color: "var(--muted)",
-                              }}
-                            >
-                              Reason / Comment
-                            </label>
-                            <textarea
-                              value={prep.editedReason}
-                              onChange={(e) =>
-                                setPrepIssues((prev) => ({
-                                  ...prev,
-                                  [issue.id]: {
-                                    ...prev[issue.id],
-                                    editedReason: e.target.value,
-                                  },
-                                }))
-                              }
-                              style={{
-                                width: "100%",
-                                background: "var(--surface)",
-                                border: "1px solid var(--border)",
-                                color: "var(--text)",
-                                padding: "0.75rem",
-                                borderRadius: "6px",
-                                minHeight: "80px",
-                                fontFamily: "inherit",
-                                resize: "vertical",
-                                marginBottom: "1rem",
-                              }}
-                            />
-
-                            {issue.suggestion && (
-                              <>
-                                <label
-                                  style={{
-                                    display: "block",
-                                    fontSize: "0.85rem",
-                                    fontWeight: 600,
-                                    marginBottom: "0.25rem",
-                                    color: "var(--muted)",
-                                  }}
-                                >
-                                  Suggestion Description
-                                </label>
-                                <textarea
-                                  value={prep.editedSuggestion}
-                                  onChange={(e) =>
-                                    setPrepIssues((prev) => ({
-                                      ...prev,
-                                      [issue.id]: {
-                                        ...prev[issue.id],
-                                        editedSuggestion: e.target.value,
-                                      },
-                                    }))
-                                  }
-                                  style={{
-                                    width: "100%",
-                                    background: "var(--surface)",
-                                    border: "1px solid var(--border)",
-                                    color: "var(--text)",
-                                    padding: "0.75rem",
-                                    borderRadius: "6px",
-                                    minHeight: "60px",
-                                    fontFamily: "inherit",
-                                    resize: "vertical",
-                                    marginBottom: "0.5rem",
-                                  }}
-                                />
-                              </>
-                            )}
-
-                            {issue.suggestion?.patch && (
-                              <div
-                                style={{
-                                  background: "#1e1e1e",
-                                  color: "#d4d4d4",
-                                  padding: "1rem",
-                                  borderRadius: "6px",
-                                  fontSize: "0.85rem",
-                                  fontFamily: "monospace",
-                                  overflowX: "auto",
-                                  marginTop: "0.5rem",
-                                }}
-                              >
-                                <pre style={{ margin: 0 }}>
-                                  {issue.suggestion.patch}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  .map((issue) => (
+                    <PublishIssueCard
+                      key={issue.id}
+                      issue={issue}
+                      prep={prepIssues[issue.id]!}
+                      onChange={(patch) =>
+                        setPrepIssues((prev) => ({
+                          ...prev,
+                          [issue.id]: { ...prev[issue.id]!, ...patch },
+                        }))
+                      }
+                      language={language}
+                      projectId={associatedProject?.id}
+                      onRulesUpdated={(ci) =>
+                        setAssociatedProject((p) => (p ? { ...p, customInstructions: ci } : p))
+                      }
+                      fileUrl={codeLinks[`${issue.location.file}|${issue.location.line ?? ""}`]}
+                      snippetError={snippetErrors[issue.location.file] ?? snippetErrors["*"]}
+                      prUrl={inputMode === "pr" ? prUrl.trim() : undefined}
+                      snippet={
+                        codeSnippets[`${issue.location.file}|${issue.location.line ?? ""}`] ??
+                        (inputMode === "diff"
+                          ? snippetFromDiff(diff, issue.location.file, issue.location.line)
+                          : undefined)
+                      }
+                      getEnv={() =>
+                        buildEnvOverrides(
+                          config,
+                          language,
+                          inputMode === "pr" ? prUrl.trim() : undefined,
+                        )
+                      }
+                    />
+                  ))}
               </div>
               <div
                 style={{ display: "flex", alignItems: "center", gap: "1rem" }}

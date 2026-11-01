@@ -319,3 +319,67 @@ export async function deleteProjectHandler(
 
   return { success: true };
 }
+
+export async function submitFeedbackHandler(
+  projectStore: ProjectStore,
+  projectId: string,
+  body: {
+    verdict?: string;
+    reason?: string;
+    note?: string;
+    rule?: string;
+    addToRules?: boolean;
+    issue?: {
+      title?: string;
+      category?: string;
+      severity?: string;
+      location?: { file?: string };
+    };
+  },
+  security?: SecurityContext,
+  currentUser?: SafeUser | null
+) {
+  const fail = (status: number, message: string) => {
+    const error = new Error(message);
+    (error as any).status = status;
+    return error;
+  };
+  if (body.verdict !== "up" && body.verdict !== "down") {
+    throw fail(400, "Field 'verdict' must be 'up' or 'down'");
+  }
+  if (!body.issue?.title) throw fail(400, "Field 'issue' is required");
+
+  let canManage = true;
+  if (security && currentUser) {
+    const canReview = await security.canAccessProject(currentUser, projectId as ProjectId, "project:review");
+    if (!canReview) throw fail(403, "Access denied: You do not have permission to give feedback on this project.");
+    canManage = await security.canAccessProject(currentUser, projectId as ProjectId, "project:manage");
+  }
+
+  const wantsRule = body.addToRules === true && Boolean(body.rule?.trim());
+  const rule = wantsRule && canManage ? body.rule!.slice(0, 500) : undefined;
+
+  const { record, project } = await projectStore.addFeedback(
+    projectId,
+    {
+      verdict: body.verdict,
+      reason: (body.reason || (body.verdict === "up" ? "useful" : "other")).slice(0, 60),
+      ...(body.note?.trim() ? { note: body.note.trim().slice(0, 500) } : {}),
+      title: body.issue.title.slice(0, 200),
+      category: body.issue.category || "unknown",
+      severity: body.issue.severity || "unknown",
+      file: body.issue.location?.file || "",
+      ...(currentUser ? { author: currentUser.name } : {}),
+    },
+    rule,
+  );
+
+  return {
+    record,
+    project,
+    ruleAdded: record.ruleAdded,
+    ...(wantsRule && !canManage
+      ? { ruleDenied: "Feedback saved, but only project managers can change the project rules." }
+      : {}),
+  };
+}

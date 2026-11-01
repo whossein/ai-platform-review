@@ -26,7 +26,26 @@ import {
   extractMergeRequestNumber,
 } from "@ai-review/git";
 
+export interface FeedbackRecord {
+  readonly id: string;
+  readonly projectId: string;
+  readonly timestamp: number;
+  readonly verdict: "up" | "down";
+  readonly reason: string;
+  readonly note?: string | undefined;
+  readonly title: string;
+  readonly category: string;
+  readonly severity: string;
+  readonly file: string;
+  readonly ruleAdded: boolean;
+  readonly author?: string | undefined;
+}
+
+const RULES_HEADING = "Learned from reviewer feedback:";
+const MAX_FEEDBACK = 200;
+
 interface StorageData {
+  feedback?: Record<string, FeedbackRecord[]>; // projectId -> feedback list
   projects: Record<string, Project>;
   identityIndex: Record<string, string>; // identityKey -> projectId
   mergeRequests: Record<string, ProjectMergeRequest[]>; // projectId -> MR list
@@ -61,6 +80,7 @@ export class ProjectStore {
         identityIndex: parsed.identityIndex || {},
         mergeRequests: parsed.mergeRequests || {},
         reviews: parsed.reviews || {},
+        feedback: parsed.feedback || {},
       };
       // Rebuild identityIndex if missing or corrupted
       for (const p of Object.values(this.data.projects)) {
@@ -282,6 +302,73 @@ export class ProjectStore {
     this.data.projects[id] = updated;
     await this.persist();
     return updated;
+  }
+
+  /**
+   * Stores one piece of reviewer feedback. When `rule` is given it is appended
+   * to the project's custom instructions (the "project rules" the AI reads on
+   * every review), once, under a dedicated heading.
+   */
+  async addFeedback(
+    projectId: string,
+    input: Omit<FeedbackRecord, "id" | "projectId" | "timestamp" | "ruleAdded">,
+    rule?: string,
+  ): Promise<{ record: FeedbackRecord; project: Project }> {
+    await this.ensureLoaded();
+    const project = this.data.projects[projectId];
+    if (!project) throw new Error(`Project with ID "${projectId}" not found`);
+
+    let updated = project;
+    const cleanRule = rule?.replace(/\s+/g, " ").trim();
+    if (cleanRule) {
+      const current = project.customInstructions ?? "";
+      const line = `- ${cleanRule}`;
+      if (!current.split("\n").some((l) => l.trim() === line)) {
+        const body = current.includes(RULES_HEADING)
+          ? `${current.trimEnd()}\n${line}`
+          : `${current.trimEnd()}${current.trim() ? "\n\n" : ""}${RULES_HEADING}\n${line}`;
+        updated = {
+          ...project,
+          customInstructions: body,
+          updatedAt: new Date().toISOString() as IsoTimestamp,
+        };
+        this.data.projects[projectId] = updated;
+      }
+    }
+
+    const record: FeedbackRecord = {
+      ...input,
+      id: `fb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      projectId,
+      timestamp: Date.now(),
+      ruleAdded: Boolean(cleanRule),
+    };
+    const list = (this.data.feedback ??= {})[projectId] ?? [];
+    list.unshift(record);
+    if (list.length > MAX_FEEDBACK) list.length = MAX_FEEDBACK;
+    this.data.feedback[projectId] = list;
+    await this.persist();
+    return { record, project: updated };
+  }
+
+  /**
+   * Short text of the most recent rejected findings that were NOT promoted to
+   * rules, for the review prompt. Keeps recent feedback in play without
+   * touching the project's permanent instructions.
+   */
+  async getFeedbackDigest(projectId: string, limit = 10): Promise<string> {
+    await this.ensureLoaded();
+    const items = (this.data.feedback?.[projectId] ?? [])
+      .filter((f) => f.verdict === "down" && !f.ruleAdded)
+      .slice(0, limit);
+    if (items.length === 0) return "";
+    return [
+      "Recent reviewer feedback (findings reviewers rejected; avoid repeating similar ones):",
+      ...items.map(
+        (f) =>
+          `- [${f.category}] "${f.title}" in ${f.file}: ${f.reason}${f.note ? ` — ${f.note}` : ""}`,
+      ),
+    ].join("\n");
   }
 
   /**

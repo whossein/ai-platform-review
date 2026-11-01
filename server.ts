@@ -15,6 +15,9 @@ import {
   reviewHandler,
   publishHandler,
   applyLocalHandler,
+  codeContextHandler,
+  suggestCodeHandler,
+  commitSuggestionHandler,
   modelsHandler,
   testProviderHandler,
   testGitConnectionHandler,
@@ -24,6 +27,7 @@ import {
   updateProjectHandler,
   findOrCreateProjectHandler,
   recordReviewHandler,
+  submitFeedbackHandler,
   deleteProjectHandler,
   getAuthStatusHandler,
   setupFirstAdminHandler,
@@ -439,6 +443,16 @@ async function startServer() {
     }
   });
 
+  app.post("/api/projects/:id/feedback", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await submitFeedbackHandler(projectStore, req.params.id, req.body || {}, security, user);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to save feedback" });
+    }
+  });
+
   app.patch("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
@@ -663,8 +677,13 @@ async function startServer() {
             }
           : undefined;
 
+      const feedbackDigest = preProject
+        ? await projectStore.getFeedbackDigest(preProject.id).catch(() => "")
+        : "";
       const customInstructions =
-        req.body?.customInstructions || preProject?.customInstructions;
+        [req.body?.customInstructions || preProject?.customInstructions, feedbackDigest]
+          .filter(Boolean)
+          .join("\n\n") || undefined;
       const projectName = req.body?.projectName || preProject?.name;
 
       if (user) {
@@ -792,6 +811,30 @@ async function startServer() {
     try {
       const result = await publishHandler(req.body || {});
       res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || "Internal error" });
+    }
+  });
+
+  app.post("/api/code-context", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await codeContextHandler(req.body || {}));
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || "Internal error" });
+    }
+  });
+
+  app.post("/api/suggest-code", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await suggestCodeHandler(req.body || {}));
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || "Internal error" });
+    }
+  });
+
+  app.post("/api/commit-suggestion", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await commitSuggestionHandler(req.body || {}));
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message || "Internal error" });
     }

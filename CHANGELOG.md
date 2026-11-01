@@ -15,6 +15,40 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.2.23] - 2026-11-02
+
+### Added
+- **EN:** Review & Publish cards have a Feedback section: 👍 Useful / 👎 Not useful with a reason and note. A checkbox "Add to project rules" (editable text) appends the rule to the project's instructions under "Learned from reviewer feedback:", so the AI follows it in every later review. Rejections not promoted to rules are still fed to the next reviews of that project (last 10). Only project managers can change rules; others' feedback is saved without it. New endpoint: `POST /api/projects/:id/feedback`.
+- **FA:** کارت‌های Review & Publish بخش بازخورد دارند: 👍 مفید / 👎 بی‌فایده همراه با دلیل و توضیح. چک‌باکس «افزودن به قوانین پروژه» (با متن قابل ویرایش) قانون را زیر عنوان «Learned from reviewer feedback:» به دستورهای پروژه اضافه می‌کند تا AI در همه ریویوهای بعدی رعایتش کند. یافته‌های ردشده‌ای که به قانون تبدیل نشوند هم (۱۰ مورد آخر) به ریویوهای بعدی همان پروژه داده می‌شوند. فقط مدیران پروژه می‌توانند قوانین را تغییر دهند؛ بازخورد بقیه بدون آن ذخیره می‌شود. مسیر جدید: `POST /api/projects/:id/feedback`.
+
+## [0.2.22] - 2026-11-01
+
+### Fixed
+- **EN:** "Review MR" in a project's MRs tab (and "Open saved result" in Review History) now opens the latest saved review of that MR, with a note showing when it ran, instead of an unrelated or empty result. Saved results live in this browser's review history (last 50).
+- **FA:** دکمه «Review MR» در تب MRهای پروژه (و «Open saved result» در Review History) حالا آخرین ریویو ذخیره‌شده همان MR را همراه با زمان اجرایش باز می‌کند، نه نتیجه نامرتبط یا خالی. نتایج ذخیره‌شده در تاریخچه ریویو همین مرورگر هستند (۵۰ مورد آخر).
+
+## [0.2.21] - 2026-11-01
+
+### Added
+- **EN:** Each Review & Publish card has an "Open in Git" link to the same file and line on the source branch in GitLab (or the MR changes page when the API is not reachable). `POST /api/code-context` now also returns `links`.
+- **FA:** هر کارت Review & Publish یک لینک «Open in Git» دارد که همان فایل و خط را روی branch مبدأ در GitLab باز می‌کند (یا صفحه تغییرات MR اگر API در دسترس نباشد). مسیر `POST /api/code-context` حالا `links` هم برمی‌گرداند.
+
+## [0.2.20] - 2026-11-01
+
+### Fixed
+- **EN:** Reviews now warn clearly when no AI provider is connected (only deterministic rules ran) or when AI specialists failed, instead of silently showing partial results. `POST /api/review` returns `llmConfigured` and `errors`.
+- **FA:** ریویو حالا وقتی به هیچ AI وصل نیست (فقط قوانین قطعی اجرا شده‌اند) یا ارزیاب‌های AI شکست خورده‌اند، به‌جای نمایش بی‌صدای نتیجه ناقص، هشدار واضح می‌دهد. مسیر `POST /api/review` فیلدهای `llmConfigured` و `errors` را برمی‌گرداند.
+- **EN:** Review & Publish code preview now explains why code is missing (e.g. no Git token, file not found) and falls back to the review's own diff.
+- **FA:** پیش‌نمایش کد در Review & Publish دلیل نیامدن کد را نشان می‌دهد (مثلاً نبود توکن Git یا پیدا نشدن فایل) و به دیف خود ریویو برمی‌گردد.
+
+## [0.2.19] - 2026-11-01
+
+### Added
+- **EN:** Review & Publish: each finding card now shows the flagged code (from the MR source branch, or from the pasted diff), the full description and confidence that go into the PR comment, and an exact preview of the comment. Persian comments render right-to-left.
+- **FA:** Review & Publish: هر کارت حالا کد مشکل‌دار (از branch مبدأ MR یا از دیف واردشده)، توضیح کامل و درصد اطمینانی که در کامنت PR می‌رود و پیش‌نمایش دقیق کامنت را نشان می‌دهد. کامنت‌های فارسی راست‌چین نمایش داده می‌شوند.
+- **EN:** "Get AI sample fix" button (MR URLs, GitLab): asks the configured AI for a corrected snippet, with Copy, Regenerate and "Commit to branch" (creates a real commit on the MR source branch after confirmation; refuses if the lines changed since). New endpoints: `POST /api/code-context`, `/api/suggest-code`, `/api/commit-suggestion`.
+- **FA:** دکمه «دریافت کد نمونه از AI» (آدرس MR، GitLab): از AI تنظیم‌شده یک تکه کد اصلاح‌شده می‌گیرد، با امکان کپی، تولید مجدد و «کامیت روی branch» (پس از تأیید، یک کامیت واقعی روی branch مبدأ MR می‌سازد؛ اگر خطوط تغییر کرده باشند رد می‌کند). مسیرهای جدید: `POST /api/code-context`، `/api/suggest-code` و `/api/commit-suggestion`.
+
 ## [0.2.18] - 2026-11-01
 
 ### Added

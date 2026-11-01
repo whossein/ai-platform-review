@@ -43,6 +43,9 @@ export interface ReviewResponse {
   readonly accepted: number;
   readonly total: number;
   readonly issues: readonly ReviewIssue[];
+  /** False when no real AI provider is configured (only deterministic rules ran). */
+  readonly llmConfigured?: boolean;
+  readonly errors?: readonly { agentId: string; message: string }[];
   readonly metrics?: {
     readonly totalPromptTokens: number;
     readonly totalCompletionTokens: number;
@@ -209,6 +212,102 @@ export async function requestApplyLocal(
     throw new Error(body.error ?? `apply-local failed (${res.status})`);
   }
   return await res.json();
+}
+
+async function postJson<T>(path: string, payload: unknown): Promise<T> {
+  const res = await authFetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `${path} failed (${res.status})`);
+  }
+  return (await res.json()) as T;
+}
+
+export interface CodeSnippet {
+  readonly startLine: number;
+  readonly lines: readonly string[];
+}
+
+export interface AiCodeSuggestion {
+  readonly file: string;
+  readonly language: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly original: string;
+  readonly code: string;
+  readonly explanation: string;
+  readonly sourceBranch: string;
+}
+
+export async function requestCodeContext(
+  diff: string,
+  items: readonly { file: string; line?: number | undefined }[],
+  env?: Record<string, string>,
+): Promise<{
+  snippets: Record<string, CodeSnippet>;
+  errors: Record<string, string>;
+  links: Record<string, string>;
+}> {
+  const r = await postJson<{
+    snippets: Record<string, CodeSnippet>;
+    errors?: Record<string, string>;
+    links?: Record<string, string>;
+  }>("/api/code-context", { diff, items, ...(env ? { env } : {}) });
+  return { snippets: r.snippets, errors: r.errors ?? {}, links: r.links ?? {} };
+}
+
+export function requestSuggestCode(
+  diff: string,
+  issue: ReviewIssue,
+  env?: Record<string, string>,
+): Promise<AiCodeSuggestion> {
+  return postJson<AiCodeSuggestion>("/api/suggest-code", {
+    diff,
+    issue,
+    ...(env ? { env } : {}),
+  });
+}
+
+export function requestCommitSuggestion(
+  diff: string,
+  s: AiCodeSuggestion & { code: string },
+  env?: Record<string, string>,
+): Promise<{ commitId?: string; webUrl?: string; branch: string }> {
+  return postJson("/api/commit-suggestion", {
+    diff,
+    file: s.file,
+    startLine: s.startLine,
+    endLine: s.endLine,
+    original: s.original,
+    code: s.code,
+    ...(env ? { env } : {}),
+  });
+}
+
+export interface FeedbackInput {
+  verdict: "up" | "down";
+  reason?: string;
+  note?: string;
+  rule?: string;
+  addToRules?: boolean;
+  issue: ReviewIssue;
+}
+
+export interface FeedbackResult {
+  ruleAdded: boolean;
+  ruleDenied?: string;
+  project?: { id: string; customInstructions?: string };
+}
+
+export function requestFeedback(
+  projectId: string,
+  input: FeedbackInput,
+): Promise<FeedbackResult> {
+  return postJson<FeedbackResult>(`/api/projects/${encodeURIComponent(projectId)}/feedback`, input);
 }
 
 export interface TestProviderResult {

@@ -1033,6 +1033,23 @@ export function ProjectsView({
                         <div style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                           {rev.target}
                         </div>
+                        {onNavigateToReview && /^https?:\/\//.test(rev.target) && (
+                          <button
+                            onClick={() => onNavigateToReview(rev.target)}
+                            style={{
+                              marginTop: "0.4rem",
+                              background: "transparent",
+                              border: "1px solid var(--border)",
+                              color: "var(--accent)",
+                              borderRadius: "6px",
+                              padding: "0.25rem 0.6rem",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Open saved result
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

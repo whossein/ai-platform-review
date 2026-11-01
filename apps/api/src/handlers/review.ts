@@ -12,6 +12,7 @@
 
 import { runReview } from "@ai-review/orchestrator";
 import { resolveDiffInput, parseDiffToFiles } from "@ai-review/git";
+import { providersFromEnv } from "@ai-review/llm";
 import type {
   AgentRegistry,
   LLMProvider,
@@ -47,6 +48,10 @@ export interface ReviewResponse {
   accepted: number;
   total: number;
   issues: readonly any[];
+  /** False when no real AI provider is configured: only deterministic rules ran. */
+  llmConfigured: boolean;
+  /** Specialists that failed (LLM error, bad JSON, budget…); never silently dropped. */
+  errors: readonly { agentId: string; message: string }[];
   metrics: {
     cacheHits: number;
     cacheMisses: number;
@@ -115,6 +120,8 @@ export async function reviewHandler(
     accepted: result.accepted,
     total: result.total,
     issues: result.issues,
+    llmConfigured: providersFromEnv(mergedEnv).length > 0,
+    errors: result.errors ?? [],
     metrics: result.metrics,
   };
 }
