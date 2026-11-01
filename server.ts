@@ -586,7 +586,8 @@ async function startServer() {
           const fetched = await projectStore.getProject(req.body.projectId);
           if (fetched) preProject = fetched.project;
         } else if (diffStr.startsWith("http://") || diffStr.startsWith("https://")) {
-          const auto = await projectStore.findOrCreateFromUrl(diffStr);
+          // Auto-registers the project and makes the caller its OWNER on first sight
+          const auto = await findOrCreateProjectHandler(projectStore, { url: diffStr }, security, user);
           preProject = auto.project;
           preMr = auto.mergeRequest;
         }
@@ -605,21 +606,19 @@ async function startServer() {
         }
       }
 
-      // Automatically inject user's decrypted Git credentials if available for this review
+      // Automatically inject the user's decrypted Git token for the repository's host.
+      // GitHub hosts map to the github credential; every other host (including
+      // self-hosted GitLab on a custom domain) uses the gitlab credential.
       const reviewEnv = { ...(req.body?.env || req.body?.envOverrides || {}) };
       if (user) {
         try {
-          if (diffStr.includes("gitlab") || preProject?.gitHost?.includes("gitlab")) {
-            const gitlabToken = await security.credentialStore.getDecryptedToken(user.id, "gitlab");
-            if (gitlabToken && !reviewEnv.GITLAB_TOKEN) {
-              reviewEnv.GITLAB_TOKEN = gitlabToken;
-            }
-          }
-          if (diffStr.includes("github") || preProject?.gitHost?.includes("github")) {
-            const githubToken = await security.credentialStore.getDecryptedToken(user.id, "github");
-            if (githubToken && !reviewEnv.GITHUB_TOKEN) {
-              reviewEnv.GITHUB_TOKEN = githubToken;
-            }
+          let host: string | undefined = preProject?.gitHost;
+          if (!host && /^https?:\/\//.test(diffStr)) host = new URL(diffStr).host;
+          if (host) {
+            const provider = host.toLowerCase().includes("github") ? "github" : "gitlab";
+            const token = await security.credentialStore.getDecryptedToken(user.id, provider);
+            const envKey = provider === "github" ? "GITHUB_TOKEN" : "GITLAB_TOKEN";
+            if (token && !reviewEnv[envKey]) reviewEnv[envKey] = token;
           }
         } catch (credErr) {
           console.warn("Credential injection notice:", credErr);

@@ -124,6 +124,7 @@ export async function getProjectIndexHandler(
 
   const topImportedFiles = Object.entries(snapshot.graph.importedByFile)
     .map(([file, importers]) => ({ file, importedByCount: importers.length }))
+    .filter((f) => f.importedByCount > 0)
     .sort(
       (a, b) =>
         b.importedByCount - a.importedByCount || (a.file < b.file ? -1 : 1),
