@@ -13,3 +13,7 @@ tsconfig.app.tsbuildinfo
 tsconfig.tsbuildinfo 
 *.tsbuildinfo
 **/*.tsbuildinfo
+
+# Runtime data (users, sessions, encrypted credentials, keys, projects)
+.data/
+release/

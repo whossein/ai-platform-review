@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useAppConfig } from "./Settings.js";
 import type { AIProviderConfig, AppConfig } from "./Settings.js";
-import { requestTestProvider, type TestProviderResult } from "./api.js";
+import { authFetch, requestTestProvider, type TestProviderResult } from "./api.js";
 
 const PRESET_DEFAULTS: Record<
   string,
@@ -145,7 +145,7 @@ export function SettingsView() {
       [key]: { loading: true, models: [] },
     }));
     try {
-      const res = await fetch("/api/models", {
+      const res = await authFetch("/api/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

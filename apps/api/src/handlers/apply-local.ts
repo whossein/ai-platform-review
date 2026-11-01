@@ -30,6 +30,15 @@ export async function applyLocalHandler(
   const fs = await import("fs/promises");
   const path = await import("path");
 
+  // Resolve the repository root once; every target file must stay inside it.
+  let rootDir: string;
+  try {
+    rootDir = await fs.realpath(path.resolve(localPath));
+    if (!(await fs.stat(rootDir)).isDirectory()) throw new Error("not a directory");
+  } catch {
+    throw new Error('field "localPath" must be an existing directory');
+  }
+
   const byFile = issues.reduce((acc: any, issue: any) => {
     if (!issue.accepted) return acc;
     if (!acc[issue.location.file]) acc[issue.location.file] = [];
@@ -38,12 +47,19 @@ export async function applyLocalHandler(
   }, {});
 
   for (const [file, fileIssues] of Object.entries(byFile)) {
-    const fullPath = path.resolve(localPath, file);
+    const fullPath = path.resolve(rootDir, file);
     try {
-      const stat = await fs.stat(fullPath);
+      // Reject traversal ("../x"), absolute paths and symlinks escaping the root
+      const realPath = await fs.realpath(fullPath);
+      const rel = path.relative(rootDir, realPath);
+      if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+        console.warn(`Refusing to modify file outside repository root: ${file}`);
+        continue;
+      }
+      const stat = await fs.stat(realPath);
       if (!stat.isFile()) continue;
 
-      const content = await fs.readFile(fullPath, "utf8");
+      const content = await fs.readFile(realPath, "utf8");
       const lines = content.split("\n");
 
       // Sort issues descending by line number so inserting doesn't mess up subsequent line numbers
@@ -76,7 +92,7 @@ export async function applyLocalHandler(
         lines.splice(lineNum, 0, ...indentedComments);
       }
 
-      await fs.writeFile(fullPath, lines.join("\n"), "utf8");
+      await fs.writeFile(realPath, lines.join("\n"), "utf8");
     } catch (e) {
       console.warn(`Could not apply to file ${fullPath}:`, e);
       // skip missing files

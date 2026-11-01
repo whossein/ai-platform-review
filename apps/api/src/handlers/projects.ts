@@ -16,6 +16,11 @@ export async function listProjectsHandler(
 ) {
   const allProjects = await projectStore.listProjects();
 
+  // With a security context, anonymous callers never see projects
+  if (security && !currentUser) {
+    return { projects: [] };
+  }
+
   // If no security context or user is ADMIN, return all projects with role indication
   if (!security || !currentUser || currentUser.role === "ADMIN") {
     const enriched = await Promise.all(

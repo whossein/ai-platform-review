@@ -372,7 +372,7 @@ async function startServer() {
   // PROJECT REGISTRY & TEAM MEMBERS ROUTES
   // ==========================================
 
-  app.get("/api/projects", populateAuth, async (req, res) => {
+  app.get("/api/projects", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await listProjectsHandler(projectStore, security, user);
@@ -382,7 +382,7 @@ async function startServer() {
     }
   });
 
-  app.get("/api/projects/:id", populateAuth, async (req, res) => {
+  app.get("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await getProjectDetailsHandler(projectStore, req.params.id, security, user);
@@ -392,7 +392,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/projects", populateAuth, async (req, res) => {
+  app.post("/api/projects", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await createProjectHandler(projectStore, req.body || {}, security, user);
@@ -406,7 +406,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/projects/find-or-create", populateAuth, async (req, res) => {
+  app.post("/api/projects/find-or-create", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await findOrCreateProjectHandler(projectStore, req.body || {}, security, user);
@@ -416,7 +416,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/projects/:id/reviews", populateAuth, async (req, res) => {
+  app.post("/api/projects/:id/reviews", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await recordReviewHandler(projectStore, req.params.id, req.body || {}, security, user);
@@ -426,7 +426,7 @@ async function startServer() {
     }
   });
 
-  app.patch("/api/projects/:id", populateAuth, async (req, res) => {
+  app.patch("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await updateProjectHandler(projectStore, req.params.id, req.body || {}, security, user);
@@ -436,7 +436,7 @@ async function startServer() {
     }
   });
 
-  app.put("/api/projects/:id", populateAuth, async (req, res) => {
+  app.put("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await updateProjectHandler(projectStore, req.params.id, req.body || {}, security, user);
@@ -446,7 +446,7 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/projects/:id", populateAuth, async (req, res) => {
+  app.delete("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
       const result = await deleteProjectHandler(projectStore, req.params.id, security, user);
@@ -520,7 +520,7 @@ async function startServer() {
   // CODE REVIEW & PIPELINE ROUTES
   // ==========================================
 
-  app.post("/api/estimate", populateAuth, async (req, res) => {
+  app.post("/api/estimate", requireAuth, async (req, res) => {
     try {
       const result = await estimateHandler(
         {
@@ -537,7 +537,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/review", populateAuth, async (req, res) => {
+  app.post("/api/review", requireAuth, async (req, res) => {
     try {
       const diffStr = (req.body?.diff || "").trim();
       const user = (req as any).user;
@@ -683,7 +683,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/test-provider", async (req, res) => {
+  app.post("/api/test-provider", requireAuth, async (req, res) => {
     try {
       const result = await testProviderHandler(req.body || {});
       res.status(200).json(result);
@@ -696,7 +696,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/models", async (req, res) => {
+  app.post("/api/models", requireAuth, async (req, res) => {
     try {
       const result = await modelsHandler(req.body || {});
       res.status(200).json(result);
@@ -705,7 +705,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/publish", async (req, res) => {
+  app.post("/api/publish", requireAuth, async (req, res) => {
     try {
       const result = await publishHandler(req.body || {});
       res.status(200).json(result);
@@ -714,7 +714,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/apply-local", async (req, res) => {
+  app.post("/api/apply-local", requireAuth, async (req, res) => {
     try {
       const result = await applyLocalHandler(req.body || {});
       res.status(200).json(result);

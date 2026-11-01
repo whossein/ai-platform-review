@@ -8,15 +8,17 @@ COPY turbo.json ./
 
 # Copy workspace package.json files
 COPY apps/web/package.json ./apps/web/
+COPY apps/api/package.json ./apps/api/
 COPY packages/agent-runtime/package.json ./packages/agent-runtime/
-COPY packages/api/package.json ./packages/api/
 COPY packages/config/package.json ./packages/config/
 COPY packages/context-engine/package.json ./packages/context-engine/
 COPY packages/core/package.json ./packages/core/
+COPY packages/eval/package.json ./packages/eval/
 COPY packages/git/package.json ./packages/git/
 COPY packages/llm/package.json ./packages/llm/
 COPY packages/memory/package.json ./packages/memory/
 COPY packages/orchestrator/package.json ./packages/orchestrator/
+COPY packages/project-index/package.json ./packages/project-index/
 COPY packages/prompts/package.json ./packages/prompts/
 COPY packages/reporting/package.json ./packages/reporting/
 COPY packages/repository/package.json ./packages/repository/

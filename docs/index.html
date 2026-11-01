@@ -1030,6 +1030,30 @@
     </div>
   </section>
 
+  <!-- SECTION: API HARDENING (BILINGUAL v0.2.4) -->
+  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="api-hardening">
+    <div class="max-w-6xl mx-auto space-y-16 reveal">
+      <div dir="ltr" class="text-left space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
+          <span>SECURITY • API HARDENING (v0.2.4)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">Authenticated APIs &amp; Safe Local Apply</h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
+          Every project, review, estimate, publish, model-listing and apply-local endpoint now requires a signed-in user. <code>apply-local</code> only edits files inside the given repository root, rejecting path traversal and symlinks that escape it. Runtime data in <code>.data/</code> is no longer tracked by git.
+        </p>
+      </div>
+      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
+          <span>امنیت • سخت‌سازی API (نسخه ۰.۲.۴)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">APIهای احراز هویت‌شده و اعمال امن تغییرات محلی</h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
+          همه endpointهای پروژه، ریویو، برآورد، انتشار، لیست مدل‌ها و apply-local اکنون نیازمند ورود کاربر هستند. <code>apply-local</code> فقط فایل‌های داخل ریشه مخزن را تغییر می‌دهد و path traversal و symlinkهای خارج از ریشه را رد می‌کند. داده‌های زمان اجرا در <code>.data/</code> دیگر در git ردیابی نمی‌شوند.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- SECTION 14 / FINAL CTA -->
   <section class="py-32 px-6 bg-zinc-950 border-t border-zinc-900 text-center relative overflow-hidden">
     <div class="absolute inset-0 bg-grid opacity-30 z-0 pointer-events-none"></div>
@@ -1058,7 +1082,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.2.3</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.2.4</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->
