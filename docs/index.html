@@ -427,7 +427,7 @@
             </div>
             <div class="arch-node group w-48 text-center">
               <span class="text-white">apps/web</span><br>
-              <span class="text-xs text-zinc-500">React UI (SSE)</span>
+              <span class="text-xs text-zinc-500">React UI</span>
             </div>
           </div>
 
@@ -724,7 +724,7 @@
         Watch it Think.
       </h2>
       <p class="text-xl text-zinc-400 mb-12">
-        The React frontend connects via Server-Sent Events (SSE) to stream real-time execution states from the Orchestrator.
+        The orchestrator runs every review as distinct pipeline stages, illustrated below. Live streaming of these stages to the UI via Server-Sent Events is planned and not implemented yet.<br><span dir="rtl" class="block mt-3 font-sans">مراحل اجرای ریویو در پایپ‌لاین زیر نمایش داده شده است. نمایش زنده این مراحل در رابط کاربری با SSE برنامه‌ریزی شده و هنوز پیاده‌سازی نشده است.</span>
       </p>
 
       <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-8 max-w-md mx-auto text-left font-mono text-sm shadow-2xl">
@@ -894,7 +894,7 @@
           </div>
           <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
             <div class="text-amber-400 font-bold text-sm">Audit Trail & Rate Limiting</div>
-            <p class="text-zinc-400 font-sans text-xs">Sliding-window rate limiter prevents credential stuffing; queryable audit logs record security and membership events with automated redaction.</p>
+            <p class="text-zinc-400 font-sans text-xs">Fixed-window rate limiter with temporary blocks prevents credential stuffing; queryable audit logs record security and membership events with automated redaction.</p>
           </div>
         </div>
       </div>
@@ -1054,6 +1054,30 @@
     </div>
   </section>
 
+  <!-- SECTION: RULES, BUDGET & DESKTOP FIXES (BILINGUAL v0.2.5) -->
+  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="rules-budget-fixes">
+    <div class="max-w-6xl mx-auto space-y-16 reveal">
+      <div dir="ltr" class="text-left space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
+          <span>RULES • BUDGET • DESKTOP (v0.2.5)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">New Deterministic Rules &amp; Enforced Budget</h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
+          The zero-token rule engine now also detects string-built SQL and wildcard CORS, and runs the <code>eval</code> and <code>debugger</code> rules by default. The budget limit from Settings is sent to the backend as <code>AI_REVIEW_DOLLAR_BUDGET</code>, and the server honors the <code>PORT</code> variable so the Electron desktop app can connect.
+        </p>
+      </div>
+      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
+          <span>قوانین • بودجه • دسکتاپ (نسخه ۰.۲.۵)</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">قوانین قطعی جدید و اعمال سقف بودجه</h2>
+        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
+          موتور قوانین بدون هزینه اکنون SQL ساخته‌شده با الحاق رشته و CORS با wildcard را هم شناسایی می‌کند و قوانین <code>eval</code> و <code>debugger</code> به‌صورت پیش‌فرض اجرا می‌شوند. سقف بودجه تنظیمات با نام <code>AI_REVIEW_DOLLAR_BUDGET</code> به بک‌اند ارسال می‌شود و سرور متغیر <code>PORT</code> را می‌خواند تا نسخه دسکتاپ (Electron) بتواند متصل شود.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- SECTION 14 / FINAL CTA -->
   <section class="py-32 px-6 bg-zinc-950 border-t border-zinc-900 text-center relative overflow-hidden">
     <div class="absolute inset-0 bg-grid opacity-30 z-0 pointer-events-none"></div>
@@ -1082,7 +1106,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.2.4</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.2.5</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

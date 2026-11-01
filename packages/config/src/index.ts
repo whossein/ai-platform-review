@@ -4,7 +4,8 @@
  * Configuration + the deterministic Rule Engine (ADR-0006). Rules run before
  * any AI: free, precise, and used to suppress redundant LLM work.
  *  - `DefaultRuleEngine` + `MapRuleRegistry`
- *  - built-in rules: secret detection, no-console, no-explicit-any, no-todo
+ *  - built-in rules: secret detection, SQL injection, wildcard CORS, no-eval,
+ *    no-debugger, no-console, no-explicit-any, no-todo
  *  - `ruleFindingToIssue` — lifts a deterministic finding into the canonical
  *    `Issue` shape (confidence 1.0) so it flows through the same report/judge path.
  */
@@ -19,6 +20,8 @@ export {
   noConsoleRule,
   noDebuggerRule,
   noEvalRule,
+  sqlInjectionRule,
+  wildcardCorsRule,
   noExclusiveTestsRule,
   noExplicitAnyRule,
   noTodoRule,
@@ -46,7 +49,11 @@ export function ruleFindingToIssue(finding: RuleFinding): Issue {
   });
 
   let category = "code";
-  if (finding.ruleKind === "secret_detection") {
+  if (
+    finding.ruleKind === "secret_detection" ||
+    finding.ruleKind === "sql_injection" ||
+    finding.ruleKind === "cors_misconfig"
+  ) {
     category = "security";
   } else if (finding.ruleKind === "governance") {
     category = "governance";

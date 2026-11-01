@@ -72,7 +72,8 @@ async function startServer() {
   const app = express();
   const portArgIndex = process.argv.indexOf("--port");
   const cliPort = portArgIndex !== -1 ? parseInt(process.argv[portArgIndex + 1], 10) : undefined;
-  const PORT = cliPort || 3000;
+  const envPort = parseInt(process.env.PORT || "", 10);
+  const PORT = cliPort || (Number.isNaN(envPort) ? 3000 : envPort);
 
   // Build and populate the agent registry at startup (composition root)
   const agentRegistry = new MapAgentRegistry();

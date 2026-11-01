@@ -469,12 +469,77 @@ export const prTemplateComplianceRule: Rule = {
   },
 };
 
+/**
+ * Flags SQL built by string concatenation / interpolation (injection risk).
+ * Only fires when a SQL keyword pair appears in a string that is combined with
+ * a dynamic value, so parameterized queries (`?`, `$1`, `:name`) stay clean.
+ */
+export const sqlInjectionRule: Rule = {
+  kind: "sql_injection",
+  id: "security.sql-injection",
+  async run(ctx) {
+    const sql =
+      /\b(select\s[^;]*\sfrom|insert\s+into|update\s+\w+\s+set|delete\s+from)\b/i;
+    const interpolated = /\$\{[^}]+\}/; // template literal interpolation
+    const concatenated = /(['"`])\s*\+\s*[A-Za-z_$]|[A-Za-z_$)\]]\s*\+\s*(['"`])/;
+    return {
+      ok: true,
+      value: scanLines(
+        ctx,
+        (line) =>
+          sql.test(line) && (interpolated.test(line) || concatenated.test(line))
+            ? "dynamic SQL string"
+            : undefined,
+        (file, line) => ({
+          ruleKind: "sql_injection",
+          ruleId: "security.sql-injection",
+          message:
+            "SQL query is built with string concatenation or interpolation; use parameterized queries / prepared statements.",
+          location: { file, line },
+          severity: "high",
+        }),
+      ),
+    };
+  },
+};
+
+/** Flags wildcard CORS origins. */
+export const wildcardCorsRule: Rule = {
+  kind: "cors_misconfig",
+  id: "security.wildcard-cors",
+  async run(ctx) {
+    const patterns: readonly RegExp[] = [
+      /access-control-allow-origin['"]?\s*[:,]\s*['"]\*['"]/i,
+      /\b(origin)\s*:\s*['"]\*['"]/i,
+      /\bcors\s*\(\s*\)/,
+    ];
+    return {
+      ok: true,
+      value: scanLines(
+        ctx,
+        (line) =>
+          patterns.some((p) => p.test(line)) ? "wildcard CORS" : undefined,
+        (file, line) => ({
+          ruleKind: "cors_misconfig",
+          ruleId: "security.wildcard-cors",
+          message:
+            "CORS allows every origin; restrict it to an explicit allow-list of trusted origins.",
+          location: { file, line },
+          severity: "medium",
+        }),
+      ),
+    };
+  },
+};
+
 /** The built-in deterministic rule set (static checks that are universal and zero-false-positive). */
 export const DEFAULT_RULES: readonly Rule[] = [
   secretDetectionRule,
   noConsoleRule,
   noDebuggerRule,
   noEvalRule,
+  sqlInjectionRule,
+  wildcardCorsRule,
   noExclusiveTestsRule,
   noExplicitAnyRule,
   noTodoRule,

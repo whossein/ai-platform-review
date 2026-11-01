@@ -77,6 +77,9 @@ function buildEnvOverrides(config: any, language: string) {
     AI_REVIEW_LLM_PROVIDER: config.AI_REVIEW_LLM_PROVIDER || "gemini",
     AI_REVIEW_COMMENT_LANGUAGE: language,
   };
+  const budgetLimit = parseFloat(config.BUDGET_LIMIT);
+  if (Number.isFinite(budgetLimit) && budgetLimit > 0)
+    envOverrides.AI_REVIEW_DOLLAR_BUDGET = String(budgetLimit);
   if (config.AI_REVIEW_LLM_API_KEY)
     envOverrides.AI_REVIEW_LLM_API_KEY = config.AI_REVIEW_LLM_API_KEY;
   if (config.AI_REVIEW_LLM_MODEL)

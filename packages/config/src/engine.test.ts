@@ -83,4 +83,48 @@ describe("DefaultRuleEngine", () => {
     expect(issue.severity).toBe("high");
     expect(issue.fingerprint.length).toBeGreaterThan(0);
   });
+
+  it("flags dynamic SQL, wildcard CORS, eval and debugger", async () => {
+    const engine = engineWithDefaults();
+    const res = await engine.run({
+      repositoryId: "r",
+      files: [
+        {
+          path: "api.js",
+          text: [
+            "db.query(`SELECT * FROM users WHERE id = ${id}`);",
+            'db.query("SELECT * FROM users WHERE name = \'" + name + "\'");',
+            "app.use(cors());",
+            'res.setHeader("Access-Control-Allow-Origin", "*");',
+            "eval(code);",
+            "debugger;",
+          ].join("\n"),
+        },
+      ],
+    } as FileRuleContext);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const ids = res.value.findings.map((f) => f.ruleId);
+    expect(ids.filter((i) => i === "security.sql-injection")).toHaveLength(2);
+    expect(ids.filter((i) => i === "security.wildcard-cors")).toHaveLength(2);
+    expect(ids).toContain("no-eval");
+    expect(ids).toContain("no-debugger");
+  });
+
+  it("does not flag parameterized SQL or restricted CORS", async () => {
+    const engine = engineWithDefaults();
+    const res = await engine.run({
+      repositoryId: "r",
+      files: [
+        {
+          path: "safe.js",
+          text: [
+            'db.query("SELECT * FROM users WHERE id = $1", [id]);',
+            'app.use(cors({ origin: "https://app.example.com" }));',
+          ].join("\n"),
+        },
+      ],
+    } as FileRuleContext);
+    expect(res.ok && res.value.findings).toHaveLength(0);
+  });
 });
