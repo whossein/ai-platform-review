@@ -14,12 +14,14 @@ import type { HttpClient } from "@ai-review/git";
 import { normalizeRepoPath } from "../filters.js";
 import { redactSecrets } from "../redact.js";
 import {
+  orderBranches,
   sendWithRateLimitRetry,
   throwIfAborted,
   type RateLimitRetryOptions,
   type RepositorySource,
   type ResolvedRef,
   type SourceTreeEntry,
+  type BranchListing,
 } from "./source.js";
 
 export interface GitHubSourceOptions {
@@ -132,6 +134,47 @@ export class GitHubRepositorySource implements RepositorySource {
       [this.token],
     );
     return new Error(safeMsg);
+  }
+
+  async listBranches(signal?: AbortSignal | undefined): Promise<BranchListing> {
+    throwIfAborted(signal);
+    const repoRes = await sendWithRateLimitRetry(
+      this.http,
+      {
+        method: "GET",
+        url: `${this.apiBaseUrl}/repos/${this.repoPath}`,
+        headers: this.headers(),
+      },
+      this.retryOpts(signal),
+    );
+    if (repoRes.status >= 400) {
+      throw this.formatHttpError("repo lookup", repoRes.status, repoRes.body);
+    }
+    const defaultBranch =
+      (repoRes.body as GitHubRepoDto | undefined)?.default_branch?.trim() ||
+      "main";
+
+    const names: string[] = [];
+    for (let page = 1; page <= 3; page++) {
+      const res = await sendWithRateLimitRetry(
+        this.http,
+        {
+          method: "GET",
+          url: `${this.apiBaseUrl}/repos/${this.repoPath}/branches?per_page=100&page=${page}`,
+          headers: this.headers(),
+        },
+        this.retryOpts(signal),
+      );
+      if (res.status >= 400) {
+        throw this.formatHttpError("branch listing", res.status, res.body);
+      }
+      const items = Array.isArray(res.body)
+        ? (res.body as { name?: string }[])
+        : [];
+      for (const b of items) if (b.name) names.push(b.name);
+      if (items.length < 100) break;
+    }
+    return { defaultBranch, branches: orderBranches(defaultBranch, names) };
   }
 
   async resolveRef(

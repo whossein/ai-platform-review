@@ -12,12 +12,14 @@ import type { HttpClient } from "@ai-review/git";
 import { normalizeRepoPath } from "../filters.js";
 import { redactSecrets } from "../redact.js";
 import {
+  orderBranches,
   sendWithRateLimitRetry,
   throwIfAborted,
   type RateLimitRetryOptions,
   type RepositorySource,
   type ResolvedRef,
   type SourceTreeEntry,
+  type BranchListing,
 } from "./source.js";
 
 export interface GitLabSourceOptions {
@@ -94,6 +96,47 @@ export class GitLabRepositorySource implements RepositorySource {
       [this.token],
     );
     return new Error(safeMsg);
+  }
+
+  async listBranches(signal?: AbortSignal | undefined): Promise<BranchListing> {
+    throwIfAborted(signal);
+    const projRes = await sendWithRateLimitRetry(
+      this.http,
+      {
+        method: "GET",
+        url: `${this.baseUrl}/api/v4/projects/${this.encodedProjectId}`,
+        headers: this.authHeaders(),
+      },
+      this.retryOpts(signal),
+    );
+    if (projRes.status >= 400) {
+      throw this.formatHttpError("project lookup", projRes.status, projRes.body);
+    }
+    const defaultBranch =
+      (projRes.body as GitLabProjectDto | undefined)?.default_branch?.trim() ||
+      "main";
+
+    const names: string[] = [];
+    for (let page = 1; page <= 3; page++) {
+      const res = await sendWithRateLimitRetry(
+        this.http,
+        {
+          method: "GET",
+          url: `${this.baseUrl}/api/v4/projects/${this.encodedProjectId}/repository/branches?per_page=100&page=${page}`,
+          headers: this.authHeaders(),
+        },
+        this.retryOpts(signal),
+      );
+      if (res.status >= 400) {
+        throw this.formatHttpError("branch listing", res.status, res.body);
+      }
+      const items = Array.isArray(res.body)
+        ? (res.body as { name?: string }[])
+        : [];
+      for (const b of items) if (b.name) names.push(b.name);
+      if (items.length < 100) break;
+    }
+    return { defaultBranch, branches: orderBranches(defaultBranch, names) };
   }
 
   async resolveRef(

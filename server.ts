@@ -50,6 +50,7 @@ import {
   getAuditLogsHandler,
   startProjectIndexHandler,
   cancelProjectIndexHandler,
+  listProjectBranchesHandler,
   getProjectIndexHandler,
   ensureProjectIndexed,
   buildProjectReviewContext,
@@ -474,6 +475,14 @@ async function startServer() {
       res.status(200).json(await getProjectIndexHandler(indexDeps, req.params.id, (req as any).user));
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to read project index" });
+    }
+  });
+
+  app.get("/api/projects/:id/index/branches", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await listProjectBranchesHandler(indexDeps, req.params.id, (req as any).user));
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to list branches" });
     }
   });
 

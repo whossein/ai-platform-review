@@ -16,8 +16,28 @@ export interface SourceTreeEntry {
   readonly gitBlobSha?: string | undefined;
 }
 
+export interface BranchListing {
+  /** The repository's default branch as reported by the host. */
+  readonly defaultBranch: string;
+  /** Branch names (default branch first, then alphabetical), capped at `MAX_LISTED_BRANCHES`. */
+  readonly branches: readonly string[];
+}
+
+export const MAX_LISTED_BRANCHES = 300;
+
+/** Puts the default branch first and the rest in alphabetical order, without duplicates. */
+export function orderBranches(
+  defaultBranch: string,
+  names: readonly string[],
+): string[] {
+  const rest = [...new Set(names)].filter((n) => n && n !== defaultBranch).sort();
+  return [defaultBranch, ...rest].slice(0, MAX_LISTED_BRANCHES);
+}
+
 export interface RepositorySource {
   readonly kind: "gitlab" | "github" | "local";
+  /** Lists branches and the default branch; not every source supports it. */
+  listBranches?(signal?: AbortSignal | undefined): Promise<BranchListing>;
   /**
    * Resolves a branch/tag/SHA ref (or default branch if omitted) into a canonical commit SHA.
    */

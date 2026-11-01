@@ -13,6 +13,7 @@ import {
   getProjectIndexHandler,
   ensureProjectIndexed,
   buildProjectReviewContext,
+  listProjectBranchesHandler,
   type IndexHandlerDeps,
 } from "./index-handlers.js";
 
@@ -159,5 +160,12 @@ describe("project index handlers", () => {
     });
     const ctx = await buildProjectReviewContext(deps, projectId, ["src/a.ts"]);
     expect(ctx).toContain("src/a.ts: exports a; imported by 1 file(s): src/b.ts");
+  });
+
+  it("branch listing is manage-only and reports host errors without leaking the token", async () => {
+    await expect(listProjectBranchesHandler(deps, projectId, outsider)).rejects.toMatchObject({ status: 403 });
+    const err = await listProjectBranchesHandler(deps, projectId, owner).catch((e) => e);
+    expect(err.status).toBe(502);
+    expect(String(err.message)).not.toContain(SECRET);
   });
 });

@@ -154,6 +154,30 @@ export async function startProjectIndexHandler(
   return { job };
 }
 
+export async function listProjectBranchesHandler(
+  deps: IndexHandlerDeps,
+  projectId: string,
+  user: SafeUser,
+) {
+  const project = await requireProject(deps, projectId, user, "project:manage");
+  const token = await deps.security.credentialStore.getDecryptedToken(
+    user.id,
+    providerForHost(project.gitHost),
+  );
+  const { localPath: _ignored, ...remoteProject } = project as typeof project & {
+    localPath?: string;
+  };
+  try {
+    return await deps.indexJobs.listBranches({
+      project: remoteProject,
+      credentials: token ? { token } : undefined,
+    });
+  } catch (err) {
+    // Token-scrubbed message from the source; surface as a gateway-style error
+    throw httpError(502, err instanceof Error ? err.message : "Failed to list branches");
+  }
+}
+
 export async function cancelProjectIndexHandler(
   deps: IndexHandlerDeps,
   projectId: string,

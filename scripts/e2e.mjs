@@ -61,6 +61,7 @@ const gitlab = await listen((req, res) => {
     return send(res, [{ old_path: "src/db.ts", new_path: "src/db.ts", new_file: true, diff }]);
   }
   if (p === "/api/v4/projects/team/app") return send(res, { default_branch: "main" });
+  if (p.endsWith("/repository/branches")) return send(res, [{ name: "feature/x" }, { name: "main" }, { name: "develop" }]);
   if (p.endsWith("/repository/commits/main")) return send(res, { id: "a".repeat(40) });
   if (p.endsWith("/repository/tree")) return send(res, Object.keys(FILES).map((f, i) => ({ type: "blob", path: f, id: "blob" + i })));
   const m = /\/repository\/files\/(.+)\/raw$/.exec(p);
@@ -129,6 +130,9 @@ try {
   check("second review succeeds without duplicating project/MR", r2.status === 200 && (await api("GET", `/api/projects/${pid}`, null, admin)).body.reviews?.length === 2);
   check("index context reaches the reviewers", llmPrompts.some((p) => p.includes("PROJECT STRUCTURE") && p.includes("src/app.ts")), `prompts=${llmPrompts.length}`);
 
+  const br = await api("GET", `/api/projects/${pid}/index/branches`, null, admin);
+  check("branch list has the default branch first", br.body.defaultBranch === "main" && JSON.stringify(br.body.branches) === JSON.stringify(["main", "develop", "feature/x"]), JSON.stringify(br.body));
+
   const re = await api("POST", `/api/projects/${pid}/index`, {}, admin);
   check("manual re-index accepted", re.status === 202);
   const again = await waitIndex(pid, admin);
@@ -136,6 +140,7 @@ try {
 
   await api("POST", "/api/users", { name: "Mem", email: "m@x.io", password: "MemberPass123!", role: "MEMBER" }, admin);
   const member = (await api("POST", "/api/auth/login", { email: "m@x.io", password: "MemberPass123!" })).body.token;
+  check("non-member cannot list branches", (await api("GET", `/api/projects/${pid}/index/branches`, null, member)).status === 403);
   check("non-member cannot read project index", (await api("GET", `/api/projects/${pid}/index`, null, member)).status === 403);
   check("non-member cannot review an existing project", (await api("POST", "/api/review", { diff: mr, env }, member)).status === 403);
   const mr8 = `${gl}/team/other/-/merge_requests/1`;

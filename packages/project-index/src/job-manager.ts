@@ -15,7 +15,7 @@ import { redactSecrets } from "./redact.js";
 import { GitHubRepositorySource } from "./sources/github-source.js";
 import { GitLabRepositorySource } from "./sources/gitlab-source.js";
 import { LocalRepositorySource } from "./sources/local-source.js";
-import type { RepositorySource } from "./sources/source.js";
+import type { BranchListing, RepositorySource } from "./sources/source.js";
 import type { ProjectIndexStore } from "./store.js";
 import type {
   GitSourceCredentials,
@@ -105,6 +105,18 @@ export class IndexJobManager {
       maxRetryAfterMs: input.options?.maxRetryAfterMs,
       maxRateLimitRetries: input.options?.maxRateLimitRetries,
     });
+  }
+
+  /**
+   * Lists branches (and the default branch) of the project's remote repository.
+   * Local checkouts are not supported through this call.
+   */
+  async listBranches(input: StartIndexJobInput): Promise<BranchListing> {
+    const source = this.createSourceForProject(input);
+    if (!source.listBranches) {
+      throw new Error("Branch listing is not supported for this repository source");
+    }
+    return source.listBranches();
   }
 
   /**

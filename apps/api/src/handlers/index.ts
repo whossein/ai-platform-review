@@ -62,6 +62,7 @@ export * from "./audit-handlers.js";
 export {
   startProjectIndexHandler,
   cancelProjectIndexHandler,
+  listProjectBranchesHandler,
   getProjectIndexHandler,
   ensureProjectIndexed,
   buildProjectReviewContext,

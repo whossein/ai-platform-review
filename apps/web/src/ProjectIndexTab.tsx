@@ -4,6 +4,8 @@ import {
   fetchProjectIndex,
   startProjectIndex,
   cancelProjectIndex,
+  fetchProjectBranches,
+  type ProjectBranches,
   type ProjectIndexResponse,
 } from "./api.js";
 
@@ -18,6 +20,9 @@ export function ProjectIndexTab({ projectId, userRole }: ProjectIndexTabProps): 
   const [data, setData] = useState<ProjectIndexResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ref, setRef] = useState("");
+  const [branches, setBranches] = useState<ProjectBranches | null>(null);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesError, setBranchesError] = useState<string | null>(null);
   const canManage = userRole === "OWNER" || userRole === "MANAGER";
 
   const load = useCallback(async () => {
@@ -32,6 +37,31 @@ export function ProjectIndexTab({ projectId, userRole }: ProjectIndexTabProps): 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Load branches from the git host and prefill the default branch
+  useEffect(() => {
+    if (!canManage) return;
+    let cancelled = false;
+    setBranchesLoading(true);
+    setBranchesError(null);
+    fetchProjectBranches(projectId)
+      .then((b) => {
+        if (cancelled) return;
+        setBranches(b);
+        setRef((current) => current || b.defaultBranch);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setBranchesError(e instanceof Error ? e.message : "Failed to load branches");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBranchesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, canManage]);
 
   const active = data?.job?.status === "queued" || data?.job?.status === "running";
   useEffect(() => {
@@ -69,13 +99,39 @@ export function ProjectIndexTab({ projectId, userRole }: ProjectIndexTabProps): 
           </button>
           {canManage && (
             <>
-              <input
-                value={ref}
-                onChange={(e) => setRef(e.target.value)}
-                placeholder="Branch / tag / SHA (optional)"
-                disabled={active}
-                style={{ width: "14rem" }}
-              />
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                <label style={{ fontSize: "0.7rem", color: "var(--muted)" }}>
+                  Branch{branches ? ` (default: ${branches.defaultBranch})` : ""}
+                </label>
+                <div style={{ display: "flex", gap: "0.35rem" }}>
+                  <input
+                    list="project-index-branches"
+                    value={ref}
+                    onChange={(e) => setRef(e.target.value)}
+                    placeholder={branchesLoading ? "Loading branches..." : "Branch, tag or commit SHA"}
+                    disabled={active}
+                    style={{ width: "14rem" }}
+                  />
+                  <datalist id="project-index-branches">
+                    {branches?.branches?.map((b) => <option key={b} value={b} />)}
+                  </datalist>
+                  {branches && ref !== branches.defaultBranch && (
+                    <button
+                      className="btn btn-secondary"
+                      disabled={active}
+                      onClick={() => setRef(branches.defaultBranch)}
+                      title="Back to the default branch"
+                    >
+                      Default
+                    </button>
+                  )}
+                </div>
+                {branchesError && (
+                  <span style={{ fontSize: "0.7rem", color: "var(--muted)" }} title={branchesError}>
+                    Could not load branches from the git host; you can still type one.
+                  </span>
+                )}
+              </div>
               {active ? (
                 <button className="btn btn-secondary" onClick={() => void run(() => cancelProjectIndex(projectId))}>
                   <Square size={14} /> Cancel

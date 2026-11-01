@@ -32,6 +32,7 @@ import {
 import { parseRepositoryUrl } from "./url-helper.js";
 import { ProjectMembersTab } from "./ProjectMembersTab.js";
 import { ProjectIndexTab } from "./ProjectIndexTab.js";
+import { ErrorBoundary } from "./ErrorBoundary.js";
 
 interface ProjectsViewProps {
   initialProjectId?: string | null | undefined;
@@ -1600,10 +1601,12 @@ export function ProjectsView({
 
           {/* Subtab 5: Team Members & Access */}
           {activeTab === "index" && (
-            <ProjectIndexTab
-              projectId={projectDetails.project.id}
-              userRole={projectDetails.userRole}
-            />
+            <ErrorBoundary label="the Index tab">
+              <ProjectIndexTab
+                projectId={projectDetails.project.id}
+                userRole={projectDetails.userRole}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "members" && (

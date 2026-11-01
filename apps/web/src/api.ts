@@ -819,8 +819,11 @@ export interface ProjectIndexResponse {
 
 async function indexRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await authFetch(url, init);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  const data = await res.json().catch(() => undefined);
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+  if (data === undefined || data === null || typeof data !== "object") {
+    throw new Error("Unexpected response from the server. Restart the dev server so it picks up the latest API routes.");
+  }
   return data as T;
 }
 
@@ -843,4 +846,13 @@ export function cancelProjectIndex(projectId: string): Promise<{ cancelled: bool
   return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index/job`, {
     method: "DELETE",
   });
+}
+
+export interface ProjectBranches {
+  readonly defaultBranch: string;
+  readonly branches: readonly string[];
+}
+
+export function fetchProjectBranches(projectId: string): Promise<ProjectBranches> {
+  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/index/branches`);
 }

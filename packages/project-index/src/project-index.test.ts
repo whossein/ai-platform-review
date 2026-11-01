@@ -752,3 +752,49 @@ describe("buildReviewContext", async () => {
     expect(buildReviewContext(snapshot, ["src/lonely.ts"])).toContain("not imported by other indexed files");
   });
 });
+
+describe("listBranches", () => {
+  const route = (table: Record<string, unknown>): HttpClient => ({
+    async send(req: HttpRequest) {
+      const key = Object.keys(table).find((k) => req.url.includes(k));
+      return { ok: true, value: { status: key ? 200 : 404, body: key ? table[key] : {} } } as never;
+    },
+  });
+
+  it("GitLab: default branch first, then alphabetical, deduplicated", async () => {
+    const { GitLabRepositorySource } = await import("./sources/gitlab-source.js");
+    const source = new GitLabRepositorySource(
+      route({
+        "/repository/branches": [{ name: "feature/z" }, { name: "develop" }, { name: "main" }, { name: "develop" }],
+        "/api/v4/projects/team%2Fapp": { default_branch: "develop" },
+      }),
+      { baseUrl: "https://gl.example.com", projectPath: "team/app" },
+    );
+    const res = await source.listBranches!();
+    expect(res.defaultBranch).toBe("develop");
+    expect(res.branches).toEqual(["develop", "feature/z", "main"]);
+  });
+
+  it("GitHub: reads default branch from the repo and lists branches", async () => {
+    const { GitHubRepositorySource } = await import("./sources/github-source.js");
+    const source = new GitHubRepositorySource(
+      route({
+        "/branches": [{ name: "zeta" }, { name: "alpha" }],
+        "/repos/o/r": { default_branch: "trunk" },
+      }),
+      { repositoryPath: "o/r", gitHost: "github.com" },
+    );
+    const res = await source.listBranches!();
+    expect(res).toEqual({ defaultBranch: "trunk", branches: ["trunk", "alpha", "zeta"] });
+  });
+
+  it("surfaces host errors without leaking the token", async () => {
+    const { GitLabRepositorySource } = await import("./sources/gitlab-source.js");
+    const source = new GitLabRepositorySource(
+      { async send() { return { ok: true, value: { status: 401, body: { message: "bad token glpat-SECRET123" } } } as never; } },
+      { baseUrl: "https://gl.example.com", projectPath: "team/app", token: "glpat-SECRET123" },
+    );
+    await expect(source.listBranches!()).rejects.toThrow(/HTTP 401/);
+    await expect(source.listBranches!()).rejects.not.toThrow(/glpat-SECRET123/);
+  });
+});
