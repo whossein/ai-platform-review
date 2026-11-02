@@ -211,6 +211,7 @@ export class ReviewOrchestrator {
     // Construct ReviewExecutionContext
     const reviewCtx: ReviewExecutionContext = {
       diff: opts.diff,
+      governanceRules: opts.env?.AI_REVIEW_GOVERNANCE_RULES === "1",
       files: opts.files,
       slice,
       baseCtx,

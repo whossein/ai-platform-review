@@ -50,6 +50,8 @@ export interface ReviewResponse {
   issues: readonly any[];
   /** False when no real AI provider is configured: only deterministic rules ran. */
   llmConfigured: boolean;
+  /** "rules-only" when the caller selected no AI specialists (deterministic checks, no tokens spent). */
+  mode: "ai" | "rules-only";
   /** Specialists that failed (LLM error, bad JSON, budget…); never silently dropped. */
   errors: readonly { agentId: string; message: string }[];
   metrics: {
@@ -121,6 +123,10 @@ export async function reviewHandler(
     total: result.total,
     issues: result.issues,
     llmConfigured: providersFromEnv(mergedEnv).length > 0,
+    mode:
+      Array.isArray(selectedSpecialists) && selectedSpecialists.length === 0
+        ? "rules-only"
+        : "ai",
     errors: result.errors ?? [],
     metrics: result.metrics,
   };

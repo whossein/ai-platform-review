@@ -78,6 +78,13 @@ export {
 } from "./index-handlers.js";
 
 export {
+  startProjectScanHandler,
+  cancelProjectScanHandler,
+  getProjectScanHandler,
+  type ScanHandlerDeps,
+} from "./scan-handlers.js";
+
+export {
   codeContextHandler,
   suggestCodeHandler,
   commitSuggestionHandler,

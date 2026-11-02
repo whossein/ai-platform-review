@@ -19,6 +19,7 @@ import {
   FileText,
   Users,
   Network,
+  ScanSearch,
 } from "lucide-react";
 import {
   fetchProjects,
@@ -32,6 +33,7 @@ import {
 import { parseRepositoryUrl } from "./url-helper.js";
 import { ProjectMembersTab } from "./ProjectMembersTab.js";
 import { ProjectIndexTab } from "./ProjectIndexTab.js";
+import { ProjectScanTab } from "./ProjectScanTab.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
 import type { ProjectSubTab } from "./route.js";
 
@@ -806,6 +808,25 @@ export function ProjectsView({
             >
               <Network size={16} />
               <span>Index</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("scan")}
+              style={{
+                background: activeTab === "scan" ? "var(--panel)" : "transparent",
+                border: activeTab === "scan" ? "1px solid var(--border)" : "1px solid transparent",
+                color: activeTab === "scan" ? "var(--text)" : "var(--muted)",
+                padding: "0.5rem 1rem",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <ScanSearch size={16} />
+              <span>Scan</span>
             </button>
           </div>
 
@@ -1630,6 +1651,16 @@ export function ProjectsView({
           {activeTab === "index" && (
             <ErrorBoundary label="the Index tab">
               <ProjectIndexTab
+                projectId={projectDetails.project.id}
+                userRole={projectDetails.userRole}
+                repositoryUrl={projectDetails.project.repositoryUrl}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeTab === "scan" && (
+            <ErrorBoundary label="the Scan tab">
+              <ProjectScanTab
                 projectId={projectDetails.project.id}
                 userRole={projectDetails.userRole}
                 repositoryUrl={projectDetails.project.repositoryUrl}

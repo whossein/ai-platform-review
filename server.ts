@@ -58,11 +58,15 @@ import {
   listProjectBranchesHandler,
   getProjectIndexHandler,
   getProjectIndexHistoryHandler,
+  startProjectScanHandler,
+  cancelProjectScanHandler,
+  getProjectScanHandler,
   ensureProjectIndexed,
   buildProjectReviewContext,
 } from "./apps/api/src/handlers/index.js";
 import { ProjectIndexStore, IndexJobManager } from "@ai-review/project-index";
 import { ProjectStore } from "./apps/api/src/project-store.js";
+import { ScanStore, ScanJobManager } from "./apps/api/src/scan-manager.js";
 import { SecurityContext } from "./apps/api/src/security/index.js";
 
 loadDotEnv();
@@ -103,7 +107,10 @@ async function startServer() {
   const security = new SecurityContext("./.data");
   const indexStore = new ProjectIndexStore("./.data/index");
   const indexJobs = new IndexJobManager(indexStore);
+  const scanStore = new ScanStore("./.data/scans");
+  const scanJobs = new ScanJobManager(scanStore, indexJobs);
   const indexDeps = { projectStore, security, indexStore, indexJobs };
+  const scanDeps = { ...indexDeps, scanStore, scanJobs };
 
   app.use(express.json({ limit: "50mb" }));
 
@@ -478,7 +485,9 @@ async function startServer() {
       const user = (req as any).user;
       const result = await deleteProjectHandler(projectStore, req.params.id, security, user);
       indexJobs.cancelJob(req.params.id);
+      scanJobs.cancelJob(req.params.id);
       await indexStore.deleteProjectIndex(req.params.id).catch(() => undefined);
+      await scanStore.deleteProject(req.params.id).catch(() => undefined);
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to delete project" });
@@ -524,6 +533,32 @@ async function startServer() {
       res.status(200).json(await cancelProjectIndexHandler(indexDeps, req.params.id, (req as any).user));
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to cancel indexing" });
+    }
+  });
+
+  // Project rule scan (no AI)
+  app.get("/api/projects/:id/scan", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await getProjectScanHandler(scanDeps, req.params.id, (req as any).user, { ref: req.query.ref }));
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to read scan" });
+    }
+  });
+
+  app.post("/api/projects/:id/scan", requireAuth, async (req, res) => {
+    try {
+      const result = await startProjectScanHandler(scanDeps, req.params.id, (req as any).user, req.body || {}, req.get("x-git-token") || undefined);
+      res.status(202).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to start scan" });
+    }
+  });
+
+  app.delete("/api/projects/:id/scan/job", requireAuth, async (req, res) => {
+    try {
+      res.status(200).json(await cancelProjectScanHandler(scanDeps, req.params.id, (req as any).user));
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to cancel scan" });
     }
   });
 

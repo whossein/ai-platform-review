@@ -23,6 +23,8 @@ import type {
 import type { StageExecutor, StageOutcome } from "@ai-review/workflow-engine";
 import {
   DefaultRuleEngine,
+  GOVERNANCE_RULES,
+  mrMetadataFile,
   MapRuleRegistry,
   DEFAULT_RULES,
   ruleFindingToIssue,
@@ -40,6 +42,8 @@ export interface ModelPricing {
 
 export interface ReviewExecutionContext {
   readonly diff: string;
+  /** Enables MR metadata (branch/title) governance rules. */
+  readonly governanceRules?: boolean | undefined;
   readonly files?: readonly { path: string; text: string }[] | undefined;
   readonly slice: ContextSlice;
   readonly baseCtx: AgentExecutionContext;
@@ -128,9 +132,17 @@ export class ReviewStageExecutor implements StageExecutor {
       }
     }
 
+    const metadata = this.ctx.governanceRules
+      ? mrMetadataFile(this.ctx.diff)
+      : undefined;
+    if (metadata) filesToScan.push(metadata);
+
     if (filesToScan.length > 0) {
       const ruleRegistry = new MapRuleRegistry();
       for (const rule of DEFAULT_RULES) ruleRegistry.register(rule);
+      if (this.ctx.governanceRules) {
+        for (const rule of GOVERNANCE_RULES) ruleRegistry.register(rule);
+      }
       const ruleEngine = new DefaultRuleEngine(ruleRegistry);
       const ruleCtx: FileRuleContext = {
         repositoryId: "repo.local",

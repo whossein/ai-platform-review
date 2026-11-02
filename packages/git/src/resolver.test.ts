@@ -34,6 +34,19 @@ describe("parseDiffToFiles", () => {
     expect(files[0]?.path).toBe("foo.ts");
     expect(files[1]?.path).toBe("bar.ts");
   });
+
+  it("blanks unchanged context lines but keeps line numbers", () => {
+    const diff = `--- a/a.ts
++++ b/a.ts
+@@ -1,2 +1,3 @@
+ console.log("old");
++console.log("new");
+-removed
+ keep
+`;
+    const text = parseDiffToFiles(diff)[0]?.text ?? "";
+    expect(text.split("\n")).toEqual(["", 'console.log("new");', ""]);
+  });
 });
 
 describe("resolveDiffInput", () => {

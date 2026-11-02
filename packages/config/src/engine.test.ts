@@ -11,6 +11,7 @@ import {
   ruleFindingToIssue,
 } from "./index.js";
 import type { FileRuleContext } from "./rules.js";
+import { GOVERNANCE_RULES, mrMetadataFile } from "./rules.js";
 
 function engineWithDefaults(): DefaultRuleEngine {
   const registry = new MapRuleRegistry();
@@ -126,5 +127,68 @@ describe("DefaultRuleEngine", () => {
       ],
     } as FileRuleContext);
     expect(res.ok && res.value.findings).toHaveLength(0);
+  });
+
+  it("keeps same-rule findings on different lines as distinct issues", async () => {
+    const engine = engineWithDefaults();
+    const res = await engine.run({
+      repositoryId: "r",
+      files: [{ path: "a.ts", text: "console.log(1);\nconsole.log(2);" }],
+    } as FileRuleContext);
+    if (!res.ok) throw new Error("rule run failed");
+    const ids = new Set(res.value.findings.map((f) => ruleFindingToIssue(f).id));
+    expect(res.value.findings).toHaveLength(2);
+    expect(ids.size).toBe(2);
+  });
+
+  it("governance rules check MR branch and title only when metadata exists", async () => {
+    const registry = new MapRuleRegistry();
+    for (const rule of GOVERNANCE_RULES) registry.register(rule);
+    const engine = new DefaultRuleEngine(registry);
+    const meta = mrMetadataFile(
+      "# Merge Request Metadata:\n# Source Branch: my-stuff\n# Target Branch: main\n# MR Title: updated code\n\n",
+    )!;
+    const bad = await engine.run({ repositoryId: "r", files: [meta] } as FileRuleContext);
+    expect(bad.ok && bad.value.findings.map((f) => f.ruleId).sort()).toEqual([
+      "governance.branch-naming",
+      "governance.commit-convention",
+    ]);
+    const good = await engine.run({
+      repositoryId: "r",
+      files: [
+        mrMetadataFile("# Source Branch: feat/x\n# MR Title: feat(ui): add y\n")!,
+        { path: "a.ts", text: "// branch foo, Message: hi" },
+      ],
+    } as FileRuleContext);
+    expect(good.ok && good.value.findings).toHaveLength(0);
+    expect(mrMetadataFile("--- a/x\n+++ b/x\n")).toBeUndefined();
+  });
+
+  it("applies language-specific rules only to matching files", async () => {
+    const engine = engineWithDefaults();
+    const run = async (path: string, text: string) => {
+      const res = await engine.run({ repositoryId: "r", files: [{ path, text }] } as FileRuleContext);
+      return res.ok ? res.value.findings.map((f) => f.ruleId) : [];
+    };
+    expect(await run("a.py", "data = pickle.loads(blob)\nprint(data)\ntry:\n  x()\nexcept:\n  pass")).toEqual(
+      expect.arrayContaining(["py.unsafe-deserialization", "py.no-print", "py.bare-except"]),
+    );
+    expect(await run("a.py", 'cur.execute(f"SELECT * FROM t WHERE id={uid}")')).toContain("security.sql-injection");
+    expect(await run("A.java", "} catch (Exception e) {}\nSystem.out.println(1);")).toEqual(
+      expect.arrayContaining(["jvm-cs.empty-catch", "java.no-system-out"]),
+    );
+    expect(await run("a.php", "var_dump($x); $u = unserialize($d);")).toEqual(
+      expect.arrayContaining(["php.debug-output", "php.unsafe-function"]),
+    );
+    expect(await run("run.sh", "curl https://x.sh | sudo bash\nchmod 777 /srv")).toEqual(
+      expect.arrayContaining(["sh.curl-pipe-shell", "sh.chmod-777"]),
+    );
+    expect(await run("Dockerfile", "FROM node:latest")).toContain("docker.latest-tag");
+    expect(await run("m.go", "tr := &tls.Config{InsecureSkipVerify: true}\nfmt.Println(1)")).toEqual(
+      expect.arrayContaining(["security.tls-verify-disabled", "go.no-print"]),
+    );
+    // JS/TS-only rules stay silent on other languages
+    expect(await run("a.py", "x: any = 1  # console.log(x)")).toEqual([]);
+    expect(await run("a.ts", "console.log(1)")).toContain("no-console");
   });
 });

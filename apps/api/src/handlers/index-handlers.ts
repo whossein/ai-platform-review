@@ -32,7 +32,7 @@ function httpError(status: number, message: string): Error {
   return err;
 }
 
-async function requireProject(
+export async function requireProject(
   deps: IndexHandlerDeps,
   projectId: string,
   user: SafeUser,
@@ -53,7 +53,7 @@ async function requireProject(
   return details.project;
 }
 
-function providerForHost(gitHost: string): GitCredentialProvider {
+export function providerForHost(gitHost: string): GitCredentialProvider {
   return gitHost.toLowerCase().includes("github") ? "github" : "gitlab";
 }
 

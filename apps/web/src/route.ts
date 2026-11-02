@@ -9,7 +9,8 @@ export type ProjectSubTab =
   | "identity"
   | "instructions"
   | "members"
-  | "index";
+  | "index"
+  | "scan";
 
 const SUB_TABS: readonly ProjectSubTab[] = [
   "mrs",
@@ -18,6 +19,7 @@ const SUB_TABS: readonly ProjectSubTab[] = [
   "instructions",
   "members",
   "index",
+  "scan",
 ];
 
 const TABS = [

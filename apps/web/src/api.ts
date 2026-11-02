@@ -45,6 +45,8 @@ export interface ReviewResponse {
   readonly issues: readonly ReviewIssue[];
   /** False when no real AI provider is configured (only deterministic rules ran). */
   readonly llmConfigured?: boolean;
+  /** "rules-only" when no AI specialist was selected (deterministic checks only). */
+  readonly mode?: "ai" | "rules-only";
   readonly errors?: readonly { agentId: string; message: string }[];
   readonly metrics?: {
     readonly totalPromptTokens: number;
@@ -1006,4 +1008,80 @@ export function fetchProjectBranches(
     `/api/projects/${encodeURIComponent(projectId)}/index/branches`,
     gitToken ? { headers: { "x-git-token": gitToken } } : undefined,
   );
+}
+
+
+// ==========================================
+// PROJECT RULE SCAN (no AI)
+// ==========================================
+
+export type ScanSeverity = "critical" | "high" | "medium" | "low" | "info";
+
+export interface ScanFinding {
+  readonly ruleId: string;
+  readonly category: string;
+  readonly severity: ScanSeverity;
+  readonly message: string;
+  readonly file: string;
+  readonly line: number;
+  readonly snippet?: string;
+}
+
+export interface ScanSummary {
+  readonly filesScanned: number;
+  readonly filesSkipped: number;
+  readonly totalFindings: number;
+  readonly truncated: boolean;
+  readonly bySeverity: Readonly<Record<ScanSeverity, number>>;
+  readonly durationMs: number;
+}
+
+export interface ScanJob {
+  readonly id: string;
+  readonly status: IndexJobStatus;
+  readonly ref?: string;
+  readonly commitSha?: string;
+  readonly progress: { readonly done: number; readonly total: number; readonly message: string };
+  readonly startedAt: string;
+  readonly finishedAt?: string;
+  readonly error?: string;
+  readonly summary?: ScanSummary;
+}
+
+export interface ScanReport {
+  readonly job: ScanJob;
+  readonly summary: ScanSummary;
+  readonly findings: readonly ScanFinding[];
+}
+
+export interface ProjectScanResponse {
+  readonly job: ScanJob | null;
+  readonly report: ScanReport | null;
+  readonly history: readonly ScanJob[];
+}
+
+export function fetchProjectScan(projectId: string, ref?: string): Promise<ProjectScanResponse> {
+  const q = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/scan${q}`);
+}
+
+export function startProjectScan(
+  projectId: string,
+  ref?: string,
+  gitToken?: string,
+): Promise<{ job: ScanJob }> {
+  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/scan`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(gitToken ? { "x-git-token": gitToken } : {}),
+    },
+    body: JSON.stringify(ref ? { ref } : {}),
+  });
+}
+
+export function cancelProjectScan(projectId: string): Promise<{ cancelled: boolean }> {
+  return indexRequest(`/api/projects/${encodeURIComponent(projectId)}/scan/job`, {
+    method: "DELETE",
+  });
 }

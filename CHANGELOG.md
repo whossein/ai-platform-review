@@ -15,6 +15,24 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.2.25] - 2026-11-02
+
+### Added
+- **EN:** New **Scan** tab in each project: choose a branch (or tag/commit) and scan every text file with the built-in multi-language rules — no AI, no tokens, runs as a background job you can cancel. The report lists findings by severity, file and rule with filters, a JSON download and a history of past scans (latest report kept per branch). Lines flagged as secrets are never stored in the report. Endpoints: `GET/POST /api/projects/:id/scan`, `DELETE /api/projects/:id/scan/job` (start/cancel need project manager rights; reading needs view access).
+- **FA:** تب جدید **Scan** در هر پروژه: یک برنچ (یا تگ/کامیت) انتخاب کنید و همه فایل‌های متنی با قوانین چندزبانه داخلی اسکن می‌شوند — بدون AI و بدون توکن، به‌صورت job پس‌زمینه قابل لغو. گزارش یافته‌ها را بر اساس شدت، فایل و قانون با فیلتر، دانلود JSON و تاریخچه اسکن‌ها نشان می‌دهد (آخرین گزارش هر برنچ نگه داشته می‌شود). خطوطی که secret تشخیص داده شده‌اند هرگز در گزارش ذخیره نمی‌شوند. مسیرها: `GET/POST /api/projects/:id/scan` و `DELETE /api/projects/:id/scan/job` (شروع/لغو نیاز به دسترسی مدیر پروژه دارد؛ مشاهده نیاز به دسترسی مشاهده).
+
+## [0.2.24] - 2026-11-02
+
+### Added
+- **EN:** **Rules-only (no AI) review.** A new "Rules only (no AI)" checkbox on the Review page runs just the deterministic checks — no AI provider, no tokens, instant. Rules now cover many languages: Python (unsafe `pickle`/`yaml.load`, `shell=True`, bare `except`, mutable defaults, `print`), Java/Kotlin (`System.out`, MD5/SHA-1, `Runtime.exec`, `!!`), C# (`Console`, MD5/SHA-1, empty catch), PHP (`var_dump`, `unserialize`, `mysql_*`, shell functions), Go, Swift, shell (`curl | sh`, `chmod 777`), Dockerfile (`:latest`), plus disabled-TLS-verification and SQL built with f-strings/`.format`. JS/TS-only rules (`console`, `any`, `debugger`, `.only`) no longer fire on other languages. The API accepts `selectedSpecialists: []` and returns `mode: "rules-only"`.
+- **FA:** **ریویو فقط با قوانین (بدون AI).** چک‌باکس جدید «Rules only (no AI)» در صفحه Review فقط بررسی‌های قطعی را اجرا می‌کند — بدون ارائه‌دهنده AI، بدون مصرف توکن و فوری. قوانین حالا زبان‌های مختلف را پوشش می‌دهند: Python (‏`pickle`/`yaml.load` ناامن، `shell=True`، `except` خالی، آرگومان پیش‌فرض تغییرپذیر، `print`)، Java/Kotlin (‏`System.out`، MD5/SHA-1، `Runtime.exec`، `!!`)، C# (‏`Console`، MD5/SHA-1، catch خالی)، PHP (‏`var_dump`، `unserialize`، `mysql_*`، توابع shell)، Go، Swift، شل (‏`curl | sh`، `chmod 777`)، Dockerfile (‏`:latest`)، و نیز خاموش‌کردن اعتبارسنجی TLS و SQL ساخته‌شده با f-string/‏`.format`. قوانین مخصوص JS/TS (‏`console`، `any`، `debugger`، `.only`) دیگر روی زبان‌های دیگر اجرا نمی‌شوند. API مقدار `selectedSpecialists: []` را می‌پذیرد و `mode: "rules-only"` برمی‌گرداند.
+- **EN:** Optional governance checks (off by default): set `AI_REVIEW_GOVERNANCE_RULES=1` and reviews of GitLab MR / GitHub PR URLs also check that the source branch name (`feat/...`, `fix/...`) and the MR/PR title follow Conventional Commits. Findings are low severity and need no AI.
+- **FA:** بررسی‌های اختیاری حاکمیتی (به‌صورت پیش‌فرض خاموش): با تنظیم `AI_REVIEW_GOVERNANCE_RULES=1` در ریویوی لینک MR گیت‌لب / PR گیت‌هاب، نام برنچ مبدأ (`feat/...`، `fix/...`) و عنوان MR/PR هم از نظر انطباق با Conventional Commits بررسی می‌شود. یافته‌ها شدت پایین دارند و به AI نیاز ندارند.
+
+### Fixed
+- **EN:** The built-in rule checks (no AI: secrets, `console`, `any`, SQL injection, …) now look only at lines added or changed in the diff, so existing untouched code is no longer reported. Several findings of the same rule in one file (different lines) are now kept as separate issues instead of being merged into one.
+- **FA:** بررسی‌های قطعی داخلی (بدون AI: رمز/کلید، `console`، `any`، SQL injection و …) حالا فقط خطوط اضافه‌شده یا تغییرکرده در diff را بررسی می‌کنند و کد قدیمیِ دست‌نخورده گزارش نمی‌شود. چند یافته از یک قانون در یک فایل (در خطوط مختلف) دیگر در یک issue ادغام نمی‌شوند.
+
 ## [0.2.23] - 2026-11-02
 
 ### Added

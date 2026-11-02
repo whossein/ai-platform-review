@@ -264,6 +264,20 @@ export function ReviewView({
     }
     return null;
   });
+  const [rulesOnly, setRulesOnly] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("rv_rulesOnly") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("rv_rulesOnly", rulesOnly ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
+  }, [rulesOnly]);
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(() => {
     const a = localStorage.getItem("rv_selectedAgents");
     if (a) {
@@ -449,7 +463,7 @@ export function ReviewView({
   const budgetLimit = config.BUDGET_LIMIT
     ? parseFloat(config.BUDGET_LIMIT)
     : null;
-  const currentTotalAgents = selectedAgents.size;
+  const currentTotalAgents = rulesOnly ? 0 : selectedAgents.size;
   const currentEstimatedCost =
     estimate && estimate.totalAgents > 0
       ? (estimate.estimatedCostUsd / estimate.totalAgents) * currentTotalAgents
@@ -645,7 +659,7 @@ export function ReviewView({
         diffToReview,
         threshold,
         envOverrides,
-        Array.from(selectedAgents),
+        rulesOnly ? [] : Array.from(selectedAgents),
         controller.signal,
         autoProjectId,
         autoMergeRequestId,
@@ -1863,7 +1877,37 @@ export function ReviewView({
                     )}
                   </div>
 
-                  <div style={{ fontSize: "0.85rem", marginTop: "1rem" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      marginTop: "1rem",
+                      fontSize: "0.9rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={rulesOnly}
+                      onChange={(e) => setRulesOnly(e.target.checked)}
+                      style={{ accentColor: "var(--accent)" }}
+                    />
+                    <span>
+                      <strong>Rules only (no AI)</strong> — fast, free, deterministic
+                      checks for Python, Java, C#, PHP, Go, Kotlin, Swift, JS/TS, shell
+                      and Docker; no tokens are spent.
+                    </span>
+                  </label>
+
+                  <div
+                    style={{
+                      fontSize: "0.85rem",
+                      marginTop: "1rem",
+                      opacity: rulesOnly ? 0.4 : 1,
+                      pointerEvents: rulesOnly ? "none" : undefined,
+                    }}
+                  >
                     <div
                       style={{
                         color: "var(--muted)",
@@ -1954,7 +1998,26 @@ export function ReviewView({
               the review again for fresh results.
             </div>
           )}
-          {(result.llmConfigured === false || (result.errors?.length ?? 0) > 0) && (
+          {result.mode === "rules-only" && (
+            <div
+              dir="ltr"
+              style={{
+                textAlign: "left",
+                background: "rgba(47,129,247,0.1)",
+                border: "1px solid var(--accent)",
+                borderRadius: 8,
+                padding: "0.7rem 1rem",
+                marginBottom: "1.25rem",
+                fontSize: "0.88rem",
+              }}
+            >
+              <strong>Rules-only review</strong> — deterministic checks ran; no AI was
+              used and no tokens were spent. Turn off “Rules only” to add AI
+              specialists.
+            </div>
+          )}
+          {result.mode !== "rules-only" &&
+            (result.llmConfigured === false || (result.errors?.length ?? 0) > 0) && (
             <div
               dir="ltr"
               role="alert"

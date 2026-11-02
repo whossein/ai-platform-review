@@ -29,7 +29,10 @@ export {
   requireReleaseChangeRule,
   commitConventionRule,
   branchNamingRule,
-  prTemplateComplianceRule,
+  GOVERNANCE_RULES,
+  LANGUAGE_RULES,
+  MR_METADATA_PATH,
+  mrMetadataFile,
 } from "./rules.js";
 export type { FileRuleContext } from "./rules.js";
 
@@ -46,13 +49,17 @@ export function ruleFindingToIssue(finding: RuleFinding): Issue {
     ruleId: finding.ruleId,
     file: finding.location.file,
     ...(finding.location.symbol ? { symbol: finding.location.symbol } : {}),
+    ...(finding.location.line !== undefined
+      ? { line: finding.location.line }
+      : {}),
   });
 
   let category = "code";
   if (
     finding.ruleKind === "secret_detection" ||
     finding.ruleKind === "sql_injection" ||
-    finding.ruleKind === "cors_misconfig"
+    finding.ruleKind === "cors_misconfig" ||
+    finding.ruleKind === "security"
   ) {
     category = "security";
   } else if (finding.ruleKind === "governance") {

@@ -4,7 +4,9 @@ import { FetchHttpClient } from "./http.js";
 
 /**
  * Pure function to parse unified diff text into simulated file representations
- * for static rule and deterministic analysis.
+ * for static rule and deterministic analysis. Only added lines keep their text;
+ * unchanged context lines are blanked (so line numbers stay correct) to keep
+ * rules from flagging code the change did not touch.
  */
 export function parseDiffToFiles(
   diffText: string,
@@ -32,7 +34,7 @@ export function parseDiffToFiles(
     } else if (line.startsWith("+") && !line.startsWith("+++")) {
       currentContent.push(line.substring(1));
     } else if (line.startsWith(" ")) {
-      currentContent.push(line.substring(1));
+      currentContent.push("");
     }
   }
   if (currentFile) {

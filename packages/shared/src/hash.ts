@@ -58,6 +58,7 @@ export function fingerprintIssue(parts: {
   readonly ruleId: string;
   readonly file: string;
   readonly symbol?: string;
+  readonly line?: number;
 }): ContentHash {
   return hashObject(parts);
 }
