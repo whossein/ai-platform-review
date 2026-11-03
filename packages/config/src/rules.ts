@@ -502,6 +502,45 @@ export const wildcardCorsRule: Rule = {
   },
 };
 
+/**
+ * Flags text in the change that tries to steer AI reviewers (prompt injection):
+ * classic "ignore previous instructions" phrasing, or an instruction to report
+ * nothing / approve that is addressed to an AI, reviewer or model on the same
+ * line. Runs on every file type — injections hide in comments and in docs such
+ * as AGENTS.md — and does not depend on the model noticing it.
+ */
+export const promptInjectionRule: Rule = {
+  kind: "security",
+  id: "security.prompt-injection",
+  async run(ctx) {
+    const classic =
+      /\b(?:ignore|disregard|forget|override)\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier|system)\s+(?:instructions?|prompts?|rules?|messages?)\b/i;
+    // Plain "reviewer(s)" is left out: human-facing review notes are fine.
+    const addressee =
+      /\b(?:ai|llm|gpt|chatgpt|claude|gemini|copilot|assistant|language\s+model|(?:review|reviewer)\s+(?:bots?|agents?))\b/i;
+    const directive =
+      /\b(?:(?:do\s+not|don'?t|never|must\s+not|should\s+not)\s+(?:report|flag|mention|comment\s+on|raise)|report\s+(?:no|zero|nothing)|(?:no|zero)\s+(?:issues|findings|problems)\s+(?:here|in\s+this)|ignore\s+(?:all\s+|any\s+)?(?:issues|findings|problems|errors|vulnerabilit(?:y|ies))|(?:approve|lgtm)\s+(?:this|the)\s+(?:mr|pr|merge\s+request|pull\s+request|change)|(?:already|has\s+been)\s+(?:approved|reviewed))\b/i;
+    return {
+      ok: true,
+      value: scanLines(
+        ctx,
+        (line) =>
+          classic.test(line) || (addressee.test(line) && directive.test(line))
+            ? "instruction aimed at AI reviewers"
+            : undefined,
+        (file, line) => ({
+          ruleKind: "security",
+          ruleId: "security.prompt-injection",
+          message:
+            "This line looks like an instruction aimed at AI reviewers (prompt injection). Remove it; review rules belong in the project's saved guidelines, not in the change.",
+          location: { file, line },
+          severity: "critical",
+        }),
+      ),
+    };
+  },
+};
+
 /** Declarative single-pattern line rule, optionally limited to some languages. */
 function lineRule(spec: {
   readonly id: string;
@@ -710,6 +749,7 @@ export const DEFAULT_RULES: readonly Rule[] = [
   noEvalRule,
   sqlInjectionRule,
   wildcardCorsRule,
+  promptInjectionRule,
   noExclusiveTestsRule,
   noExplicitAnyRule,
   noTodoRule,

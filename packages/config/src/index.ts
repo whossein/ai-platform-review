@@ -22,6 +22,7 @@ export {
   noEvalRule,
   sqlInjectionRule,
   wildcardCorsRule,
+  promptInjectionRule,
   noExclusiveTestsRule,
   noExplicitAnyRule,
   noTodoRule,

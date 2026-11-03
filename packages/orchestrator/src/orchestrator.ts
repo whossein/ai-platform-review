@@ -236,6 +236,11 @@ export class ReviewOrchestrator {
       threshold,
       maxAgentRetries: maxRetries,
       startedAt: started,
+      // ~1024 tokens is the smallest prefix OpenAI/Gemini/DeepSeek will cache.
+      cacheWarmup:
+        opts.env?.AI_REVIEW_CACHE_WARMUP !== "0" &&
+        agentsToRun.length > 1 &&
+        slice.estimatedTokens >= 1024,
       deterministicIssues: [],
       allIssues: [],
       agentMetrics: [],

@@ -54,6 +54,13 @@ export interface ReviewExecutionContext {
   readonly threshold: number;
   readonly maxAgentRetries?: number | undefined;
   readonly startedAt: number;
+  /**
+   * Run the first specialist's LLM call alone before releasing the others, so
+   * the shared prompt prefix is already in the provider's prompt cache when
+   * the parallel calls arrive. Costs one call of latency; only worth it when
+   * several specialists share a prefix above the providers' cache minimum.
+   */
+  readonly cacheWarmup?: boolean | undefined;
 
   // Mutable accumulators populated across stages
   readonly deterministicIssues: Issue[];
@@ -92,6 +99,9 @@ export function adjudicate(
 }
 
 export class ReviewStageExecutor implements StageExecutor {
+  /** Settles once the first specialist call finishes (success or failure). */
+  private warmup: Promise<void> | undefined;
+
   constructor(private readonly ctx: ReviewExecutionContext) {}
 
   async execute(
@@ -162,6 +172,22 @@ export class ReviewStageExecutor implements StageExecutor {
   }
 
   private async executeAgent(stage: WorkflowStage): AsyncResult<StageOutcome> {
+    if (!this.ctx.cacheWarmup) return this.runAgent(stage);
+    // The check-and-set is synchronous, so exactly one parallel stage leads.
+    if (this.warmup) {
+      await this.warmup;
+      return this.runAgent(stage);
+    }
+    let release!: () => void;
+    this.warmup = new Promise<void>((resolve) => (release = resolve));
+    try {
+      return await this.runAgent(stage);
+    } finally {
+      release();
+    }
+  }
+
+  private async runAgent(stage: WorkflowStage): AsyncResult<StageOutcome> {
     const agentId = (stage.agentId ?? stage.id) as AgentId;
 
     // Estimate cost based on diff/slice size + expected completion

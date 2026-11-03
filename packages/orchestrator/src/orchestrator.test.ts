@@ -403,3 +403,58 @@ describe("runReview (end-to-end)", () => {
     expect(result.metrics.agents.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("prompt-cache warm-up", () => {
+  /** An LLM that records call windows, answering after a short delay. */
+  function timedLlm() {
+    const windows: Array<{ start: number; end: number }> = [];
+    let clock = 0;
+    const llm: LLMClient = {
+      complete: async () => {
+        const w = { start: clock++, end: -1 };
+        windows.push(w);
+        await new Promise((r) => setTimeout(r, 5));
+        w.end = clock++;
+        return {
+          ok: true,
+          value: {
+            model: "m" as ModelId,
+            content: '{"issues":[],"confidence":0.9,"summary":"ok"}',
+            usage: { promptTokens: 0, completionTokens: 0 },
+            finishReason: "stop",
+          },
+        };
+      },
+    };
+    return { llm, windows };
+  }
+  const bigDiff = [
+    "+++ b/src/big.ts",
+    "@@ -0,0 +1,300 @@",
+    ...Array.from({ length: 300 }, (_, i) => `+export const value${i} = compute(${i});`),
+  ].join("\n");
+  const specialists = ["Security Reviewer", "Code Reviewer", "TypeScript Reviewer"];
+
+  it("runs one specialist first, then the rest in parallel", async () => {
+    const { llm, windows } = timedLlm();
+    await runReview({ diff: bigDiff, llm, selectedSpecialists: specialists });
+    expect(windows).toHaveLength(3);
+    const [first, ...rest] = [...windows].sort((a, b) => a.start - b.start);
+    for (const w of rest) expect(w.start).toBeGreaterThan(first!.end);
+    // The followers overlap each other (still parallel).
+    expect(rest[1]!.start).toBeLessThan(rest[0]!.end);
+  });
+
+  it("can be turned off with AI_REVIEW_CACHE_WARMUP=0", async () => {
+    const { llm, windows } = timedLlm();
+    await runReview({
+      diff: bigDiff,
+      llm,
+      selectedSpecialists: specialists,
+      env: { AI_REVIEW_CACHE_WARMUP: "0" },
+    });
+    const starts = windows.map((w) => w.start).sort((a, b) => a - b);
+    const firstEnd = Math.min(...windows.map((w) => w.end));
+    expect(starts.filter((s) => s < firstEnd)).toHaveLength(3);
+  });
+});
