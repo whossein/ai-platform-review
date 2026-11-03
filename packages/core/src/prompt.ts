@@ -41,3 +41,17 @@ export interface PromptRenderer {
     version?: number,
   ): AsyncResult<RenderedPrompt>;
 }
+
+/**
+ * Wraps untrusted text (diff, repository files, tool output) in an XML-style
+ * block the model is told to treat as data only. Any opening/closing tag of the
+ * same name inside the text is defanged so the content cannot close the block
+ * early and smuggle instructions outside it.
+ */
+export function untrustedBlock(tag: string, text: string): string {
+  const defanged = text.replace(
+    new RegExp(`<(/?)${tag}(?=[\\s>/])`, "gi"),
+    (_m, slash: string) => `<${slash}${tag}_`,
+  );
+  return `<${tag}>\n${defanged}\n</${tag}>`;
+}

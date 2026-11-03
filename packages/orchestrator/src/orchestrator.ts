@@ -29,7 +29,7 @@ import type {
 } from "@ai-review/core";
 import type { StageExecutor } from "@ai-review/workflow-engine";
 import type { SourceFile } from "@ai-review/context-engine";
-import type {} from "@ai-review/core";
+import { untrustedBlock } from "@ai-review/core";
 
 import { plan, type ReviewPlan } from "./planner.js";
 import { ReservableBudgetGuard } from "./budget.js";
@@ -130,8 +130,11 @@ export class ReviewOrchestrator {
     let slice: ContextSlice;
     const projectInstructions = opts.customInstructions?.trim() || undefined;
 
+    // Everything below is derived from the change under review, so it is fenced
+    // as untrusted data; reviewers are told never to follow text inside it.
+    const diffSection = untrustedBlock("diff", opts.diff);
     const structureSection = opts.projectContext?.trim()
-      ? `\n\n${opts.projectContext.trim()}\n`
+      ? `\n\n${untrustedBlock("project_structure", opts.projectContext.trim())}`
       : "";
 
     const instructionFields = {
@@ -145,7 +148,10 @@ export class ReviewOrchestrator {
         tokenBudget: budget.tokenBudget,
       });
       const structural = sliceRes.ok ? sliceRes.value.rendered : "";
-      const rendered = `${opts.diff}${structureSection}\n\n--- context ---\n${structural}`;
+      const contextSection = structural
+        ? `\n\n${untrustedBlock("code_context", structural)}`
+        : "";
+      const rendered = `${diffSection}${structureSection}${contextSection}`;
       slice = {
         handle: built.value.handle,
         version: built.value.version,
@@ -156,7 +162,7 @@ export class ReviewOrchestrator {
         ...instructionFields,
       };
     } else {
-      const rendered = `${opts.diff}${structureSection}`;
+      const rendered = `${diffSection}${structureSection}`;
       slice = {
         handle: "ctx.local" as ContextSlice["handle"],
         version: 1,
