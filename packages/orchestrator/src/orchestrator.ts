@@ -32,6 +32,7 @@ import type { SourceFile } from "@ai-review/context-engine";
 import { untrustedBlock } from "@ai-review/core";
 
 import { plan, type ReviewPlan } from "./planner.js";
+import { annotateDiffLineNumbers } from "./diff-anchor.js";
 import { ReservableBudgetGuard } from "./budget.js";
 import {
   ReviewStageExecutor,
@@ -132,7 +133,10 @@ export class ReviewOrchestrator {
 
     // Everything below is derived from the change under review, so it is fenced
     // as untrusted data; reviewers are told never to follow text inside it.
-    const diffSection = untrustedBlock("diff", opts.diff);
+    const diffSection = untrustedBlock(
+      "diff",
+      annotateDiffLineNumbers(opts.diff),
+    );
     const structureSection = opts.projectContext?.trim()
       ? `\n\n${untrustedBlock("project_structure", opts.projectContext.trim())}`
       : "";

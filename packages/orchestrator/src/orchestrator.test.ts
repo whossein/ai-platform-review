@@ -286,7 +286,7 @@ describe("runReview (end-to-end)", () => {
           confidence: 0.95,
           reason: "generic reason",
           suggestion: "generic suggestion",
-          file: "src/anything.txt",
+          file: "src/UserList.tsx",
           line: 3,
           category: "generic",
         },

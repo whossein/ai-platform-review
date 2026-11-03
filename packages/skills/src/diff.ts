@@ -39,6 +39,9 @@ const SENSITIVE_PATTERNS = [
   /payment/i,
 ];
 
+/** Line-number gutter (6 chars) the orchestrator prepends to in-hunk lines. */
+const GUTTER_RE = /^(?: {0,5}\d+| {6})(?=[+\- ])/;
+
 export const diffAnalysisSkill: Skill = {
   descriptor: {
     id: "skill.diff.analyze" as SkillId,
@@ -75,7 +78,11 @@ export const diffAnalysisSkill: Skill = {
 
     if (rawDiff.length > 0) {
       const lines = rawDiff.split("\n");
-      for (const line of lines) {
+      for (const rawLine of lines) {
+        // Tolerate the annotated diff format: drop the line-number gutter.
+        const gutter = GUTTER_RE.exec(rawLine);
+        const line =
+          gutter && gutter[0].length === 6 ? rawLine.slice(6) : rawLine;
         if (line.startsWith("+++ b/")) {
           changedFiles.add(line.slice(6));
         } else if (line.startsWith("+") && !line.startsWith("+++")) {

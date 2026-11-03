@@ -211,4 +211,29 @@ describe("diffAnalysisSkill", () => {
       expect(result.riskLevel).toBe("high");
     }
   });
+
+  it("reports the same counts for a diff annotated with line numbers", async () => {
+    const annotated = [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1,3 +1,3 @@",
+      "     1 const a = 1;",
+      "      -const b = 2;",
+      "     2+const b = 3;",
+      "     3+// --- a comment",
+      "",
+    ].join("\n");
+    const res = await diffAnalysisSkill.execute({
+      skillId: diffAnalysisSkill.descriptor.id,
+      args: { diff: annotated },
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const result = res.value.result as Record<string, unknown>;
+      expect(result.filesChanged).toBe(1);
+      expect(result.linesAdded).toBe(2);
+      expect(result.linesDeleted).toBe(1);
+    }
+  });
 });

@@ -34,6 +34,7 @@ import { MarkdownReporter, JsonReporter } from "@ai-review/reporting";
 import type { ReservableBudgetGuard } from "./budget.js";
 import { isTransientError } from "./budget.js";
 import { critique } from "./critic.js";
+import { anchorIssues } from "./diff-anchor.js";
 
 export interface ModelPricing {
   readonly inputCostPer1M: number;
@@ -227,7 +228,10 @@ export class ReviewStageExecutor implements StageExecutor {
         dollarsSpent: costUsd,
       });
 
-      this.ctx.allIssues.push(...value.issues);
+      const prompt = this.ctx.slice.rendered;
+      this.ctx.allIssues.push(
+        ...anchorIssues(value.issues, this.ctx.diff, (path) => prompt.includes(path)),
+      );
       this.ctx.agentMetrics.push({
         agentId,
         executionMs,

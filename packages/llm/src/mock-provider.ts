@@ -125,13 +125,21 @@ const RULES: readonly PatternRule[] = [
 const MODEL_ID = "mock.deterministic" as ModelId;
 const PROVIDER_ID = "provider.mock" as ProviderId;
 
+/** Line-number gutter (6 chars) the orchestrator prepends to in-hunk lines. */
+const GUTTER_RE = /^(?: {0,5}\d+| {6})(?=[+\- ])/;
+
 /** Parses `diff --git`-style headers to attribute added lines to a file + line no. */
 function scanDiff(diff: string, focus: string): DetectedIssue[] {
   const issues: DetectedIssue[] = [];
   let currentFile = "unknown";
   let newLineNo = 0;
 
-  for (const raw of diff.split("\n")) {
+  for (const annotated of diff.split("\n")) {
+    // Annotated diffs prefix in-hunk lines with a line-number gutter; strip it
+    // so the +/-/space marker is first. Header lines have no such gutter.
+    const gutter = GUTTER_RE.exec(annotated);
+    const raw =
+      gutter && gutter[0].length === 6 ? annotated.slice(6) : annotated;
     if (raw.startsWith("+++ ")) {
       currentFile = raw
         .replace(/^\+\+\+\s+b\//, "")
