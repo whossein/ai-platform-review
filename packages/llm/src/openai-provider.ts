@@ -70,6 +70,13 @@ function llmError(
   };
 }
 
+/** Token usage block of a Chat Completions response (cached count is optional). */
+interface OpenAIUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+}
+
 const DEFAULT_CAPS: readonly ModelCapability[] = ["text", "json_mode"];
 
 /**
@@ -151,9 +158,20 @@ export class OpenAICompatibleProvider implements LLMProvider {
       ...(request.maxTokens !== undefined
         ? { max_tokens: request.maxTokens }
         : {}),
-      // Ask for strict JSON when the agent supplied a schema (all reviewers do).
+      // Ask for schema-validated JSON when the agent supplied a schema (all
+      // reviewers do). Endpoints that reject it are retried with the weaker
+      // `json_object` mode and then with no `response_format` (see below).
       ...(request.jsonSchema
-        ? { response_format: { type: "json_object" } }
+        ? {
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "review_result",
+                schema: request.jsonSchema,
+                strict: true,
+              },
+            },
+          }
         : {}),
       // Explicit: some OpenAI-compatible relays default to SSE streaming when
       // this is omitted, returning `data: {...}` chunks instead of one JSON
@@ -272,14 +290,21 @@ export class OpenAICompatibleProvider implements LLMProvider {
       }
     }
 
-    // Auto-retry if the model rejected `response_format` (json_object)
-    if (
+    // Auto-retry if the endpoint rejected `response_format`, degrading one step
+    // at a time: json_schema -> json_object -> no response_format. Other errors
+    // are never retried here.
+    while (
       !res.ok &&
       res.status === 400 &&
       body.response_format &&
-      text.toLowerCase().includes("response_format")
+      /response_format|json_schema/.test(text.toLowerCase())
     ) {
-      delete body.response_format;
+      const current = body.response_format as { type?: string };
+      if (current.type === "json_schema") {
+        body.response_format = { type: "json_object" };
+      } else {
+        delete body.response_format;
+      }
       try {
         const retryRes = await this.fetchImpl(targetEndpoint, {
           method: "POST",
@@ -287,12 +312,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
           body: JSON.stringify(body),
           ...(signal ? { signal } : {}),
         });
-        if (retryRes.ok) {
-          res = retryRes;
-          text = await retryRes.text();
-        }
+        const retryText = await retryRes.text();
+        res = retryRes;
+        text = retryText;
       } catch {
         // keep original response
+        break;
       }
     }
 
@@ -317,7 +342,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         delta?: { content?: string };
         finish_reason?: string;
       }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
+      usage?: OpenAIUsage;
     };
     let payload: Payload;
     try {
@@ -352,6 +377,13 @@ export class OpenAICompatibleProvider implements LLMProvider {
         usage: {
           promptTokens: payload.usage?.prompt_tokens ?? 0,
           completionTokens: payload.usage?.completion_tokens ?? 0,
+          ...(typeof payload.usage?.prompt_tokens_details?.cached_tokens ===
+          "number"
+            ? {
+                cachedPromptTokens:
+                  payload.usage.prompt_tokens_details.cached_tokens,
+              }
+            : {}),
         },
         finishReason:
           finish === "length"
@@ -376,7 +408,7 @@ function parseSseChunks<
       delta?: { content?: string };
       finish_reason?: string;
     }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
+    usage?: OpenAIUsage;
   },
 >(text: string): T | undefined {
   const lines = text.split("\n").filter((l) => l.startsWith("data:"));
@@ -384,7 +416,7 @@ function parseSseChunks<
 
   let content = "";
   let finishReason: string | undefined;
-  let usage: { prompt_tokens?: number; completion_tokens?: number } | undefined;
+  let usage: OpenAIUsage | undefined;
 
   for (const line of lines) {
     const data = line.slice("data:".length).trim();
@@ -395,7 +427,7 @@ function parseSseChunks<
           delta?: { content?: string };
           finish_reason?: string;
         }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        usage?: OpenAIUsage;
       };
       const c = chunk.choices?.[0];
       if (c?.delta?.content) content += c.delta.content;

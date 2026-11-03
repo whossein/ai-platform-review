@@ -180,8 +180,12 @@ function scanDiff(diff: string, focus: string): DetectedIssue[] {
 }
 
 function extractFocus(request: LLMRequest): string {
-  const sys = request.messages.find((m) => m.role === "system")?.content ?? "";
-  return /FOCUS:([a-z]+)/.exec(sys)?.[1] ?? "code";
+  // The specialist's focus is in its final <review_task> message.
+  for (const m of [...request.messages].reverse()) {
+    const focus = /FOCUS:([a-z]+)/.exec(m.content)?.[1];
+    if (focus) return focus;
+  }
+  return "code";
 }
 
 function extractDiff(request: LLMRequest): string {

@@ -43,15 +43,29 @@ export interface PromptRenderer {
 }
 
 /**
+ * Tags with a meaning in reviewer prompts. Inside untrusted text they are
+ * defanged, so content can neither close its block early nor forge a trusted
+ * block such as <project_guidelines>.
+ */
+export const RESERVED_PROMPT_TAGS: readonly string[] = [
+  "diff",
+  "project_structure",
+  "code_context",
+  "skill_insights",
+  "project_guidelines",
+  "review_task",
+];
+
+/**
  * Wraps untrusted text (diff, repository files, tool output) in an XML-style
- * block the model is told to treat as data only. Any opening/closing tag of the
- * same name inside the text is defanged so the content cannot close the block
- * early and smuggle instructions outside it.
+ * block the model is told to treat as data only. `tag` and every reserved
+ * prompt tag inside the text are defanged (`<diff>` → `<diff_>`).
  */
 export function untrustedBlock(tag: string, text: string): string {
+  const names = [...new Set([tag, ...RESERVED_PROMPT_TAGS])].join("|");
   const defanged = text.replace(
-    new RegExp(`<(/?)${tag}(?=[\\s>/])`, "gi"),
-    (_m, slash: string) => `<${slash}${tag}_`,
+    new RegExp(`<(/?)(${names})(?=[\\s>/])`, "gi"),
+    (_m, slash: string, name: string) => `<${slash}${name}_`,
   );
   return `<${tag}>\n${defanged}\n</${tag}>`;
 }

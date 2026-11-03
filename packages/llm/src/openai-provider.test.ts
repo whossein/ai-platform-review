@@ -72,8 +72,94 @@ describe("OpenAICompatibleProvider", () => {
     expect(headers["Authorization"]).toBe("Bearer sk-test");
     const body = JSON.parse(String(seen.body));
     expect(body.model).toBe("gpt-4o-mini");
-    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.response_format).toEqual({
+      type: "json_schema",
+      json_schema: {
+        name: "review_result",
+        schema: { type: "object" },
+        strict: true,
+      },
+    });
     expect(body.temperature).toBe(0.2);
+  });
+
+  function rejectingProvider(rejectTypes: string[], errorStatus = 400) {
+    const sent: Array<Record<string, any>> = [];
+    const provider = new OpenAICompatibleProvider({
+      providerId: "provider.openai",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "sk-test",
+      models: [{ id: "gpt-4o-mini", tier: "cheap" }],
+      fetchImpl: (async (_u: unknown, init?: RequestInit) => {
+        const b = JSON.parse(String(init?.body));
+        sent.push(b);
+        const type = b.response_format?.type ?? "none";
+        const ok = !rejectTypes.includes(type);
+        const payload = ok
+          ? { choices: [{ message: { content: "{}" } }], usage: {} }
+          : { error: { message: "Unsupported response_format" } };
+        return {
+          ok,
+          status: ok ? 200 : errorStatus,
+          text: async () => JSON.stringify(payload),
+        } as Response;
+      }) as unknown as typeof fetch,
+    });
+    return { provider, sent };
+  }
+
+  it("falls back from json_schema to json_object when rejected", async () => {
+    const { provider, sent } = rejectingProvider(["json_schema"]);
+    const res = await provider.complete(REQ);
+    expect(res.ok).toBe(true);
+    expect(sent.map((b) => b.response_format?.type)).toEqual([
+      "json_schema",
+      "json_object",
+    ]);
+  });
+
+  it("falls back all the way to no response_format", async () => {
+    const { provider, sent } = rejectingProvider(["json_schema", "json_object"]);
+    const res = await provider.complete(REQ);
+    expect(res.ok).toBe(true);
+    expect(sent.map((b) => b.response_format?.type)).toEqual([
+      "json_schema",
+      "json_object",
+      undefined,
+    ]);
+  });
+
+  it("does not retry on unrelated errors", async () => {
+    const sent: unknown[] = [];
+    const provider = new OpenAICompatibleProvider({
+      providerId: "provider.openai",
+      baseUrl: "https://api.openai.com/v1",
+      models: [{ id: "gpt-4o-mini", tier: "cheap" }],
+      fetchImpl: fakeFetch(400, { error: "context too long" }, (i) =>
+        sent.push(i),
+      ),
+    });
+    const res = await provider.complete(REQ);
+    expect(res.ok).toBe(false);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("reports cached prompt tokens when the provider returns them", async () => {
+    const provider = new OpenAICompatibleProvider({
+      providerId: "provider.openai",
+      baseUrl: "https://api.openai.com/v1",
+      models: [{ id: "gpt-4o-mini", tier: "cheap" }],
+      fetchImpl: fakeFetch(200, {
+        choices: [{ message: { content: "{}" } }],
+        usage: {
+          prompt_tokens: 2000,
+          completion_tokens: 5,
+          prompt_tokens_details: { cached_tokens: 1536 },
+        },
+      }),
+    });
+    const res = await provider.complete(REQ);
+    expect(res.ok && res.value.usage.cachedPromptTokens).toBe(1536);
   });
 
   it("omits the auth header when no api key (e.g. local Ollama)", async () => {
