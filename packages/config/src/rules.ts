@@ -296,13 +296,15 @@ export const requireReleaseChangeRule: Rule = {
       );
     });
 
+    // Any touched path that looks like a release/changelog file counts
+    // (CHANGELOG.fa.md, docs/release-notes/1.2.md, release-change/...), not only
+    // the exact filenames, otherwise the rule contradicts its own trigger above.
     const hasReleaseChangeInDiff = files.some((f) => {
       const p = f.path.toLowerCase();
       return (
         p.includes("release-change") ||
-        p.endsWith("release-change.md") ||
-        p.endsWith("release-notes.md") ||
-        p.endsWith("changelog.md")
+        p.includes("changelog") ||
+        p.includes("release-notes")
       );
     });
 

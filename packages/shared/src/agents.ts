@@ -11,6 +11,7 @@
  * runs a real review today.
  */
 
+import { instructionsForAgent } from "./instructions.js";
 import type {
   AgentDefinition,
   AgentHandler,
@@ -412,9 +413,15 @@ export function makeSpecialistHandler(
         }
       }
 
+      // Only the guideline sections relevant to this specialist, not the whole text.
+      const guidelines = instructionsForAgent(ctx.seedSlice?.projectInstructions, spec.id);
+      const guidelinesBlock = guidelines
+        ? `\n\n--- PROJECT-SPECIFIC SYSTEM INSTRUCTIONS & GUIDELINES (${ctx.seedSlice?.projectName || "Active Project"}) ---\n${guidelines}\nIMPORTANT: The above project-specific instructions MUST be strictly respected and prioritized by all reviewers.\n`
+        : "";
+      const withGuidelines = `${rendered}${guidelinesBlock}`;
       const promptContext = skillInsights.length > 0
-        ? `${rendered}\n\n--- DETERMINISTIC SKILL INSIGHTS ---\n${skillInsights.join("\n")}`
-        : rendered;
+        ? `${withGuidelines}\n\n--- DETERMINISTIC SKILL INSIGHTS ---\n${skillInsights.join("\n")}`
+        : withGuidelines;
 
       const completion = await ctx.llm.complete({
         messages: [

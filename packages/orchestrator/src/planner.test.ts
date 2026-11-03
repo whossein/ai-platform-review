@@ -59,3 +59,32 @@ describe("planner / smart routing", () => {
     ).toBe(true);
   });
 });
+
+describe("planner: Next.js reviewer", () => {
+  const nextAgent = {
+    id: "agent.nextjs-reviewer",
+    name: "Next.js Reviewer",
+    goal: "x",
+    focus: "nextjs",
+    priority: 60,
+    preferredTier: "mid",
+  } as any;
+  const mk = (file: string, line: string) =>
+    `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -0,0 +1 @@\n+${line}\n`;
+
+  it("skips a plain React app that only has an app/ folder", () => {
+    const r = plan({
+      diff: mk("src/app/App.tsx", 'import { useState } from "react";'),
+      agents: [nextAgent],
+    });
+    expect(r.selected).toHaveLength(0);
+  });
+
+  it("selects it for real Next.js code", () => {
+    const r = plan({
+      diff: mk("src/Nav.tsx", 'import Link from "next/link";'),
+      agents: [nextAgent],
+    });
+    expect(r.selected).toHaveLength(1);
+  });
+});

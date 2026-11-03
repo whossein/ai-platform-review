@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Trash2,
   ArrowRight,
-  ShieldCheck,
   Award,
   Sparkles,
   BrainCircuit,
@@ -20,21 +19,30 @@ import {
   Users,
   Network,
   ScanSearch,
+  UserRound,
 } from "lucide-react";
 import {
   fetchProjects,
   fetchProjectDetails,
   createProject,
   updateProject,
+  optimizeProjectInstructions,
+  type OptimizedInstructions,
   deleteProject,
   type ProjectWithStats,
   type ProjectDetailsResponse,
+  type ProjectMergeRequest,
 } from "./api.js";
 import { parseRepositoryUrl } from "./url-helper.js";
 import { ProjectMembersTab } from "./ProjectMembersTab.js";
 import { ProjectIndexTab } from "./ProjectIndexTab.js";
 import { ProjectScanTab } from "./ProjectScanTab.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
+import { ProjectDevelopersTab } from "./ProjectDevelopersTab.js";
+import { MergeRequestGrade, canGradeMergeRequests } from "./MergeRequestGrade.js";
+import { MergeRequestAiUsage } from "./MergeRequestAiUsage.js";
+import { useAppConfig } from "./Settings.js";
+import { buildEnvOverrides } from "./review-env.js";
 import type { ProjectSubTab } from "./route.js";
 
 interface ProjectsViewProps {
@@ -44,6 +52,9 @@ interface ProjectsViewProps {
   subTab?: ProjectSubTab | undefined;
   onSubTabChange?: ((tab: ProjectSubTab) => void) | undefined;
 }
+
+/** Above this many tokens, guidelines are flagged as costly (they are sent to every specialist). */
+const GUIDELINES_TOKEN_WARNING = 1500;
 
 export function ProjectsView({
   initialProjectId = null,
@@ -70,6 +81,32 @@ export function ProjectsView({
   const [projectDetails, setProjectDetails] = useState<ProjectDetailsResponse | null>(null);
   const [localTab, setLocalTab] = useState<ProjectSubTab>("mrs");
   const activeTab = subTab ?? localTab;
+  const [appConfig] = useAppConfig();
+
+  const updateMergeRequest = (updated: ProjectMergeRequest) => {
+    setProjectDetails((prev) =>
+      prev
+        ? { ...prev, mergeRequests: prev.mergeRequests.map((m) => (m.id === updated.id ? updated : m)) }
+        : prev,
+    );
+  };
+
+  const developerSummary = useMemo(() => {
+    const byUser = new Map<string, { label: string; count: number; scores: number[] }>();
+    for (const mr of projectDetails?.mergeRequests ?? []) {
+      if (!mr.author) continue;
+      const key = mr.author.username.toLowerCase();
+      const entry = byUser.get(key) ?? { label: mr.author.name || mr.author.username, count: 0, scores: [] };
+      entry.count++;
+      if (mr.grade) entry.scores.push(mr.grade.score);
+      byUser.set(key, entry);
+    }
+    return [...byUser.values()].map((e) => ({
+      label: e.label,
+      count: e.count,
+      avg: e.scores.length ? Math.round((e.scores.reduce((a, b) => a + b, 0) / e.scores.length) * 10) / 10 : undefined,
+    }));
+  }, [projectDetails]);
   const setActiveTab = (tab: ProjectSubTab) => {
     setLocalTab(tab);
     onSubTabChange?.(tab);
@@ -93,6 +130,11 @@ export function ProjectsView({
   const [savingGuidelines, setSavingGuidelines] = useState<boolean>(false);
   const [guidelinesError, setGuidelinesError] = useState<string | null>(null);
   const [guidelinesSuccess, setGuidelinesSuccess] = useState<string | null>(null);
+  // AI rewrite of the guidelines: a suggestion to review, and the compact text accepted with it
+  const [optimizeEnglish, setOptimizeEnglish] = useState<boolean>(true);
+  const [optimizing, setOptimizing] = useState<boolean>(false);
+  const [optimizeResult, setOptimizeResult] = useState<OptimizedInstructions | null>(null);
+  const [pendingCompact, setPendingCompact] = useState<{ text: string; compact: string } | null>(null);
 
   // Load projects list
   const loadProjects = async () => {
@@ -198,6 +240,28 @@ export function ProjectsView({
     }
   };
 
+  const handleOptimizeGuidelines = async () => {
+    if (!projectDetails || !editInstructions.trim()) return;
+    try {
+      setOptimizing(true);
+      setGuidelinesError(null);
+      setOptimizeResult(
+        await optimizeProjectInstructions(
+          projectDetails.project.id,
+          editInstructions,
+          {
+            english: optimizeEnglish,
+            env: buildEnvOverrides(appConfig, localStorage.getItem("rv_language") || "en", projectDetails.project.repositoryUrl),
+          },
+        ),
+      );
+    } catch (err: any) {
+      setGuidelinesError(err.message || "Failed to improve guidelines");
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   const handleSaveGuidelines = async () => {
     if (!projectDetails) return;
     try {
@@ -208,7 +272,13 @@ export function ProjectsView({
         name: editName.trim() || undefined,
         description: editDescription.trim() || undefined,
         customInstructions: editInstructions.trim() || undefined,
+        // Only valid for the exact text it was made from; otherwise the server drops the old one.
+        ...(pendingCompact && pendingCompact.text === editInstructions.trim()
+          ? { compactInstructions: pendingCompact.compact }
+          : {}),
       });
+      setPendingCompact(null);
+      setOptimizeResult(null);
       setProjectDetails({
         ...projectDetails,
         project: updated,
@@ -730,27 +800,6 @@ export function ProjectsView({
               <Award size={16} />
               <span>Review History ({projectDetails.reviews.length})</span>
             </button>
-
-            <button
-              onClick={() => setActiveTab("identity")}
-              style={{
-                background: activeTab === "identity" ? "var(--panel)" : "transparent",
-                border: activeTab === "identity" ? "1px solid var(--border)" : "1px solid transparent",
-                color: activeTab === "identity" ? "var(--text)" : "var(--muted)",
-                padding: "0.5rem 1rem",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.4rem",
-              }}
-            >
-              <ShieldCheck size={16} />
-              <span>Identity & Deduplication</span>
-            </button>
-
             <button
               onClick={() => setActiveTab("instructions")}
               style={{
@@ -828,6 +877,25 @@ export function ProjectsView({
               <ScanSearch size={16} />
               <span>Scan</span>
             </button>
+            <button
+              onClick={() => setActiveTab("developers")}
+              style={{
+                background: activeTab === "developers" ? "var(--panel)" : "transparent",
+                border: activeTab === "developers" ? "1px solid var(--border)" : "1px solid transparent",
+                color: activeTab === "developers" ? "var(--text)" : "var(--muted)",
+                padding: "0.5rem 1rem",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <UserRound size={16} />
+              <span>Developers · توسعه‌دهندگان</span>
+            </button>
           </div>
 
           {/* Subtab 1: Merge Requests */}
@@ -854,6 +922,18 @@ export function ProjectsView({
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {developerSummary.length > 0 && (
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.8rem" }}>
+                      {developerSummary.map((d) => (
+                        <span
+                          key={d.label}
+                          style={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: "999px", padding: "0.25rem 0.7rem", color: "var(--text)" }}
+                        >
+                          {d.label} · {d.count} MR{d.count === 1 ? "" : "s"} · avg {d.avg ?? "—"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {projectDetails.mergeRequests.map((mr) => (
                     <div
                       key={mr.id}
@@ -918,6 +998,35 @@ export function ProjectsView({
                             }}
                           >
                             {mr.url}
+                          </div>
+                          {mr.title && (
+                            <div style={{ fontSize: "0.85rem", color: "var(--text)", marginTop: "0.25rem" }}>{mr.title}</div>
+                          )}
+                          {mr.author && (
+                            <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: "0.2rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              {mr.author.avatarUrl && (
+                                <img src={mr.author.avatarUrl} alt="" width={16} height={16} style={{ borderRadius: "50%" }} />
+                              )}
+                              <span>
+                                Author: <strong style={{ color: "var(--text)" }}>{mr.author.name || mr.author.username}</strong>
+                                {mr.author.name ? ` (@${mr.author.username})` : ""}
+                              </span>
+                            </div>
+                          )}
+                          <div style={{ marginTop: "0.5rem" }}>
+                            <MergeRequestGrade
+                              mr={mr}
+                              canGrade={canGradeMergeRequests(projectDetails.userRole)}
+                              onUpdated={updateMergeRequest}
+                            />
+                            <div style={{ marginTop: "0.4rem" }}>
+                              <MergeRequestAiUsage
+                                mr={mr}
+                                canEstimate={canGradeMergeRequests(projectDetails.userRole)}
+                                getEnv={() => buildEnvOverrides(appConfig, localStorage.getItem("rv_language") || "en", mr.url)}
+                                onUpdated={updateMergeRequest}
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1076,89 +1185,6 @@ export function ProjectsView({
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Subtab 3: Identity & Deduplication */}
-          {activeTab === "identity" && (
-            <div
-              style={{
-                background: "var(--panel)",
-                border: "1px solid var(--border)",
-                borderRadius: "10px",
-                padding: "1.5rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "1.1rem" }}>
-                Repository Identity Architecture
-              </h3>
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                In accordance with system specifications, project identity is strictly defined by the combination of
-                <strong> gitHost</strong> + <strong>repositoryPath</strong>. This guarantees that projects hosted on
-                different servers or namespaces never collide, while duplicate submissions of MRs or branches are
-                automatically recognized and routed to this single Project entity.
-              </p>
-
-              <div
-                className="identity-meta-grid"
-                style={{
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "8px",
-                  padding: "1rem",
-                  display: "grid",
-                  gridTemplateColumns: "minmax(120px, 1fr) minmax(0, 2fr)",
-                  gap: "0.75rem",
-                  fontSize: "0.85rem",
-                  fontFamily: "ui-monospace, monospace",
-                  minWidth: 0,
-                  maxWidth: "100%",
-                }}
-              >
-                <div style={{ color: "var(--muted)" }}>Git Host:</div>
-                <div className="break-url" style={{ color: "var(--text)", fontWeight: 600, wordBreak: "break-all", overflowWrap: "anywhere" }}>{projectDetails.project.gitHost}</div>
-
-                <div style={{ color: "var(--muted)" }}>Repository Path:</div>
-                <div className="break-url" style={{ color: "var(--text)", fontWeight: 600, wordBreak: "break-all", overflowWrap: "anywhere" }}>{projectDetails.project.repositoryPath}</div>
-
-                <div style={{ color: "var(--muted)" }}>Namespace:</div>
-                <div className="break-url" style={{ color: "var(--text)", wordBreak: "break-all", overflowWrap: "anywhere" }}>{projectDetails.project.namespace || "(root)"}</div>
-
-                <div style={{ color: "var(--muted)" }}>Project Name:</div>
-                <div style={{ color: "var(--text)", wordBreak: "break-word" }}>{projectDetails.project.name}</div>
-
-                <div style={{ color: "var(--muted)" }}>Composite Identity Key:</div>
-                <div className="break-url" style={{ color: "var(--accent)", wordBreak: "break-all", overflowWrap: "anywhere" }}>
-                  {`${projectDetails.project.gitHost.toLowerCase()}/${projectDetails.project.repositoryPath.toLowerCase()}`}
-                </div>
-
-                <div style={{ color: "var(--muted)" }}>Canonical URL:</div>
-                <div className="break-url" style={{ color: "var(--text)", wordBreak: "break-all", overflowWrap: "anywhere" }}>{projectDetails.project.repositoryUrl}</div>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  fontSize: "0.8rem",
-                  color: "var(--low)",
-                  background: "rgba(63, 185, 80, 0.1)",
-                  padding: "0.6rem 0.8rem",
-                  borderRadius: "6px",
-                  border: "1px solid rgba(63, 185, 80, 0.2)",
-                  flexWrap: "wrap",
-                  minWidth: 0,
-                }}
-              >
-                <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
-                <span>
-                  Deduplication active: Any Merge Request submitted under <code className="break-url" style={{ wordBreak: "break-all", overflowWrap: "anywhere" }}>{projectDetails.project.gitHost}/{projectDetails.project.repositoryPath}</code> resolves to this project entity.
-                </span>
-              </div>
             </div>
           )}
 
@@ -1429,6 +1455,125 @@ export function ProjectsView({
                     />
                   </div>
 
+                  {/* Token cost + AI rewrite */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    {(() => {
+                      const tokens = Math.ceil(editInstructions.length / 4);
+                      const heavy = tokens > GUIDELINES_TOKEN_WARNING;
+                      return (
+                        <div
+                          style={{
+                            fontSize: "0.78rem",
+                            color: heavy ? "var(--medium)" : "var(--muted)",
+                            background: heavy ? "rgba(210, 153, 34, 0.1)" : "transparent",
+                            border: heavy ? "1px solid rgba(210, 153, 34, 0.3)" : "none",
+                            borderRadius: "6px",
+                            padding: heavy ? "0.5rem 0.7rem" : 0,
+                          }}
+                        >
+                          ≈ {tokens.toLocaleString()} tokens. {heavy
+                            ? "Long guidelines raise the cost of every review — use “Fix, improve & shorten with AI” to shorten them without losing rules."
+                            : "Each specialist only receives the sections that concern it (use ## Security, ## Performance, ## Git & Commits… headings)."}
+                        </div>
+                      );
+                    })()}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={handleOptimizeGuidelines}
+                        disabled={optimizing || !editInstructions.trim()}
+                        style={{
+                          background: "rgba(168, 85, 247, 0.15)",
+                          border: "1px solid rgba(168, 85, 247, 0.35)",
+                          color: "#c084fc",
+                          borderRadius: "8px",
+                          padding: "0.45rem 0.9rem",
+                          fontSize: "0.8rem",
+                          fontWeight: 500,
+                          cursor: optimizing || !editInstructions.trim() ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                        }}
+                      >
+                        <Sparkles size={15} />
+                        <span>{optimizing ? "Improving…" : "Fix, improve & shorten with AI"}</span>
+                      </button>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.78rem", color: "var(--muted)", cursor: "pointer" }}>
+                        <input type="checkbox" checked={optimizeEnglish} onChange={(e) => setOptimizeEnglish(e.target.checked)} />
+                        <span>Translate to English (cheaper, models follow it better)</span>
+                      </label>
+                      {pendingCompact && pendingCompact.text === editInstructions.trim() && (
+                        <span style={{ fontSize: "0.75rem", color: "var(--low)" }}>
+                          ✓ Compact version ready (≈ {Math.ceil(pendingCompact.compact.length / 4).toLocaleString()} tokens) — saved with the guidelines
+                        </span>
+                      )}
+                    </div>
+                    {optimizeResult && (
+                      <div
+                        style={{
+                          background: "var(--bg)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "8px",
+                          padding: "0.9rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.6rem",
+                        }}
+                      >
+                        <div style={{ fontSize: "0.8rem", color: "var(--text)", fontWeight: 600 }}>
+                          AI suggestion — original ≈ {optimizeResult.tokens.original.toLocaleString()} tokens → improved ≈{" "}
+                          {optimizeResult.tokens.improved.toLocaleString()} → sent to reviewers ≈{" "}
+                          {optimizeResult.tokens.compact.toLocaleString()}
+                        </div>
+                        <pre
+                          style={{
+                            margin: 0,
+                            maxHeight: "260px",
+                            overflow: "auto",
+                            fontSize: "0.8rem",
+                            fontFamily: "ui-monospace, monospace",
+                            color: "var(--text)",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            lineHeight: 1.55,
+                          }}
+                        >
+                          {optimizeResult.improved}
+                        </pre>
+                        <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className="run-btn"
+                            onClick={() => {
+                              setEditInstructions(optimizeResult.improved);
+                              setPendingCompact({ text: optimizeResult.improved.trim(), compact: optimizeResult.compact });
+                              setOptimizeResult(null);
+                            }}
+                            style={{ padding: "0.4rem 0.9rem", fontSize: "0.8rem" }}
+                          >
+                            Use improved text
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOptimizeResult(null)}
+                            style={{
+                              background: "transparent",
+                              border: "1px solid var(--border)",
+                              color: "var(--muted)",
+                              borderRadius: "8px",
+                              padding: "0.4rem 0.9rem",
+                              fontSize: "0.8rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Discard
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Quick guideline template chips */}
                   <div>
                     <span style={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 600, display: "block", marginBottom: "0.4rem" }}>
@@ -1532,6 +1677,14 @@ export function ProjectsView({
                           <span style={{ fontSize: "0.75rem", color: "var(--accent)", fontFamily: "monospace" }}>
                             ({projectDetails.project.customInstructions.length} chars)
                           </span>
+                          {projectDetails.project.compactInstructions && (
+                            <span
+                              style={{ fontSize: "0.72rem", color: "var(--low)" }}
+                              title="Reviewers receive the compact version to save tokens; this full text stays here for you."
+                            >
+                              · compact version active (≈ {Math.ceil(projectDetails.project.compactInstructions.length / 4).toLocaleString()} vs ≈ {Math.ceil(projectDetails.project.customInstructions.length / 4).toLocaleString()} tokens)
+                            </span>
+                          )}
                         </div>
                         <button
                           type="button"
@@ -1586,7 +1739,7 @@ export function ProjectsView({
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--accent)", fontSize: "0.8rem", fontWeight: 600 }}>
                           <FileText size={15} />
-                          <span>AI Context Injection Preview / نحوه ارسال به مدل هوش مصنوعی:</span>
+                          <span>AI Context Injection Preview / نحوه ارسال به مدل هوش مصنوعی (each specialist gets only its relevant sections):</span>
                         </div>
                         <pre
                           style={{
@@ -1598,7 +1751,7 @@ export function ProjectsView({
                             wordBreak: "break-all",
                           }}
                         >
-                          {`--- PROJECT-SPECIFIC SYSTEM INSTRUCTIONS & GUIDELINES (${projectDetails.project.name}) ---\n${projectDetails.project.customInstructions}\nIMPORTANT: The above project-specific instructions MUST be strictly respected and prioritized by all reviewers.`}
+                          {`--- PROJECT-SPECIFIC SYSTEM INSTRUCTIONS & GUIDELINES (${projectDetails.project.name}) ---\n${projectDetails.project.compactInstructions || projectDetails.project.customInstructions}\nIMPORTANT: The above project-specific instructions MUST be strictly respected and prioritized by all reviewers.`}
                         </pre>
                       </div>
                     </div>
@@ -1664,6 +1817,15 @@ export function ProjectsView({
                 projectId={projectDetails.project.id}
                 userRole={projectDetails.userRole}
                 repositoryUrl={projectDetails.project.repositoryUrl}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeTab === "developers" && (
+            <ErrorBoundary label="the Developers tab">
+              <ProjectDevelopersTab
+                mergeRequests={projectDetails.mergeRequests}
+                onNavigateToReview={onNavigateToReview}
               />
             </ErrorBoundary>
           )}

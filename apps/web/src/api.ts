@@ -55,6 +55,7 @@ export interface ReviewResponse {
   };
   readonly project?: Project | undefined;
   readonly mergeRequest?: ProjectMergeRequest | undefined;
+  readonly projectRole?: string | undefined;
 }
 
 export interface EstimateResponse {
@@ -402,9 +403,44 @@ export interface Project {
   readonly namespace: string;
   readonly description?: string | undefined;
   readonly customInstructions?: string | undefined;
+  /** Token-saving version sent to reviewers while present (cleared when the full text changes). */
+  readonly compactInstructions?: string | undefined;
   readonly userRole?: string | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface MergeRequestAuthor {
+  readonly username: string;
+  readonly name?: string | undefined;
+  readonly avatarUrl?: string | undefined;
+  readonly profileUrl?: string | undefined;
+}
+
+export interface MergeRequestGrade {
+  readonly score: number;
+  readonly note?: string | undefined;
+  readonly gradedById: string;
+  readonly gradedByName: string;
+  readonly gradedAt: string;
+}
+
+export interface MergeRequestAiUsage {
+  readonly percent: number;
+  readonly level: "low" | "medium" | "high";
+  readonly reasons: readonly string[];
+  readonly method: "rules+ai" | "rules";
+  readonly rulesScore: number;
+  readonly aiScore?: number | undefined;
+  readonly computedAt: string;
+  readonly computedByName: string;
+}
+
+export interface MergeRequestSuggestedGrade {
+  readonly score: number;
+  readonly reason: string;
+  readonly reviewId: string;
+  readonly computedAt: string;
 }
 
 export interface ProjectMergeRequest {
@@ -415,6 +451,10 @@ export interface ProjectMergeRequest {
   readonly title?: string | undefined;
   readonly sourceBranch?: string | undefined;
   readonly targetBranch?: string | undefined;
+  readonly author?: MergeRequestAuthor | undefined;
+  readonly grade?: MergeRequestGrade | undefined;
+  readonly suggestedGrade?: MergeRequestSuggestedGrade | undefined;
+  readonly aiUsage?: MergeRequestAiUsage | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -502,6 +542,7 @@ export async function updateProject(
     name?: string | undefined;
     description?: string | undefined;
     customInstructions?: string | undefined;
+    compactInstructions?: string | undefined;
   },
 ): Promise<Project> {
   const res = await authFetch(`/api/projects/${encodeURIComponent(id)}`, {
@@ -516,9 +557,32 @@ export async function updateProject(
   return data.project;
 }
 
+export interface OptimizedInstructions {
+  improved: string;
+  compact: string;
+  tokens: { original: number; improved: number; compact: number };
+}
+
+/** Asks the AI to rewrite a project's guidelines; nothing is saved until the user saves. */
+export async function optimizeProjectInstructions(
+  projectId: string,
+  text: string,
+  options: { english?: boolean; env?: Record<string, string> } = {},
+): Promise<OptimizedInstructions> {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(projectId)}/instructions/optimize`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text, english: options.english === true, ...(options.env ? { env: options.env } : {}) }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Optimize failed (${res.status})`);
+  return data;
+}
+
 export async function findOrCreateProjectFromUrl(
   url: string,
   name?: string,
+  env?: Record<string, string>,
 ): Promise<{
   project: Project;
   mergeRequest?: ProjectMergeRequest;
@@ -527,13 +591,55 @@ export async function findOrCreateProjectFromUrl(
   const res = await authFetch("/api/projects/find-or-create", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ url, ...(name ? { name } : {}) }),
+    body: JSON.stringify({ url, ...(name ? { name } : {}), ...(env ? { env } : {}) }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Failed to resolve project from URL (${res.status})`);
   }
   return await res.json();
+}
+
+export async function gradeMergeRequest(
+  projectId: string,
+  mergeRequestId: string,
+  score: number | null,
+  note?: string,
+): Promise<ProjectMergeRequest> {
+  const url = `/api/projects/${encodeURIComponent(projectId)}/merge-requests/${encodeURIComponent(mergeRequestId)}/grade`;
+  const res = await authFetch(
+    url,
+    score === null
+      ? { method: "DELETE" }
+      : {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ score, note }),
+        },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to save grade (${res.status})`);
+  }
+  return data.mergeRequest;
+}
+
+export async function estimateMergeRequestAiUsage(
+  projectId: string,
+  mergeRequestId: string,
+  env?: Record<string, string>,
+): Promise<ProjectMergeRequest> {
+  const res = await authFetch(
+    `/api/projects/${encodeURIComponent(projectId)}/merge-requests/${encodeURIComponent(mergeRequestId)}/ai-usage`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...(env ? { env } : {}) }),
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Estimate failed (${res.status})`);
+  return data.mergeRequest;
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

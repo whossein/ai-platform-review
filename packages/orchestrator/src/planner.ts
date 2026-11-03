@@ -135,11 +135,18 @@ function isRelevant(
         )
       );
     case "agent.nextjs-reviewer":
-      // Very broad since it's React based, but look for next specific things or just run if TSX/JSX
+      // Only real Next.js evidence: a plain React app also has `app/` or `pages/`
+      // folders, so folder names alone must not select this specialist.
       return (
-        [".tsx", ".jsx"].some((e) => ctx.exts.has(e)) &&
-        (/\bnext\/|\bapp\/|\bpages\//.test(ctx.added) ||
-          ctx.files.some((f) => f.includes("/app/") || f.includes("/pages/")))
+        [".tsx", ".jsx", ".ts", ".js", ".mjs"].some((e) => ctx.exts.has(e)) &&
+        (/from\s+["']next(\/|["'])|require\(\s*["']next(\/|["'])|^\+\s*["']use (client|server)["']|\bgetServerSideProps\b|\bgetStaticProps\b|\bgenerateMetadata\b/m.test(
+          ctx.added,
+        ) ||
+          ctx.files.some((f) =>
+            /(^|\/)next\.config\.(js|mjs|ts)$|(^|\/)(app|src\/app)\/(.+\/)?(page|layout|route|loading|error)\.(tsx|jsx|ts|js)$|(^|\/)(pages|src\/pages)\/_(app|document)\.(tsx|jsx|js)$/.test(
+              f,
+            ),
+          ))
       );
     case "agent.angular-reviewer":
       return (

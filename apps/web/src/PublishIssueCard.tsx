@@ -213,6 +213,7 @@ export function PublishIssueCard({
   const [busy, setBusy] = useState<"gen" | "commit" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [addedBlock, setAddedBlock] = useState<string | null>(null);
   const [committed, setCommitted] = useState<{ webUrl?: string; branch: string } | null>(null);
 
   const [fbOpen, setFbOpen] = useState(false);
@@ -292,6 +293,29 @@ export function PublishIssueCard({
     }
   }
 
+  /** Builds a Git "suggestion" block so the host offers an Apply button. */
+  function buildSuggestionBlock(): string {
+    if (!ai) return "";
+    const above = flaggedLine ? flaggedLine - ai.startLine : 0;
+    const below = flaggedLine ? ai.endLine - flaggedLine : 0;
+    const anchored = flaggedLine !== undefined && above >= 0 && below >= 0;
+    const tag = !anchored || (above === 0 && below === 0) ? "suggestion" : `suggestion:-${above}+${below}`;
+    const body = aiCode.replace(/\n+$/, "");
+    return "```" + tag + "\n" + body + "\n```";
+  }
+
+  function toggleInComment(): void {
+    const current = prep.editedSuggestion ?? "";
+    if (addedBlock !== null) {
+      onChange({ editedSuggestion: current.replace(addedBlock, "").replace(/\n{3,}/g, "\n\n").trim() });
+      setAddedBlock(null);
+      return;
+    }
+    const block = buildSuggestionBlock();
+    onChange({ editedSuggestion: current.trim() ? `${current.trim()}\n\n${block}` : block });
+    setAddedBlock(block);
+  }
+
   async function commit(): Promise<void> {
     if (!prUrl || !ai) return;
     const target = `${ai.file}:${ai.startLine}-${ai.endLine}`;
@@ -319,7 +343,7 @@ export function PublishIssueCard({
     issue.description,
     "",
     `_Why:_ ${prep.editedReason}`,
-    ...(issue.suggestion
+    ...(issue.suggestion || prep.editedSuggestion
       ? ["", `_Suggestion:_ ${prep.editedSuggestion ?? ""}`]
       : []),
     "",
@@ -411,7 +435,7 @@ export function PublishIssueCard({
               style={{ ...field, minHeight: 72 }}
             />
 
-            {issue.suggestion && (
+            {(issue.suggestion || prep.editedSuggestion) && (
               <>
                 <SectionLabel>Suggestion</SectionLabel>
                 <textarea
@@ -490,6 +514,14 @@ export function PublishIssueCard({
                 </button>
                 <button onClick={generate} disabled={busy !== null} style={smallBtn}>
                   {busy === "gen" ? "Asking AI…" : "Regenerate"}
+                </button>
+                <button
+                  onClick={toggleInComment}
+                  disabled={busy !== null || !aiCode.trim()}
+                  style={smallBtn}
+                  title="Appends the code to this issue's PR comment as a Git suggestion block"
+                >
+                  {addedBlock !== null ? "✓ Added to comment (undo)" : "Add to comment"}
                 </button>
                 <button
                   onClick={commit}

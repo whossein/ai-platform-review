@@ -23,3 +23,11 @@ export { InMemoryCache, CacheSet } from "./cache.js";
 export { InMemoryTelemetrySink } from "./telemetry.js";
 export { loadDotEnv } from "./env.js";
 export * from "./agents.js";
+export {
+  splitInstructionSections,
+  instructionsForAgent,
+  estimateTextTokens,
+  topicsOf,
+  type InstructionSection,
+  type InstructionTopic,
+} from "./instructions.js";

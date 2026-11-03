@@ -20,7 +20,10 @@ import {
 } from "./api.js";
 import { parseRepositoryUrl } from "./url-helper.js";
 import { useAppConfig, resolveGitEnv } from "./Settings.js";
+import { buildEnvOverrides, gitEnvFor } from "./review-env.js";
 import { PublishIssueCard, snippetFromDiff } from "./PublishIssueCard.js";
+import { MergeRequestGrade, canGradeMergeRequests } from "./MergeRequestGrade.js";
+import { MergeRequestAiUsage } from "./MergeRequestAiUsage.js";
 
 const SAMPLE_DIFF = `diff --git a/src/UserList.tsx b/src/UserList.tsx
 --- a/src/UserList.tsx
@@ -73,84 +76,6 @@ function IssueCard({ issue }: { issue: ReviewIssue }): JSX.Element {
   );
 }
 
-function buildEnvOverrides(config: any, language: string, targetUrl?: string) {
-  const envOverrides: Record<string, string> = {
-    AI_REVIEW_LLM_PROVIDER: config.AI_REVIEW_LLM_PROVIDER || "gemini",
-    AI_REVIEW_COMMENT_LANGUAGE: language,
-  };
-  const budgetLimit = parseFloat(config.BUDGET_LIMIT);
-  if (Number.isFinite(budgetLimit) && budgetLimit > 0)
-    envOverrides.AI_REVIEW_DOLLAR_BUDGET = String(budgetLimit);
-  if (config.AI_REVIEW_LLM_API_KEY)
-    envOverrides.AI_REVIEW_LLM_API_KEY = config.AI_REVIEW_LLM_API_KEY;
-  if (config.AI_REVIEW_LLM_MODEL)
-    envOverrides.AI_REVIEW_LLM_MODEL = config.AI_REVIEW_LLM_MODEL;
-  if (config.AI_REVIEW_LLM_BASE_URL)
-    envOverrides.AI_REVIEW_LLM_BASE_URL = config.AI_REVIEW_LLM_BASE_URL;
-
-  if (config.AI_PROVIDERS && config.AI_PROVIDERS.length > 0) {
-    const enabledProviders = config.AI_PROVIDERS.filter(
-      (p: any) => p.enabled !== false,
-    );
-    envOverrides.AI_PROVIDERS_JSON = JSON.stringify(enabledProviders);
-
-    // Find the currently active provider if AI_REVIEW_LLM_PROVIDER matches an ID or provider name
-    const active = config.AI_PROVIDERS.find(
-      (p: any) =>
-        p.id === config.AI_REVIEW_LLM_PROVIDER ||
-        p.provider === config.AI_REVIEW_LLM_PROVIDER,
-    );
-    if (active && active.enabled !== false) {
-      envOverrides.AI_REVIEW_LLM_PROVIDER = active.provider;
-      if (active.apiKey) envOverrides.AI_REVIEW_LLM_API_KEY = active.apiKey;
-      if (active.model) envOverrides.AI_REVIEW_LLM_MODEL = active.model;
-      if (active.baseUrl) envOverrides.AI_REVIEW_LLM_BASE_URL = active.baseUrl;
-      if (active.inputCostPer1M !== undefined)
-        envOverrides.AI_REVIEW_INPUT_COST_PER_1M = String(
-          active.inputCostPer1M,
-        );
-      if (active.outputCostPer1M !== undefined)
-        envOverrides.AI_REVIEW_OUTPUT_COST_PER_1M = String(
-          active.outputCostPer1M,
-        );
-    } else if (active && active.enabled === false) {
-      // If active is disabled, fallback to the first enabled one
-      const fallback = enabledProviders[0];
-      if (fallback) {
-        envOverrides.AI_REVIEW_LLM_PROVIDER = fallback.provider;
-        if (fallback.apiKey)
-          envOverrides.AI_REVIEW_LLM_API_KEY = fallback.apiKey;
-        if (fallback.model) envOverrides.AI_REVIEW_LLM_MODEL = fallback.model;
-        if (fallback.baseUrl)
-          envOverrides.AI_REVIEW_LLM_BASE_URL = fallback.baseUrl;
-        if (fallback.inputCostPer1M !== undefined)
-          envOverrides.AI_REVIEW_INPUT_COST_PER_1M = String(
-            fallback.inputCostPer1M,
-          );
-        if (fallback.outputCostPer1M !== undefined)
-          envOverrides.AI_REVIEW_OUTPUT_COST_PER_1M = String(
-            fallback.outputCostPer1M,
-          );
-      }
-    }
-
-    for (const p of enabledProviders) {
-      const prefix = p.provider.toUpperCase();
-      if (p.apiKey) envOverrides[`AI_REVIEW_${prefix}_API_KEY`] = p.apiKey;
-      if (p.model) envOverrides[`AI_REVIEW_${prefix}_MODEL`] = p.model;
-      if (p.baseUrl) envOverrides[`AI_REVIEW_${prefix}_BASE_URL`] = p.baseUrl;
-    }
-  }
-
-  if (config.GITLAB_TOKEN) envOverrides.GITLAB_TOKEN = config.GITLAB_TOKEN;
-  if (config.GITLAB_BASE_URL)
-    envOverrides.GITLAB_BASE_URL = config.GITLAB_BASE_URL;
-  if (config.GITHUB_TOKEN) envOverrides.GITHUB_TOKEN = config.GITHUB_TOKEN;
-  Object.assign(envOverrides, resolveGitEnv(config, targetUrl));
-
-  return envOverrides;
-}
-
 type InputMode = "diff" | "pr" | "zip" | "path" | "repo";
 
 export interface ReviewViewProps {
@@ -183,6 +108,7 @@ export function ReviewView({
 
   const [associatedProject, setAssociatedProject] = useState<Project | null>(null);
   const [associatedMr, setAssociatedMr] = useState<ProjectMergeRequest | null>(null);
+  const [gradedMr, setGradedMr] = useState<ProjectMergeRequest | null>(null);
 
   const [loadedFromHistory, setLoadedFromHistory] = useState<number | null>(null);
 
@@ -205,6 +131,7 @@ export function ReviewView({
     });
   }, [initialPrUrl]);
 
+
   // Real-time parsed repository info
   const parsedPrRepo = useMemo(() => {
     return prUrl ? parseRepositoryUrl(prUrl) : null;
@@ -222,7 +149,7 @@ export function ReviewView({
     const timer = setTimeout(async () => {
       try {
         const { findOrCreateProjectFromUrl } = await import("./api.js");
-        const res = await findOrCreateProjectFromUrl(prUrl.trim());
+        const res = await findOrCreateProjectFromUrl(prUrl.trim(), undefined, gitEnvFor(config, language, prUrl.trim()));
         if (isCurrent && res) {
           if (res.project) setAssociatedProject(res.project);
           if (res.mergeRequest) setAssociatedMr(res.mergeRequest);
@@ -264,6 +191,23 @@ export function ReviewView({
     }
     return null;
   });
+  // Role is missing on results restored from an earlier session, so look it up.
+  const [fetchedRole, setFetchedRole] = useState<string | undefined>(undefined);
+  const resultProjectId = (result?.project || associatedProject)?.id;
+  const resultHasRole = Boolean(result?.projectRole);
+  useEffect(() => {
+    if (!resultProjectId || resultHasRole) return;
+    let current = true;
+    import("./api.js")
+      .then(({ fetchProjectDetails }) => fetchProjectDetails(resultProjectId))
+      .then((d) => {
+        if (current) setFetchedRole(d.userRole);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [resultProjectId, resultHasRole]);
   const [rulesOnly, setRulesOnly] = useState<boolean>(() => {
     try {
       return localStorage.getItem("rv_rulesOnly") === "1";
@@ -515,10 +459,10 @@ export function ReviewView({
           return {
             ...i,
             reason: p.editedReason,
-            ...(i.suggestion
+            ...(i.suggestion || p.editedSuggestion
               ? {
                   suggestion: {
-                    ...i.suggestion,
+                    ...(i.suggestion ?? {}),
                     description: p.editedSuggestion || "",
                   },
                 }
@@ -540,6 +484,8 @@ export function ReviewView({
   }
 
   async function onEstimate(): Promise<void> {
+    const prevEstimate = estimate;
+    const prevSelected = selectedAgents;
     setEstimating(true);
     setError(null);
     setEstimate(null);
@@ -570,8 +516,19 @@ export function ReviewView({
       );
 
       const res = await requestEstimate(diffToEstimate, envOverrides);
+      // Keep the user's manual unticks across a re-estimate: only specialists
+      // that were already listed and are now unticked stay off.
+      const known = new Set([
+        ...(prevEstimate?.agents ?? []),
+        ...(prevEstimate?.skipped ?? []),
+      ]);
+      const untickedByUser = new Set(
+        [...known].filter((a) => !prevSelected.has(a)),
+      );
       setEstimate(res);
-      setSelectedAgents(new Set(res.agents));
+      setSelectedAgents(
+        new Set(res.agents.filter((a) => !untickedByUser.has(a))),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "estimation failed");
     } finally {
@@ -600,7 +557,7 @@ export function ReviewView({
       // Automatically find or create Project and associate MR
       try {
         const { findOrCreateProjectFromUrl } = await import("./api.js");
-        const auto = await findOrCreateProjectFromUrl(prUrl.trim());
+        const auto = await findOrCreateProjectFromUrl(prUrl.trim(), undefined, gitEnvFor(config, language, prUrl.trim()));
         autoProjectId = auto.project.id;
         autoMergeRequestId = auto.mergeRequest?.id;
         setAssociatedProject(auto.project);
@@ -1107,6 +1064,16 @@ export function ReviewView({
                     <ArrowRight size={13} />
                   </button>
                 )}
+              </div>
+            )}
+            {associatedMr && associatedProject && (
+              <div style={{ marginTop: "0.6rem" }}>
+                <MergeRequestAiUsage
+                  mr={gradedMr?.id === associatedMr.id ? gradedMr : associatedMr}
+                  canEstimate={canGradeMergeRequests(fetchedRole)}
+                  getEnv={() => buildEnvOverrides(config, language, prUrl.trim() || undefined)}
+                  onUpdated={setGradedMr}
+                />
               </div>
             )}
           </div>
@@ -1637,45 +1604,6 @@ export function ReviewView({
             marginBottom: "1.5rem",
           }}
         >
-          {estimate.deterministicIssues &&
-            estimate.deterministicIssues.length > 0 && (
-              <div
-                style={{
-                  background: "rgba(255, 171, 0, 0.05)",
-                  border: "1px solid rgba(255, 171, 0, 0.3)",
-                  padding: "1.25rem",
-                  borderRadius: "12px",
-                }}
-              >
-                <h3
-                  style={{
-                    margin: "0 0 1rem 0",
-                    fontSize: "1.1rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    color: "#eab308",
-                  }}
-                >
-                  Pre-Review Findings (Static Analysis)
-                </h3>
-                <p
-                  style={{
-                    fontSize: "0.85rem",
-                    color: "var(--text)",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  These issues were found instantly without using AI tokens.
-                </p>
-                <ul className="issue-list" style={{ marginTop: 0 }}>
-                  {estimate.deterministicIssues.map((issue) => (
-                    <IssueCard key={issue.id} issue={issue} />
-                  ))}
-                </ul>
-              </div>
-            )}
-
           <div
             style={{
               background: "rgba(47, 129, 247, 0.05)",
@@ -2056,6 +1984,43 @@ export function ReviewView({
               )}
             </div>
           )}
+          {(() => {
+            const baseMr = result.mergeRequest || associatedMr;
+            const mr = baseMr && gradedMr?.id === baseMr.id ? gradedMr : baseMr;
+            if (!mr) return null;
+            return (
+              <div
+                style={{
+                  background: "var(--panel)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  padding: "0.9rem 1rem",
+                  marginBottom: "1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.4rem",
+                }}
+              >
+                <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>
+                  MR #{mr.mrNumber} · Author:{" "}
+                  <strong style={{ color: "var(--text)" }}>
+                    {mr.author ? mr.author.name || mr.author.username : "unknown (set a Git token to fetch it)"}
+                  </strong>
+                </div>
+                <MergeRequestGrade
+                  mr={mr}
+                  canGrade={canGradeMergeRequests(result.projectRole ?? fetchedRole)}
+                  onUpdated={setGradedMr}
+                />
+                <MergeRequestAiUsage
+                  mr={mr}
+                  canEstimate={canGradeMergeRequests(result.projectRole ?? fetchedRole)}
+                  getEnv={() => buildEnvOverrides(config, language, prUrl.trim() || undefined)}
+                  onUpdated={setGradedMr}
+                />
+              </div>
+            );
+          })()}
           <div
             className="summary"
             style={{
@@ -2445,6 +2410,128 @@ export function ReviewView({
                 Review and edit comments before publishing them to your Merge
                 Request. Uncheck items to skip them.
               </p>
+              {(() => {
+                const all = result.issues.filter((i) => prepIssues[i.id] !== undefined);
+                const ids = all.map((i) => i.id);
+                const selected = all.filter((i) => prepIssues[i.id]!.selected);
+                const count = selected.length;
+                const setAll = (sel: boolean): void =>
+                  setPrepIssues((prev) => {
+                    const next = { ...prev };
+                    for (const id of ids) next[id] = { ...next[id]!, selected: sel };
+                    return next;
+                  });
+                const btn = (active: boolean): React.CSSProperties => ({
+                  padding: "0.4rem 0.9rem",
+                  borderRadius: 6,
+                  border: "1px solid var(--border)",
+                  background: active ? "var(--accent)" : "transparent",
+                  color: active ? "white" : "var(--text)",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                });
+                const mr = result.mergeRequest || associatedMr;
+                const mrUrl = mr?.url || (inputMode === "pr" ? prUrl.trim() : "");
+                const sevs = ["critical", "high", "medium", "low", "info"] as const;
+                const sevCount = (list: typeof all, sev: string): number =>
+                  list.filter((i) => i.severity === sev).length;
+                const files = new Set(selected.map((i) => i.location.file)).size;
+                const cats = new Set(selected.map((i) => i.category)).size;
+                const avgConf =
+                  count > 0
+                    ? Math.round((selected.reduce((a, i) => a + i.confidence, 0) / count) * 100)
+                    : 0;
+                const stat = (label: string, value: React.ReactNode): JSX.Element => (
+                  <div style={{ minWidth: 90 }}>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text)" }}>{value}</div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      {label}
+                    </div>
+                  </div>
+                );
+                return (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1rem",
+                      marginBottom: "1.25rem",
+                      padding: "1.1rem 1.25rem",
+                      background: "var(--panel)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                    }}
+                  >
+                    {(mr || mrUrl) && (
+                      <div dir="ltr" style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text)" }}>
+                            {mr?.title || (mr ? `Merge Request #${mr.mrNumber}` : "Merge Request")}
+                          </span>
+                          {mr && <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>#{mr.mrNumber}</span>}
+                          {mrUrl && (
+                            <a href={mrUrl} target="_blank" rel="noreferrer" style={{ fontSize: "0.85rem", color: "var(--accent)" }}>
+                              Open merge request ↗
+                            </a>
+                          )}
+                        </div>
+                        <div style={{ fontSize: "0.82rem", color: "var(--muted)", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                          {mr?.author && <span>👤 {mr.author.name || mr.author.username}</span>}
+                          {mr?.sourceBranch && (
+                            <span style={{ fontFamily: "monospace" }}>
+                              {mr.sourceBranch}
+                              {mr.targetBranch ? ` → ${mr.targetBranch}` : ""}
+                            </span>
+                          )}
+                          {associatedProject && <span>📁 {associatedProject.name}</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    <div dir="ltr" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {sevs.map((sev) => {
+                        const total = sevCount(all, sev);
+                        if (total === 0) return null;
+                        return (
+                          <span
+                            key={sev}
+                            style={{
+                              fontSize: "0.82rem",
+                              fontWeight: 600,
+                              padding: "0.2rem 0.65rem",
+                              borderRadius: 999,
+                              border: `1px solid var(--${sev})`,
+                              color: `var(--${sev})`,
+                            }}
+                          >
+                            {sevCount(selected, sev)}/{total} {sev}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    <div dir="ltr" style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+                      {stat("Selected", `${count} / ${ids.length}`)}
+                      {stat("Files", files)}
+                      {stat("Categories", cats)}
+                      {stat("Avg confidence", `${avgConf}%`)}
+                    </div>
+
+                    <div dir="ltr" style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <button onClick={() => setAll(true)} style={btn(count === ids.length && ids.length > 0)}>
+                        ☑ Select all
+                      </button>
+                      <button onClick={() => setAll(false)} style={btn(count === 0)}>
+                        ☐ Select none
+                      </button>
+                      <span style={{ fontSize: "0.8rem", color: "var(--muted)", marginInlineStart: "0.5rem" }}>
+                        Only checked findings are published.
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
               <div
                 style={{
                   display: "flex",

@@ -71,12 +71,77 @@ export interface Project {
    * specialist reviewers during code review for this project.
    */
   readonly customInstructions?: string | undefined;
+  /**
+   * AI-condensed version of `customInstructions`, sent to reviewers instead of
+   * the full text to save tokens. Only valid while `compactSourceHash` matches
+   * the hash of the current `customInstructions`.
+   */
+  readonly compactInstructions?: string | undefined;
+  readonly compactSourceHash?: string | undefined;
   /** Optional default Git branch (e.g., "main", "master") for indexing. */
   readonly defaultBranch?: string | undefined;
   /** Optional local filesystem path when indexing a local checkout. */
   readonly localPath?: string | undefined;
   readonly createdAt: IsoTimestamp;
   readonly updatedAt: IsoTimestamp;
+}
+
+/** Developer (MR/PR author) as reported by the git provider. */
+export interface MergeRequestAuthor {
+  /** Provider login, e.g. GitLab/GitHub username. */
+  readonly username: string;
+  /** Display name when the provider exposes one. */
+  readonly name?: string | undefined;
+  readonly avatarUrl?: string | undefined;
+  readonly profileUrl?: string | undefined;
+}
+
+/** Task-completion grade (0-100) a human reviewer gave to an MR's author. */
+export interface MergeRequestGrade {
+  readonly score: number;
+  readonly note?: string | undefined;
+  readonly gradedById: string;
+  readonly gradedByName: string;
+  readonly gradedAt: IsoTimestamp;
+}
+
+/** Grade proposed by the system from the latest review, with a short reason. */
+export interface MergeRequestSuggestedGrade {
+  readonly score: number;
+  readonly reason: string;
+  readonly reviewId: string;
+  readonly computedAt: IsoTimestamp;
+}
+
+/** Estimated likelihood that the MR's code was largely AI-generated. */
+export interface MergeRequestAiUsage {
+  /** 0-100, rounded. An estimate, not proof. */
+  readonly percent: number;
+  readonly level: "low" | "medium" | "high";
+  /** Short reasons: rule signals first, then the AI judge's. */
+  readonly reasons: readonly string[];
+  readonly method: "rules+ai" | "rules";
+  readonly rulesScore: number;
+  readonly aiScore?: number | undefined;
+  readonly computedAt: IsoTimestamp;
+  readonly computedByName: string;
+}
+
+/**
+ * A developer seen as an MR/PR author. This is a registry of git identities,
+ * deliberately separate from app login users (no account is created for them).
+ */
+export interface ProjectDeveloper {
+  /** `${gitHost}/${username}` lowercased. */
+  readonly id: string;
+  readonly gitHost: string;
+  readonly username: string;
+  readonly name?: string | undefined;
+  readonly avatarUrl?: string | undefined;
+  readonly profileUrl?: string | undefined;
+  /** App user this developer was matched to (by username or name), if any. */
+  readonly linkedUserId?: string | undefined;
+  readonly firstSeenAt: IsoTimestamp;
 }
 
 /**
@@ -90,6 +155,10 @@ export interface ProjectMergeRequest {
   readonly title?: string | undefined;
   readonly sourceBranch?: string | undefined;
   readonly targetBranch?: string | undefined;
+  readonly author?: MergeRequestAuthor | undefined;
+  readonly grade?: MergeRequestGrade | undefined;
+  readonly suggestedGrade?: MergeRequestSuggestedGrade | undefined;
+  readonly aiUsage?: MergeRequestAiUsage | undefined;
   readonly createdAt: IsoTimestamp;
   readonly updatedAt: IsoTimestamp;
 }

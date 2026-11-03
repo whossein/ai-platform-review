@@ -7,7 +7,11 @@
 
 import type { ProjectStore } from "../project-store.js";
 import type { SecurityContext } from "../security/security-context.js";
-import type { SafeUser, ProjectId } from "@ai-review/core";
+import type { SafeUser, ProjectId, IsoTimestamp } from "@ai-review/core";
+import { fetchChangeRequestMeta, fetchChangeRequestCommitMessages, resolveDiffInput } from "@ai-review/git";
+import { providersFromEnv } from "@ai-review/llm";
+import { estimateAiUsage, type AiJudge } from "../ai-usage.js";
+import { optimizeInstructions } from "../instructions-optimizer.js";
 
 export async function listProjectsHandler(
   projectStore: ProjectStore,
@@ -161,6 +165,7 @@ export async function updateProjectHandler(
     name?: string | undefined;
     description?: string | undefined;
     customInstructions?: string | undefined;
+    compactInstructions?: string | undefined;
   },
   security?: SecurityContext,
   currentUser?: SafeUser | null
@@ -182,6 +187,8 @@ export async function updateProjectHandler(
     name: body.name,
     description: body.description,
     customInstructions: body.customInstructions,
+    compactInstructions:
+      typeof body.compactInstructions === "string" ? body.compactInstructions : undefined,
   });
 
   if (security && currentUser) {
@@ -382,4 +389,289 @@ export async function submitFeedbackHandler(
       ? { ruleDenied: "Feedback saved, but only project managers can change the project rules." }
       : {}),
   };
+}
+
+/**
+ * Fetches the MR author from the git provider, stores it on the MR, and
+ * registers the author in the developer registry. Best effort: never throws.
+ * If an app user's username/email prefix or name matches the git author, the
+ * developer is linked to that user.
+ */
+export async function attachMergeRequestMeta(
+  projectStore: ProjectStore,
+  security: SecurityContext | undefined,
+  projectId: string,
+  mergeRequest: { id: string; url: string; author?: unknown } | undefined,
+  env: Record<string, string | undefined>
+): Promise<void> {
+  if (!mergeRequest || mergeRequest.author) return;
+  try {
+    const meta = await fetchChangeRequestMeta(mergeRequest.url, env);
+    if (!meta) {
+      console.warn(`MR author lookup: no data for ${mergeRequest.url} (check the Git token and its read_api scope)`);
+      return;
+    }
+
+    let linkedUserId: string | undefined;
+    if (meta.author && security) {
+      const uname = meta.author.username.toLowerCase();
+      const dname = meta.author.name?.trim().toLowerCase();
+      const users = await security.userStore.listUsers();
+      linkedUserId = users.find(
+        (u) =>
+          u.email.split("@")[0]?.toLowerCase() === uname ||
+          (dname !== undefined && u.name.trim().toLowerCase() === dname)
+      )?.id;
+    }
+    await projectStore.setMergeRequestMeta(projectId, mergeRequest.id, meta, linkedUserId);
+  } catch (e) {
+    console.warn("MR author lookup notice:", e);
+  }
+}
+
+export async function gradeMergeRequestHandler(
+  projectStore: ProjectStore,
+  projectId: string,
+  mergeRequestId: string,
+  body: { score?: unknown; note?: unknown },
+  security: SecurityContext | undefined,
+  currentUser: SafeUser | null | undefined
+) {
+  if (security && currentUser) {
+    const allowed = await security.canAccessProject(currentUser, projectId as ProjectId, "project:review");
+    if (!allowed) {
+      const error = new Error("Access denied: Only reviewers and above can grade merge requests.");
+      (error as any).status = 403;
+      throw error;
+    }
+  }
+
+  const score = body?.score;
+  if (typeof score !== "number" || !Number.isInteger(score) || score < 0 || score > 10) {
+    const error = new Error("score must be an integer between 0 and 10.");
+    (error as any).status = 400;
+    throw error;
+  }
+  const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) : "";
+
+  const mergeRequest = await projectStore.gradeMergeRequest(projectId, mergeRequestId, {
+    score,
+    note: note || undefined,
+    gradedById: currentUser?.id ?? "system",
+    gradedByName: currentUser?.name ?? "system",
+    gradedAt: new Date().toISOString() as IsoTimestamp,
+  });
+  if (!mergeRequest) {
+    const error = new Error("Merge request not found.");
+    (error as any).status = 404;
+    throw error;
+  }
+
+  if (security && currentUser) {
+    await security.auditStore.log({
+      actorUserId: currentUser.id,
+      actorName: currentUser.name,
+      actorEmail: currentUser.email,
+      action: "MR_GRADED",
+      entityType: "project",
+      entityId: projectId,
+      metadata: { mergeRequestId, score, author: mergeRequest.author?.username },
+    });
+  }
+  return { mergeRequest };
+}
+
+export async function clearMergeRequestGradeHandler(
+  projectStore: ProjectStore,
+  projectId: string,
+  mergeRequestId: string,
+  security: SecurityContext | undefined,
+  currentUser: SafeUser | null | undefined
+) {
+  if (security && currentUser) {
+    const allowed = await security.canAccessProject(currentUser, projectId as ProjectId, "project:review");
+    if (!allowed) {
+      const error = new Error("Access denied: Only reviewers and above can grade merge requests.");
+      (error as any).status = 403;
+      throw error;
+    }
+  }
+  const mergeRequest = await projectStore.gradeMergeRequest(projectId, mergeRequestId, null);
+  if (!mergeRequest) {
+    const error = new Error("Merge request not found.");
+    (error as any).status = 404;
+    throw error;
+  }
+  return { mergeRequest };
+}
+
+export async function listProjectDevelopersHandler(
+  projectStore: ProjectStore,
+  projectId: string,
+  security: SecurityContext | undefined,
+  currentUser: SafeUser | null | undefined
+) {
+  if (security && currentUser) {
+    const allowed = await security.canAccessProject(currentUser, projectId as ProjectId, "project:view");
+    if (!allowed) {
+      const error = new Error("Access denied: You do not have permission to access this project.");
+      (error as any).status = 403;
+      throw error;
+    }
+  }
+  return { developers: await projectStore.listDevelopers(projectId) };
+}
+
+/**
+ * Estimates how likely the MR was written with AI (rules + optional AI judge)
+ * and stores the result on the MR. Independent of the review run.
+ */
+export async function estimateMergeRequestAiUsageHandler(
+  projectStore: ProjectStore,
+  projectId: string,
+  mergeRequestId: string,
+  env: Record<string, string>,
+  security: SecurityContext | undefined,
+  currentUser: SafeUser | null | undefined
+) {
+  if (security && currentUser) {
+    const allowed = await security.canAccessProject(currentUser, projectId as ProjectId, "project:review");
+    if (!allowed) {
+      const error = new Error("Access denied: Only reviewers and above can run this estimate.");
+      (error as any).status = 403;
+      throw error;
+    }
+  }
+
+  const details = await projectStore.getProject(projectId);
+  const mr = details?.mergeRequests.find((m) => m.id === mergeRequestId);
+  if (!mr) {
+    const error = new Error("Merge request not found.");
+    (error as any).status = 404;
+    throw error;
+  }
+
+  const merged = { ...process.env, ...env } as Record<string, string | undefined>;
+  let diff: string;
+  try {
+    diff = await resolveDiffInput(mr.url, merged);
+  } catch (e: any) {
+    const error = new Error(`Could not load the MR diff: ${e.message}`);
+    (error as any).status = 502;
+    throw error;
+  }
+  const [meta, commitMessages] = await Promise.all([
+    fetchChangeRequestMeta(mr.url, merged),
+    fetchChangeRequestCommitMessages(mr.url, merged),
+  ]);
+
+  const provider = providersFromEnv(merged)[0];
+  const judge: AiJudge | undefined =
+    provider
+      ? async ({ system, user }) => {
+          const res = await provider.complete({
+            model: provider.models()[0]!.id,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: user },
+            ],
+            temperature: 0.1,
+            maxTokens: 600,
+          });
+          if (res.ok === false) throw new Error(res.error.message || "AI request failed");
+          return res.value.content;
+        }
+      : undefined;
+
+  const result = await estimateAiUsage(
+    {
+      title: meta?.title ?? mr.title,
+      description: meta?.description,
+      commitMessages,
+      diff,
+    },
+    judge
+  );
+
+  const updated = await projectStore.setMergeRequestAiUsage(projectId, mergeRequestId, {
+    percent: result.percent,
+    level: result.level,
+    reasons: result.reasons,
+    method: result.method,
+    rulesScore: result.rulesScore,
+    aiScore: result.aiScore,
+    computedAt: new Date().toISOString() as IsoTimestamp,
+    computedByName: currentUser?.name ?? "system",
+  });
+
+  if (security && currentUser) {
+    await security.auditStore.log({
+      actorUserId: currentUser.id,
+      actorName: currentUser.name,
+      actorEmail: currentUser.email,
+      action: "MR_AI_USAGE_ESTIMATED",
+      entityType: "project",
+      entityId: projectId,
+      metadata: { mergeRequestId, percent: result.percent, method: result.method },
+    });
+  }
+  return { mergeRequest: updated };
+}
+
+/** Rewrites a project's guidelines with the configured AI provider; nothing is saved here. */
+export async function optimizeProjectInstructionsHandler(
+  projectStore: ProjectStore,
+  projectId: string,
+  body: { text?: unknown; english?: unknown; env?: Record<string, string | undefined> },
+  security?: SecurityContext,
+  currentUser?: SafeUser | null
+) {
+  if (security && currentUser) {
+    const allowed = await security.canAccessProject(currentUser, projectId as ProjectId, "project:manage");
+    if (!allowed) {
+      const error = new Error("Access denied: You do not have permission to manage this project.");
+      (error as any).status = 403;
+      throw error;
+    }
+  }
+  const details = await projectStore.getProject(projectId);
+  if (!details) {
+    const error = new Error("Project not found.");
+    (error as any).status = 404;
+    throw error;
+  }
+  const text = typeof body.text === "string" && body.text.trim() ? body.text : details.project.customInstructions;
+  if (!text?.trim()) {
+    const error = new Error("There are no guidelines to optimize.");
+    (error as any).status = 400;
+    throw error;
+  }
+
+  const merged = { ...process.env, ...(body.env ?? {}) } as Record<string, string | undefined>;
+  const provider = providersFromEnv(merged)[0];
+  if (!provider) {
+    const error = new Error("No AI provider is connected. Add an API key in Settings first.");
+    (error as any).status = 400;
+    throw error;
+  }
+
+  try {
+    return await optimizeInstructions(text, async ({ system, user }) => {
+      const res = await provider.complete({
+        model: provider.models()[0]!.id,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature: 0.2,
+        maxTokens: 4000,
+      });
+      if (res.ok === false) throw new Error(res.error.message || "AI request failed");
+      return res.value.content;
+    }, { english: body.english === true });
+  } catch (e: any) {
+    const error = new Error(e.message || "Failed to optimize guidelines");
+    (error as any).status = 502;
+    throw error;
+  }
 }

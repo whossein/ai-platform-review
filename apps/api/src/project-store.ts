@@ -13,11 +13,16 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type {
   Project,
   ProjectId,
   ProjectMergeRequest,
   ProjectReviewRecord,
+  ProjectDeveloper,
+  MergeRequestAuthor,
+  MergeRequestGrade,
+  MergeRequestAiUsage,
   ProjectWithStats,
   IsoTimestamp,
 } from "@ai-review/core";
@@ -25,6 +30,7 @@ import {
   extractRepositoryIdentity,
   extractMergeRequestNumber,
 } from "@ai-review/git";
+import { suggestGrade } from "./grading.js";
 
 export interface FeedbackRecord {
   readonly id: string;
@@ -42,6 +48,22 @@ export interface FeedbackRecord {
 }
 
 const RULES_HEADING = "Learned from reviewer feedback:";
+
+const hashText = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+/** The instructions to send to reviewers: the compact version while it still matches the full text. */
+export function instructionsForPrompt(
+  project: Pick<Project, "customInstructions" | "compactInstructions" | "compactSourceHash"> | undefined,
+): string | undefined {
+  if (!project?.customInstructions) return undefined;
+  if (
+    project.compactInstructions &&
+    project.compactSourceHash === hashText(project.customInstructions)
+  ) {
+    return project.compactInstructions;
+  }
+  return project.customInstructions;
+}
 const MAX_FEEDBACK = 200;
 
 interface StorageData {
@@ -50,6 +72,9 @@ interface StorageData {
   identityIndex: Record<string, string>; // identityKey -> projectId
   mergeRequests: Record<string, ProjectMergeRequest[]>; // projectId -> MR list
   reviews: Record<string, ProjectReviewRecord[]>; // projectId -> review list
+  developers?: Record<string, ProjectDeveloper>; // `${host}/${username}` -> developer
+  /** 10 once MR grades use the 0-10 scale (older files used 0-100). */
+  gradeScale?: number;
 }
 
 export class ProjectStore {
@@ -60,6 +85,7 @@ export class ProjectStore {
     identityIndex: {},
     mergeRequests: {},
     reviews: {},
+    gradeScale: 10,
   };
   private loaded = false;
   private writeQueue: Promise<void> = Promise.resolve();
@@ -81,7 +107,22 @@ export class ProjectStore {
         mergeRequests: parsed.mergeRequests || {},
         reviews: parsed.reviews || {},
         feedback: parsed.feedback || {},
+        developers: parsed.developers || {},
       };
+      if (parsed.gradeScale !== 10) {
+        // One-time migration of MR grades from the old 0-100 scale to 0-10.
+        for (const mrs of Object.values(this.data.mergeRequests)) {
+          mrs.forEach((m, i) => {
+            const grade = m.grade && { ...m.grade, score: Math.round(m.grade.score / 10) };
+            const suggestedGrade = m.suggestedGrade && {
+              ...m.suggestedGrade,
+              score: Math.max(1, Math.round(m.suggestedGrade.score / 10)),
+            };
+            mrs[i] = { ...m, ...(grade ? { grade } : {}), ...(suggestedGrade ? { suggestedGrade } : {}) };
+          });
+        }
+      }
+      this.data.gradeScale = 10;
       // Rebuild identityIndex if missing or corrupted
       for (const p of Object.values(this.data.projects)) {
         const key = `${p.gitHost.toLowerCase()}/${p.repositoryPath.toLowerCase()}`;
@@ -273,6 +314,7 @@ export class ProjectStore {
       name?: string | undefined;
       description?: string | undefined;
       customInstructions?: string | undefined;
+      compactInstructions?: string | undefined;
     },
   ): Promise<Project> {
     await this.ensureLoaded();
@@ -282,8 +324,21 @@ export class ProjectStore {
     }
 
     const now = new Date().toISOString() as IsoTimestamp;
+    const customInstructions =
+      patch.customInstructions !== undefined
+        ? patch.customInstructions.trim() || undefined
+        : existing.customInstructions;
+    const textChanged = customInstructions !== existing.customInstructions;
+    // A compact version is only valid for the exact text it was made from.
+    let compact = textChanged ? undefined : existing.compactInstructions;
+    if (patch.compactInstructions !== undefined) compact = patch.compactInstructions.trim() || undefined;
+    const compactFields =
+      customInstructions && compact
+        ? { compactInstructions: compact, compactSourceHash: hashText(customInstructions) }
+        : { compactInstructions: undefined, compactSourceHash: undefined };
     const updated: Project = {
       ...existing,
+      ...compactFields,
       name:
         patch.name !== undefined
           ? patch.name.trim() || existing.name
@@ -292,10 +347,7 @@ export class ProjectStore {
         patch.description !== undefined
           ? patch.description.trim() || undefined
           : existing.description,
-      customInstructions:
-        patch.customInstructions !== undefined
-          ? patch.customInstructions.trim() || undefined
-          : existing.customInstructions,
+      customInstructions,
       updatedAt: now,
     };
 
@@ -327,9 +379,19 @@ export class ProjectStore {
         const body = current.includes(RULES_HEADING)
           ? `${current.trimEnd()}\n${line}`
           : `${current.trimEnd()}${current.trim() ? "\n\n" : ""}${RULES_HEADING}\n${line}`;
+        // Keep a still-valid compact version in step with the new rule.
+        const compactValid =
+          project.compactInstructions &&
+          project.compactSourceHash === hashText(current);
         updated = {
           ...project,
           customInstructions: body,
+          ...(compactValid
+            ? {
+                compactInstructions: `${project.compactInstructions!.trimEnd()}\n${line}`,
+                compactSourceHash: hashText(body),
+              }
+            : {}),
           updatedAt: new Date().toISOString() as IsoTimestamp,
         };
         this.data.projects[projectId] = updated;
@@ -356,7 +418,7 @@ export class ProjectStore {
    * rules, for the review prompt. Keeps recent feedback in play without
    * touching the project's permanent instructions.
    */
-  async getFeedbackDigest(projectId: string, limit = 10): Promise<string> {
+  async getFeedbackDigest(projectId: string, limit = 5): Promise<string> {
     await this.ensureLoaded();
     const items = (this.data.feedback?.[projectId] ?? [])
       .filter((f) => f.verdict === "down" && !f.ruleAdded)
@@ -366,7 +428,7 @@ export class ProjectStore {
       "Recent reviewer feedback (findings reviewers rejected; avoid repeating similar ones):",
       ...items.map(
         (f) =>
-          `- [${f.category}] "${f.title}" in ${f.file}: ${f.reason}${f.note ? ` — ${f.note}` : ""}`,
+          `- [${f.category}] "${f.title}" in ${f.file}: ${f.reason.slice(0, 160)}${f.note ? ` — ${f.note.slice(0, 120)}` : ""}`,
       ),
     ].join("\n");
   }
@@ -539,14 +601,151 @@ export class ProjectStore {
 
     if (params.mergeRequestId) {
       const mrs = this.data.mergeRequests[project.id] || [];
-      const targetMr = mrs.find((m) => m.id === params.mergeRequestId);
+      const idx = mrs.findIndex((m) => m.id === params.mergeRequestId);
+      const targetMr = mrs[idx];
       if (targetMr) {
-        (targetMr as any).updatedAt = now;
+        const suggestion = suggestGrade(issues);
+        mrs[idx] = {
+          ...targetMr,
+          updatedAt: now,
+          suggestedGrade: {
+            score: suggestion.score,
+            reason: suggestion.reason,
+            reviewId: record.id,
+            computedAt: now,
+          },
+        };
       }
     }
 
     await this.persist();
     return record;
+  }
+
+  /**
+   * Stores title/branches/author fetched from the git provider on an MR and
+   * registers the author in the developer registry (no login account is made).
+   */
+  async setMergeRequestMeta(
+    projectId: string,
+    mergeRequestId: string,
+    meta: {
+      title?: string | undefined;
+      sourceBranch?: string | undefined;
+      targetBranch?: string | undefined;
+      author?: MergeRequestAuthor | undefined;
+    },
+    linkedUserId?: string | undefined,
+  ): Promise<ProjectMergeRequest | undefined> {
+    await this.ensureLoaded();
+    const project = this.data.projects[projectId];
+    const mrs = this.data.mergeRequests[projectId];
+    const idx = mrs ? mrs.findIndex((m) => m.id === mergeRequestId) : -1;
+    const mr = mrs?.[idx];
+    if (!project || !mrs || !mr) return undefined;
+
+    const updated: ProjectMergeRequest = {
+      ...mr,
+      title: meta.title || mr.title,
+      sourceBranch: meta.sourceBranch || mr.sourceBranch,
+      targetBranch: meta.targetBranch || mr.targetBranch,
+      author: meta.author ?? mr.author,
+    };
+    mrs[idx] = updated;
+
+    if (meta.author) {
+      const devs = (this.data.developers ??= {});
+      const id = `${project.gitHost}/${meta.author.username}`.toLowerCase();
+      const existing = devs[id];
+      devs[id] = {
+        id,
+        gitHost: project.gitHost,
+        username: meta.author.username,
+        name: meta.author.name ?? existing?.name,
+        avatarUrl: meta.author.avatarUrl ?? existing?.avatarUrl,
+        profileUrl: meta.author.profileUrl ?? existing?.profileUrl,
+        linkedUserId: linkedUserId ?? existing?.linkedUserId,
+        firstSeenAt: existing?.firstSeenAt ?? (new Date().toISOString() as IsoTimestamp),
+      };
+    }
+
+    await this.persist();
+    return updated;
+  }
+
+  /** Sets (or clears, when `grade` is null) the reviewer's grade on an MR. */
+  async gradeMergeRequest(
+    projectId: string,
+    mergeRequestId: string,
+    grade: MergeRequestGrade | null,
+  ): Promise<ProjectMergeRequest | undefined> {
+    await this.ensureLoaded();
+    const mrs = this.data.mergeRequests[projectId];
+    const idx = mrs ? mrs.findIndex((m) => m.id === mergeRequestId) : -1;
+    const mr = mrs?.[idx];
+    if (!mrs || !mr) return undefined;
+
+    const { grade: _old, ...rest } = mr;
+    const updated: ProjectMergeRequest = grade ? { ...rest, grade } : rest;
+    mrs[idx] = {
+      ...updated,
+      updatedAt: new Date().toISOString() as IsoTimestamp,
+    };
+    await this.persist();
+    return mrs[idx];
+  }
+
+  async setMergeRequestAiUsage(
+    projectId: string,
+    mergeRequestId: string,
+    aiUsage: MergeRequestAiUsage,
+  ): Promise<ProjectMergeRequest | undefined> {
+    await this.ensureLoaded();
+    const mrs = this.data.mergeRequests[projectId];
+    const idx = mrs ? mrs.findIndex((m) => m.id === mergeRequestId) : -1;
+    const mr = mrs?.[idx];
+    if (!mrs || !mr) return undefined;
+    mrs[idx] = { ...mr, aiUsage };
+    await this.persist();
+    return mrs[idx];
+  }
+
+  /** Developers who authored MRs in this project, with their grade summary. */
+  async listDevelopers(projectId: string): Promise<
+    {
+      developer: ProjectDeveloper | { username: string };
+      mergeRequestCount: number;
+      gradedCount: number;
+      averageGrade?: number | undefined;
+    }[]
+  > {
+    await this.ensureLoaded();
+    const project = this.data.projects[projectId];
+    if (!project) return [];
+
+    const byUser = new Map<string, { count: number; scores: number[]; username: string }>();
+    for (const mr of this.data.mergeRequests[projectId] || []) {
+      if (!mr.author) continue;
+      const key = mr.author.username.toLowerCase();
+      const entry = byUser.get(key) ?? { count: 0, scores: [], username: mr.author.username };
+      entry.count++;
+      if (mr.grade) entry.scores.push(mr.grade.score);
+      byUser.set(key, entry);
+    }
+
+    return [...byUser.entries()]
+      .map(([key, e]) => ({
+        developer:
+          this.data.developers?.[`${project.gitHost}/${key}`.toLowerCase()] ?? {
+            username: e.username,
+          },
+        mergeRequestCount: e.count,
+        gradedCount: e.scores.length,
+        averageGrade: e.scores.length
+          ? Math.round((e.scores.reduce((a, b) => a + b, 0) / e.scores.length) * 10) / 10
+          : undefined,
+      }))
+      .sort((a, b) => b.mergeRequestCount - a.mergeRequestCount);
   }
 
   async deleteProject(id: string): Promise<boolean> {

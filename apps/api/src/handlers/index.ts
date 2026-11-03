@@ -53,10 +53,16 @@ export {
   getProjectDetailsHandler,
   createProjectHandler,
   updateProjectHandler,
+  optimizeProjectInstructionsHandler,
   findOrCreateProjectHandler,
   recordReviewHandler,
   submitFeedbackHandler,
   deleteProjectHandler,
+  attachMergeRequestMeta,
+  gradeMergeRequestHandler,
+  clearMergeRequestGradeHandler,
+  listProjectDevelopersHandler,
+  estimateMergeRequestAiUsageHandler,
 } from "./projects.js";
 
 export * from "./auth-handlers.js";

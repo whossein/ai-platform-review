@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { ProjectStore } from "./project-store.js";
+import { ProjectStore, instructionsForPrompt } from "./project-store.js";
 
 const base = {
   verdict: "down" as const,
@@ -43,5 +43,22 @@ describe("ProjectStore feedback", () => {
     expect(digest).toContain("console.log in CLI");
     expect(digest).not.toContain("Promoted");
     expect((await store.getProject(id))!.project.customInstructions).not.toContain("console.log in CLI");
+  });
+
+  it("uses the compact instructions only while they match the full text", async () => {
+    await store.updateProject(id, { customInstructions: "Long full rules text", compactInstructions: "Short rules" });
+    expect(instructionsForPrompt((await store.getProject(id))!.project)).toBe("Short rules");
+
+    // A learned rule is added to both versions, so the compact one stays valid.
+    await store.addFeedback(id, base, "Allow console.log in CLI");
+    const afterRule = (await store.getProject(id))!.project;
+    expect(instructionsForPrompt(afterRule)).toContain("Short rules");
+    expect(instructionsForPrompt(afterRule)).toContain("Allow console.log in CLI");
+
+    // Editing the full text without a new compact drops the stale one.
+    await store.updateProject(id, { customInstructions: "Completely new rules" });
+    const edited = (await store.getProject(id))!.project;
+    expect(edited.compactInstructions).toBeUndefined();
+    expect(instructionsForPrompt(edited)).toBe("Completely new rules");
   });
 });

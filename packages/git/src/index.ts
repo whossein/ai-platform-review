@@ -37,3 +37,8 @@ export {
   extractMergeRequestNumber,
 } from "./url.js";
 export { resolveDiffInput, parseDiffToFiles } from "./resolver.js";
+export {
+  fetchChangeRequestMeta,
+  fetchChangeRequestCommitMessages,
+  type ChangeRequestMeta,
+} from "./meta.js";

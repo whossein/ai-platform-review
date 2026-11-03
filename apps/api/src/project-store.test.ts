@@ -168,4 +168,43 @@ describe("ProjectStore & Registry", () => {
       "New AI guidelines: Always check database indices.",
     );
   });
+
+  it("suggests a grade on review, stores author meta and keeps the reviewer grade", async () => {
+    const { project, mergeRequest } = await store.findOrCreateFromUrl(
+      "https://gitlab.company.com/team/app/-/merge_requests/5",
+    );
+    const mr = mergeRequest!;
+
+    await store.recordReview({
+      projectId: project.id,
+      mergeRequestId: mr.id,
+      target: mr.url,
+      result: { issues: [{ severity: "high", accepted: true }] },
+    });
+    await store.setMergeRequestMeta(project.id, mr.id, {
+      title: "Add login",
+      author: { username: "Ali", name: "Ali R" },
+    });
+    await store.gradeMergeRequest(project.id, mr.id, {
+      score: 9,
+      note: "good",
+      gradedById: "u1",
+      gradedByName: "Sara",
+      gradedAt: new Date().toISOString() as any,
+    });
+
+    const details = await store.getProject(project.id);
+    const saved = details!.mergeRequests[0]!;
+    expect(saved.suggestedGrade?.score).toBe(9);
+    expect(saved.suggestedGrade?.reason).toContain("1 high");
+    expect(saved.grade?.score).toBe(9);
+    expect(saved.author?.username).toBe("Ali");
+
+    const devs = await store.listDevelopers(project.id);
+    expect(devs).toHaveLength(1);
+    expect(devs[0]?.averageGrade).toBe(9);
+
+    await store.gradeMergeRequest(project.id, mr.id, null);
+    expect((await store.getProject(project.id))!.mergeRequests[0]!.grade).toBeUndefined();
+  });
 });

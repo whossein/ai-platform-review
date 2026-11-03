@@ -128,13 +128,16 @@ export class ReviewOrchestrator {
       ...(opts.files ? { files: opts.files } : {}),
     });
     let slice: ContextSlice;
-    const instructionsSection = opts.customInstructions?.trim()
-      ? `\n\n--- PROJECT-SPECIFIC SYSTEM INSTRUCTIONS & GUIDELINES (${opts.projectName || "Active Project"}) ---\n${opts.customInstructions.trim()}\nIMPORTANT: The above project-specific instructions MUST be strictly respected and prioritized by all reviewers.\n`
-      : "";
+    const projectInstructions = opts.customInstructions?.trim() || undefined;
 
     const structureSection = opts.projectContext?.trim()
       ? `\n\n${opts.projectContext.trim()}\n`
       : "";
+
+    const instructionFields = {
+      ...(projectInstructions ? { projectInstructions } : {}),
+      ...(opts.projectName ? { projectName: opts.projectName } : {}),
+    };
 
     if (built.ok) {
       const sliceRes = await contextEngine.slice({
@@ -142,7 +145,7 @@ export class ReviewOrchestrator {
         tokenBudget: budget.tokenBudget,
       });
       const structural = sliceRes.ok ? sliceRes.value.rendered : "";
-      const rendered = `${opts.diff}${instructionsSection}${structureSection}\n\n--- context ---\n${structural}`;
+      const rendered = `${opts.diff}${structureSection}\n\n--- context ---\n${structural}`;
       slice = {
         handle: built.value.handle,
         version: built.value.version,
@@ -150,9 +153,10 @@ export class ReviewOrchestrator {
         rendered,
         estimatedTokens: Math.ceil(rendered.length / 4),
         compressed: sliceRes.ok ? sliceRes.value.compressed : false,
+        ...instructionFields,
       };
     } else {
-      const rendered = `${opts.diff}${instructionsSection}${structureSection}`;
+      const rendered = `${opts.diff}${structureSection}`;
       slice = {
         handle: "ctx.local" as ContextSlice["handle"],
         version: 1,
@@ -160,6 +164,7 @@ export class ReviewOrchestrator {
         rendered,
         estimatedTokens: Math.ceil(rendered.length / 4),
         compressed: false,
+        ...instructionFields,
       };
     }
 

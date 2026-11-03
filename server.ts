@@ -25,10 +25,16 @@ import {
   getProjectDetailsHandler,
   createProjectHandler,
   updateProjectHandler,
+  optimizeProjectInstructionsHandler,
   findOrCreateProjectHandler,
   recordReviewHandler,
   submitFeedbackHandler,
   deleteProjectHandler,
+  attachMergeRequestMeta,
+  gradeMergeRequestHandler,
+  clearMergeRequestGradeHandler,
+  listProjectDevelopersHandler,
+  estimateMergeRequestAiUsageHandler,
   getAuthStatusHandler,
   setupFirstAdminHandler,
   loginHandler,
@@ -65,7 +71,7 @@ import {
   buildProjectReviewContext,
 } from "./apps/api/src/handlers/index.js";
 import { ProjectIndexStore, IndexJobManager } from "@ai-review/project-index";
-import { ProjectStore } from "./apps/api/src/project-store.js";
+import { ProjectStore, instructionsForPrompt } from "./apps/api/src/project-store.js";
 import { ScanStore, ScanJobManager } from "./apps/api/src/scan-manager.js";
 import { SecurityContext } from "./apps/api/src/security/index.js";
 
@@ -90,7 +96,7 @@ async function startServer() {
   const portArgIndex = process.argv.indexOf("--port");
   const cliPort = portArgIndex !== -1 ? parseInt(process.argv[portArgIndex + 1], 10) : undefined;
   const envPort = parseInt(process.env.PORT || "", 10);
-  const PORT = cliPort || (Number.isNaN(envPort) ? 3000 : envPort);
+  const PORT = cliPort || (Number.isNaN(envPort) ? 4000 : envPort);
 
   // Build and populate the agent registry at startup (composition root)
   const agentRegistry = new MapAgentRegistry();
@@ -434,6 +440,28 @@ async function startServer() {
     try {
       const user = (req as any).user;
       const result = await findOrCreateProjectHandler(projectStore, req.body || {}, security, user);
+
+      // Fetch the MR author with the caller's Git token (request env first, then stored credential)
+      if (result.mergeRequest && !result.mergeRequest.author) {
+        const gitEnv: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.body?.env || {})) {
+          if (/^(GITLAB|GITHUB|GIT)_(TOKEN|BASE_URL)$/.test(k) && typeof v === "string" && v) gitEnv[k] = v;
+        }
+        if (user) {
+          try {
+            const provider = result.project.gitHost.toLowerCase().includes("github") ? "github" : "gitlab";
+            const key = provider === "github" ? "GITHUB_TOKEN" : "GITLAB_TOKEN";
+            const token = await security.credentialStore.getDecryptedToken(user.id, provider);
+            if (token && !gitEnv[key]) gitEnv[key] = token;
+          } catch {
+            // no stored credential
+          }
+        }
+        await attachMergeRequestMeta(projectStore, security, result.project.id, result.mergeRequest, gitEnv);
+        const fresh = await projectStore.getProject(result.project.id);
+        const mr = fresh?.mergeRequests.find((m) => m.id === result.mergeRequest!.id);
+        if (mr) result.mergeRequest = mr;
+      }
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 400).json({ error: err.message || "Failed to resolve project" });
@@ -447,6 +475,64 @@ async function startServer() {
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to record review" });
+    }
+  });
+
+  app.put("/api/projects/:id/merge-requests/:mrId/grade", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await gradeMergeRequestHandler(
+        projectStore, req.params.id, req.params.mrId, req.body || {}, security, user
+      );
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to grade merge request" });
+    }
+  });
+
+  app.delete("/api/projects/:id/merge-requests/:mrId/grade", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await clearMergeRequestGradeHandler(projectStore, req.params.id, req.params.mrId, security, user);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to clear grade" });
+    }
+  });
+
+  app.post("/api/projects/:id/merge-requests/:mrId/ai-usage", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const env: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.body?.env || {})) {
+        if (typeof v === "string" && v) env[k] = v;
+      }
+      // Fall back to the caller's stored Git credential when the request has no token
+      const details = await projectStore.getProject(req.params.id);
+      if (user && details) {
+        try {
+          const provider = details.project.gitHost.toLowerCase().includes("github") ? "github" : "gitlab";
+          const key = provider === "github" ? "GITHUB_TOKEN" : "GITLAB_TOKEN";
+          const token = await security.credentialStore.getDecryptedToken(user.id, provider);
+          if (token && !env[key]) env[key] = token;
+        } catch {
+          // no stored credential
+        }
+      }
+      res.status(200).json(
+        await estimateMergeRequestAiUsageHandler(projectStore, req.params.id, req.params.mrId, env, security, user)
+      );
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to estimate AI usage" });
+    }
+  });
+
+  app.get("/api/projects/:id/developers", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      res.status(200).json(await listProjectDevelopersHandler(projectStore, req.params.id, security, user));
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to list developers" });
     }
   });
 
@@ -467,6 +553,21 @@ async function startServer() {
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to update project" });
+    }
+  });
+
+  app.post("/api/projects/:id/instructions/optimize", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const env: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.body?.env || {})) {
+        if (typeof v === "string" && v) env[k] = v;
+      }
+      res.status(200).json(
+        await optimizeProjectInstructionsHandler(projectStore, req.params.id, { text: req.body?.text, english: req.body?.english, env }, security, user)
+      );
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to optimize guidelines" });
     }
   });
 
@@ -654,7 +755,15 @@ async function startServer() {
       try {
         if (req.body?.projectId) {
           const fetched = await projectStore.getProject(req.body.projectId);
-          if (fetched) preProject = fetched.project;
+          if (fetched) {
+            preProject = fetched.project;
+            // The client sends the MR id along with the project id; without it the
+            // review would not be linked to the MR (no suggested grade, no author).
+            preMr = fetched.mergeRequests.find((m) => m.id === req.body.mergeRequestId);
+            if (!preMr && /^https?:\/\//.test(diffStr)) {
+              preMr = (await projectStore.findOrCreateFromUrl(diffStr)).mergeRequest;
+            }
+          }
         } else if (diffStr.startsWith("http://") || diffStr.startsWith("https://")) {
           // Auto-registers the project and makes the caller its OWNER on first sight
           const auto = await findOrCreateProjectHandler(projectStore, { url: diffStr }, security, user);
@@ -716,7 +825,8 @@ async function startServer() {
         ? await projectStore.getFeedbackDigest(preProject.id).catch(() => "")
         : "";
       const customInstructions =
-        [req.body?.customInstructions || preProject?.customInstructions, feedbackDigest]
+        // The stored project wins: it may have a token-saving compact version.
+        [instructionsForPrompt(preProject) || req.body?.customInstructions, feedbackDigest]
           .filter(Boolean)
           .join("\n\n") || undefined;
       const projectName = req.body?.projectName || preProject?.name;
@@ -777,6 +887,7 @@ async function startServer() {
             associatedProject = auto.project;
             associatedMr = auto.mergeRequest;
           }
+          await attachMergeRequestMeta(projectStore, security, associatedProject.id, associatedMr, reviewEnv);
           await projectStore.recordReview({
             projectId: associatedProject.id,
             mergeRequestId: associatedMr?.id,
@@ -799,10 +910,27 @@ async function startServer() {
         console.warn("Project association error:", projErr);
       }
 
+      // Re-read the MR so the response carries the fresh author and suggested grade
+      let projectRole: string | undefined;
+      try {
+        if (associatedProject && associatedMr) {
+          const fresh = await projectStore.getProject(associatedProject.id);
+          associatedMr = fresh?.mergeRequests.find((m) => m.id === associatedMr.id) ?? associatedMr;
+        }
+        if (associatedProject && user) {
+          projectRole =
+            (await security.memberStore.getUserProjectRole(associatedProject.id, user.id)) ||
+            (user.role === "ADMIN" ? "OWNER" : undefined);
+        }
+      } catch (e) {
+        console.warn("Post-review MR refresh notice:", e);
+      }
+
       res.status(200).json({
         ...result,
         ...(associatedProject ? { project: associatedProject } : {}),
         ...(associatedMr ? { mergeRequest: associatedMr } : {}),
+        ...(projectRole ? { projectRole } : {}),
       });
     } catch (err: any) {
       const msg = err.message || "internal error";

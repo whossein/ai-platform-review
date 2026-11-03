@@ -1178,6 +1178,24 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">What's New</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2">
+          <li><span class="font-mono text-cyan-400">v0.2.43</span> — Review &amp; Publish summary panel: MR title/link/author/branches, per-severity counts (selected/total), files, categories, average confidence and Select all / none. The redundant "Pre-Review Findings" box was removed.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.42</span> — Review &amp; Publish: <b>Select all</b> / <b>Select none</b> buttons with a live "N of M selected" counter.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.41</span> — New <b>Add to comment</b> button next to <b>Commit to branch</b> on AI sample fixes: appends the code to the PR comment as a Git <code>suggestion</code> block (with an Apply button on the Git host).</li>
+          <li><span class="font-mono text-cyan-400">v0.2.40</span> — Fix: the "release change required" rule now accepts any changelog / release-notes file name (e.g. CHANGELOG.fa.md), removing a false finding.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.39</span> — Lower AI cost: project guidelines are split by <code>##</code> headings so each specialist gets only its sections; new "Fix, improve &amp; shorten with AI" button and a token counter in the guidelines editor.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.38</span> — Removed the redundant Identity &amp; Deduplication tab from the project page.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.37</span> — Developers tab shows the reviewer's grade note and the suggestion reason under each MR.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.36</span> — Fix: reviews from the Review page are always linked to their MR, so the suggested grade and author show right after the review.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.35</span> — Next.js Reviewer is no longer suggested for plain React projects; it needs real Next.js signals.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.34</span> — Re-Estimate no longer re-ticks specialists you unticked (e.g. Next.js reviewer); your selection is kept.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.33</span> — MR task grades now use a 0-10 scale (suggested grade and developer averages too); old grades convert automatically.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.32</span> — Clearer "Estimate AI usage" button; grade card and button also show on Review results restored from an earlier session.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.31</span> — Estimate / Re-estimate button for reviewers: estimated % chance an MR was written with AI (rules + AI judge), with reasons; separate from the review.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.30</span> — MR author is fetched as soon as you enter the MR URL (using your Git token), not only after a review.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.29</span> — Review page shows a grade card for the reviewed MR: author, suggested grade with reason, and a form for reviewers to set the grade.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.28</span> — Developers tab in each project: MR authors with MR count, average grade and average suggested grade, expandable to their MRs.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.27</span> — MR task grades: each MR shows its author from Git and a 0-100 task-completion grade set by reviewers, with a system-suggested grade and short reason, plus a per-developer average.</li>
+          <li><span class="font-mono text-cyan-400">v0.2.26</span> — The server now runs on port 4000 by default (Docker image too); <code>PORT</code> and <code>--port</code> still override it.</li>
           <li><span class="font-mono text-cyan-400">v0.2.25</span> — Project Scan tab: choose a branch and scan the whole repository with the built-in rules (no AI), with a filterable report and history.</li>
           <li><span class="font-mono text-cyan-400">v0.2.24</span> — Rules-only (no AI) review with multi-language rules (Python, Java, C#, PHP, Go, Kotlin, Swift, shell, Docker); Rule checks (no AI) only flag lines changed in the diff, repeated findings of one rule in a file are no longer merged, and optional branch-name / MR-title checks (AI_REVIEW_GOVERNANCE_RULES=1).</li>
           <li><span class="font-mono text-cyan-400">v0.2.23</span> — Feedback on each finding (useful / not useful) with an optional "Add to project rules" checkbox that updates the project's instructions.</li>
@@ -1201,6 +1219,22 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">تازه‌ها</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2 font-sans">
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۴۳</span> — پنل خلاصه Review &amp; Publish: عنوان/لینک/نویسنده/شاخه‌های MR، تعداد هر شدت (انتخاب‌شده/کل)، فایل‌ها، دسته‌ها، میانگین اطمینان و Select all / none. باکس تکراری «Pre-Review Findings» حذف شد.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۴۲</span> — Review &amp; Publish: دکمه‌های <b>Select all</b> و <b>Select none</b> با شمارنده «N از M انتخاب شده».</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۴۱</span> — دکمه جدید <b>Add to comment</b> کنار <b>Commit to branch</b> در نمونه‌کد AI: کد را به‌صورت بلاک <code>suggestion</code> گیت به کامنت PR اضافه می‌کند (با دکمه Apply در Git).</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۴۰</span> — رفع خطا: قانون «ثبت release الزامی است» اکنون هر نام فایل changelog / release-notes (مثل CHANGELOG.fa.md) را می‌پذیرد و یافته اشتباه حذف شد.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۹</span> — کاهش هزینه AI: دستورالعمل‌های پروژه با سرتیتر <code>##</code> تقسیم می‌شوند و هر specialist فقط بخش مربوط به خودش را می‌گیرد؛ دکمه جدید «Fix, improve &amp; shorten with AI» و شمارنده توکن در ویرایشگر.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۸</span> — تب تکراری «Identity &amp; Deduplication» از صفحه پروژه حذف شد.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۷</span> — تب Developers توضیح نمره‌دهنده و دلیل نمره پیشنهادی را زیر هر MR نشان می‌دهد.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۶</span> — رفع باگ: ریویوهای صفحه Review همیشه به MR وصل می‌شوند و نمره پیشنهادی و نویسنده بلافاصله بعد از ریویو دیده می‌شوند.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۳</span> — نمره انجام تسک MR حالا ۰ تا ۱۰ است (نمره پیشنهادی و میانگین دولوپرها هم)؛ نمره‌های قبلی خودکار تبدیل می‌شوند.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۲</span> — دکمه واضح‌تر «Estimate AI usage»؛ کارت نمره و دکمه برای نتیجه‌های بازیابی‌شده از نشست قبلی هم در صفحه Review نمایش داده می‌شود.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۱</span> — دکمه Estimate / Re-estimate برای ریویوکننده: درصد احتمال نوشته‌شدن MR با AI (قوانین + قاضی AI) با دلیل؛ جدا از ریویو.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۳۰</span> — نویسنده MR به‌محض وارد کردن لینک (با توکن Git شما) گرفته می‌شود، نه فقط بعد از ریویو.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۲۹</span> — صفحه Review کارت نمره MR را نشان می‌دهد: نویسنده، نمره پیشنهادی با دلیل و فرم ثبت نمره برای ریویوکننده.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۲۸</span> — تب توسعه‌دهندگان در هر پروژه: نویسندگان MR با تعداد MR، میانگین نمره و میانگین نمره پیشنهادی، قابل باز شدن تا MRهایشان.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۲۷</span> — نمره انجام تسک برای MR: هر MR نویسنده را از Git نشان می‌دهد و ریویوکننده نمره ۰ تا ۱۰۰ ثبت می‌کند؛ سیستم هم نمره پیشنهادی با دلیل کوتاه می‌دهد و میانگین هر دولوپر دیده می‌شود.</li>
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۲۶</span> — سرور به‌صورت پیش‌فرض روی پورت ۴۰۰۰ اجرا می‌شود (ایمیج Docker هم)؛ <code>PORT</code> و <code>--port</code> همچنان آن را تغییر می‌دهند.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۲۳</span> — ثبت بازخورد روی هر یافته (مفید / بی‌فایده) با چک‌باکس اختیاری «افزودن به قوانین پروژه» که دستورهای پروژه را به‌روز می‌کند.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۲۲</span> — دکمه Review MR در پروژه حالا ریویو ذخیره‌شده همان MR را باز می‌کند، نه نتیجه قدیمی یا خالی.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۲۱</span> — لینک «Open in Git» روی هر کارت Review &amp; Publish.</li>
@@ -1247,7 +1281,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.2.25</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.2.43</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

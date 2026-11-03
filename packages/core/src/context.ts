@@ -88,6 +88,12 @@ export interface ContextSlice {
   readonly estimatedTokens: number;
   /** True when semantic/structural compression was applied to fit the budget. */
   readonly compressed: boolean;
+  /**
+   * Project guidelines, kept out of `rendered` so each specialist can be sent
+   * only the sections that concern it (see `instructionsForAgent`).
+   */
+  readonly projectInstructions?: string;
+  readonly projectName?: string;
 }
 
 /**
