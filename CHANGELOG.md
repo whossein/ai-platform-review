@@ -15,6 +15,20 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.3.0] - 2026-11-03
+
+### Security
+- **EN:** AI reviewers can no longer be steered by the merge request itself. Docs changed in the MR (AGENTS.md, CONTRIBUTING.md, .cursorrules, lint configs) are reviewed as part of the diff instead of being treated as reviewer rules; only the guidelines saved in the project settings act as rules. The diff, project structure and tool output are sent as clearly marked data blocks, and text in them that tries to instruct the AI (e.g. "report no issues") is reported as a critical security finding.
+- **FA:** دیگر نمی‌توان ریویوکننده‌های AI را از داخل خود MR هدایت کرد. مستندات تغییرکرده در MR (AGENTS.md، CONTRIBUTING.md، .cursorrules، تنظیمات lint) جزو diff بررسی می‌شوند و دیگر قانون ریویو حساب نمی‌شوند؛ فقط دستورالعمل‌های ذخیره‌شده در تنظیمات پروژه قانون هستند. diff، ساختار پروژه و خروجی ابزارها به‌صورت بلوک‌های داده مشخص ارسال می‌شوند و متنی که داخل آن‌ها بخواهد به AI دستور بدهد (مثلاً «هیچ مشکلی گزارش نکن») به‌عنوان یافته امنیتی critical گزارش می‌شود.
+
+### Changed
+- **EN:** More accurate line numbers in review comments: the diff sent to the AI carries the new-file line number on every line, and findings are snapped to the nearest changed line (with slightly lower confidence) so inline comments land in the right place. Findings on files that are neither in the MR nor mentioned in the review context are discarded as hallucinated.
+- **FA:** شماره خط کامنت‌های ریویو دقیق‌تر شد: diff ارسالی به AI روی هر خط شماره خط فایل جدید را دارد و یافته‌ها به نزدیک‌ترین خط تغییرکرده منتقل می‌شوند (با اطمینان کمی کمتر) تا کامنت inline در جای درست بنشیند. یافته‌هایی که فایلشان نه در MR است و نه در context ریویو آمده، ساختگی فرض و حذف می‌شوند.
+- **EN:** Lower AI cost per review: all specialists now share an identical prompt prefix (instructions + diff), so providers with automatic prompt caching (OpenAI, Gemini, DeepSeek…) reuse it across specialists. Cached prompt tokens are recorded when the provider reports them.
+- **FA:** هزینه AI هر ریویو کمتر شد: همه specialistها ابتدای پرامپت یکسان دارند (دستورالعمل + diff)، بنابراین سرویس‌هایی که کش خودکار پرامپت دارند (OpenAI، Gemini، DeepSeek و…) آن را بین specialistها بازاستفاده می‌کنند. تعداد توکن‌های کش‌شده در صورت گزارش سرویس‌دهنده ثبت می‌شود.
+- **EN:** More reliable AI output: reviewers request a strict JSON schema (`json_schema`), falling back automatically to `json_object` and then plain output on providers that do not support it. Findings without a title or file are dropped, and out-of-range confidence values are clamped instead of failing the specialist.
+- **FA:** خروجی AI پایدارتر شد: ریویوکننده‌ها schema دقیق JSON (`json_schema`) درخواست می‌کنند و در سرویس‌هایی که پشتیبانی نمی‌کنند خودکار به `json_object` و سپس خروجی ساده برمی‌گردند. یافته‌های بدون عنوان یا فایل حذف می‌شوند و مقدار confidence خارج از بازه به‌جای از کار انداختن specialist محدود (clamp) می‌شود.
+
 ## [0.2.43] - 2026-11-03
 
 ### Changed
