@@ -5,8 +5,11 @@
  *   1. validation        — reject unknown deps and cycles before running;
  *   2. topological order  — a stage starts only once its deps have completed;
  *   3. parallelism        — ready stages in the same `parallelGroup` run together;
- *   4. retries            — transient stage failures retry up to `maxRetries`;
- *   5. graceful degrade   — when the budget is exhausted, remaining non-terminal
+ *   4. retries            — transient stage failures retry up to `maxRetries`,
+ *                           with exponential backoff between attempts;
+ *   5. optional stages    — a failed/skipped `optional` stage does not block its
+ *                           dependents; the run ends `degraded`, not `failed`;
+ *   6. graceful degrade   — when the budget is exhausted, remaining non-terminal
  *                           stages are skipped and the run ends `degraded` rather
  *                           than hard-failing (ADR-0005 / ARCHITECTURE §13).
  *
@@ -43,7 +46,32 @@ export type StageOutcome =
  * it is engine machinery, not a cross-package contract.
  */
 export interface StageExecutor {
-  execute(stage: WorkflowStage, budget: BudgetGuard): AsyncResult<StageOutcome>;
+  /**
+   * `attempt` tells the executor which try this is, so it can surface a
+   * retryable failure to the user once no retries remain (`attempt` is 1-based).
+   */
+  execute(
+    stage: WorkflowStage,
+    budget: BudgetGuard,
+    attempt?: { readonly attempt: number; readonly maxAttempts: number },
+  ): AsyncResult<StageOutcome>;
+}
+
+/** Tuning knobs for retry backoff; injectable so tests need not wait. */
+export interface EngineOptions {
+  /** Waits `ms` between retry attempts. Defaults to `setTimeout`. */
+  readonly sleep?: (ms: number) => Promise<void>;
+  /** Source of jitter in [0, 1). Defaults to `Math.random`. */
+  readonly random?: () => number;
+}
+
+const BACKOFF_BASE_MS = 1_000;
+const BACKOFF_CAP_MS = 8_000;
+
+/** Delay before retry number `retry` (1-based): 1s, 2s, 4s… capped, +≤10% jitter. */
+export function backoffDelayMs(retry: number, random: () => number): number {
+  const base = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** (retry - 1));
+  return Math.round(base + base * 0.1 * random());
 }
 
 function fail(
@@ -121,12 +149,16 @@ interface MutableStageState {
   finishedAt?: number;
 }
 
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 export class DagWorkflowEngine implements WorkflowEngine {
   constructor(
     private readonly executor: StageExecutor,
     /** Factory so each run gets a fresh budget tally. */
     private readonly makeBudgetGuard: (budget: Budget) => BudgetGuard,
     private readonly now: () => number = () => Date.now(),
+    private readonly options: EngineOptions = {},
   ) {}
 
   async run(
@@ -141,12 +173,20 @@ export class DagWorkflowEngine implements WorkflowEngine {
       definition.stages.map((s) => [s.id, { status: "pending", attempts: 0 }]),
     );
 
+    const byId = new Map<StageId, WorkflowStage>(
+      definition.stages.map((s) => [s.id, s]),
+    );
+    const isOptional = (id: StageId): boolean => byId.get(id)?.optional === true;
+    // An optional dep that failed/skipped counts as satisfied.
     const depsSatisfied = (stage: WorkflowStage): boolean =>
-      stage.dependsOn.every((d) => state.get(d)?.status === "completed");
+      stage.dependsOn.every((d) => {
+        const s = state.get(d)?.status;
+        return s === "completed" || (isOptional(d) && (s === "failed" || s === "skipped"));
+      });
     const depFailed = (stage: WorkflowStage): boolean =>
       stage.dependsOn.some((d) => {
         const s = state.get(d)?.status;
-        return s === "failed" || s === "skipped";
+        return (s === "failed" || s === "skipped") && !isOptional(d);
       });
 
     let degraded = false;
@@ -197,11 +237,16 @@ export class DagWorkflowEngine implements WorkflowEngine {
       };
     });
 
-    const anyFailed = stages.some((s) => s.status === "failed");
+    // Optional stages that failed/skipped only degrade the run.
+    const required = stages.filter((s) => !isOptional(s.stageId));
+    const anyFailed = required.some((s) => s.status === "failed");
     const anySkipped = stages.some((s) => s.status === "skipped");
+    const anyOptionalFailed = stages.some(
+      (s) => isOptional(s.stageId) && s.status === "failed",
+    );
     let status: WorkflowStatus;
     if (anyFailed) status = "failed";
-    else if (degraded || anySkipped) status = "degraded";
+    else if (degraded || anySkipped || anyOptionalFailed) status = "degraded";
     else status = "completed";
 
     return { ok: true, value: { workflowId: definition.id, status, stages } };
@@ -218,11 +263,19 @@ export class DagWorkflowEngine implements WorkflowEngine {
     const maxRetries = stage.maxRetries ?? 0;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (attempt > 0) {
+        await (this.options.sleep ?? defaultSleep)(
+          backoffDelayMs(attempt, this.options.random ?? Math.random),
+        );
+      }
       m.attempts = attempt + 1;
 
       let outcome: StageOutcome;
       try {
-        const res = await this.executor.execute(stage, guard);
+        const res = await this.executor.execute(stage, guard, {
+          attempt: attempt + 1,
+          maxAttempts: maxRetries + 1,
+        });
         if (!res.ok) {
           // A hard executor error is treated as permanent failure for the stage.
           m.status = "failed";

@@ -107,13 +107,14 @@ export class ReviewStageExecutor implements StageExecutor {
   async execute(
     stage: WorkflowStage,
     _budget: BudgetGuard,
+    attempt?: { readonly attempt: number; readonly maxAttempts: number },
   ): AsyncResult<StageOutcome> {
     try {
       switch (stage.kind) {
         case "rules":
           return await this.executeRules();
         case "agent":
-          return await this.executeAgent(stage);
+          return await this.executeAgent(stage, attempt);
         case "critic":
           return await this.executeCritic();
         case "judge":
@@ -171,23 +172,48 @@ export class ReviewStageExecutor implements StageExecutor {
     return { ok: true, value: { kind: "completed" } };
   }
 
-  private async executeAgent(stage: WorkflowStage): AsyncResult<StageOutcome> {
-    if (!this.ctx.cacheWarmup) return this.runAgent(stage);
+  /**
+   * Post-run safety net: if the reporting stage never ran (an upstream stage
+   * failed or the budget ran out), consolidate, adjudicate and render here so
+   * the caller still gets a report built from whatever issues were collected.
+   */
+  async finalize(): Promise<void> {
+    if (this.ctx.markdownReport) return;
+    if (this.ctx.adjudicatedIssues.length === 0) {
+      if (this.ctx.consolidatedIssues.length === 0) {
+        this.ctx.consolidatedIssues = critique(this.ctx.allIssues);
+      }
+      this.ctx.adjudicatedIssues = adjudicate(
+        this.ctx.consolidatedIssues,
+        this.ctx.threshold,
+      );
+    }
+    await this.executeReporting();
+  }
+
+  private async executeAgent(
+    stage: WorkflowStage,
+    attempt?: { readonly attempt: number; readonly maxAttempts: number },
+  ): AsyncResult<StageOutcome> {
+    if (!this.ctx.cacheWarmup) return this.runAgent(stage, attempt);
     // The check-and-set is synchronous, so exactly one parallel stage leads.
     if (this.warmup) {
       await this.warmup;
-      return this.runAgent(stage);
+      return this.runAgent(stage, attempt);
     }
     let release!: () => void;
     this.warmup = new Promise<void>((resolve) => (release = resolve));
     try {
-      return await this.runAgent(stage);
+      return await this.runAgent(stage, attempt);
     } finally {
       release();
     }
   }
 
-  private async runAgent(stage: WorkflowStage): AsyncResult<StageOutcome> {
+  private async runAgent(
+    stage: WorkflowStage,
+    attempt?: { readonly attempt: number; readonly maxAttempts: number },
+  ): AsyncResult<StageOutcome> {
     const agentId = (stage.agentId ?? stage.id) as AgentId;
 
     // Estimate cost based on diff/slice size + expected completion
@@ -278,11 +304,32 @@ export class ReviewStageExecutor implements StageExecutor {
     const retryable = isTransientError(error);
 
     if (retryable) {
+      const isLast = attempt !== undefined && attempt.attempt >= attempt.maxAttempts;
+      if (!isLast) {
+        return {
+          ok: true,
+          value: { kind: "retryable", reason: error.message },
+        };
+      }
+      // Retries exhausted: surface the error like a permanent failure, but keep
+      // the stage non-completed so the engine records it as degraded.
+      this.recordAgentFailure(agentId, error.message, executionMs);
       return { ok: true, value: { kind: "retryable", reason: error.message } };
     }
 
     // Permanent agent failure: record error and complete stage gracefully so remaining review continues
-    this.ctx.agentErrors.push({ agentId, message: error.message });
+    this.recordAgentFailure(agentId, error.message, executionMs);
+
+    return { ok: true, value: { kind: "completed" } };
+  }
+
+  /** Records a failed specialist in `agentErrors` plus a zero-usage metrics row. */
+  private recordAgentFailure(
+    agentId: AgentId,
+    message: string,
+    executionMs: number,
+  ): void {
+    this.ctx.agentErrors.push({ agentId, message });
     this.ctx.agentMetrics.push({
       agentId,
       executionMs,
@@ -292,8 +339,6 @@ export class ReviewStageExecutor implements StageExecutor {
       cacheHits: 0,
       cacheMisses: 0,
     });
-
-    return { ok: true, value: { kind: "completed" } };
   }
 
   private async executeCritic(): AsyncResult<StageOutcome> {

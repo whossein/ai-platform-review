@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { critique } from "./critic.js";
+import { critique, normalizeCategory } from "./critic.js";
 import type {
   AgentId,
   ContentHash,
@@ -91,5 +91,35 @@ describe("critic / consolidation", () => {
     ]);
     expect(out[0]!.confidence).toBe(0.72);
     expect(out[0]!.corroboratedBy).toEqual(["solo"]);
+  });
+
+  it("merges the same defect when agents word the category differently", () => {
+    const out = critique([
+      issue({ id: "a", category: "security", producedBy: "agent.security-reviewer" }),
+      issue({ id: "b", category: " Security Issue ", producedBy: "agent.code-reviewer" }),
+      issue({ id: "c", category: "Vulnerability", producedBy: "agent.perf" }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.corroboratedBy).toHaveLength(3);
+    expect(normalizeCategory("Perf")).toBe("performance");
+    expect(normalizeCategory("Logic")).toBe("correctness");
+    expect(normalizeCategory("Naming")).toBe("style");
+    expect(normalizeCategory("Custom Thing")).toBe("custom thing");
+  });
+
+  it("keeps two different issues from the same agent separate", () => {
+    const a = { ...issue({ id: "a", producedBy: "solo" }), title: "SQL injection", fingerprint: "f1" as ContentHash };
+    const b = { ...issue({ id: "b", producedBy: "solo" }), title: "Hardcoded key", fingerprint: "f2" as ContentHash };
+    const out = critique([a, b]);
+    expect(out).toHaveLength(2);
+    expect(out.every((o) => o.corroboratedBy.length === 1)).toBe(true);
+  });
+
+  it("still collapses an identical repeat from the same agent", () => {
+    const out = critique([
+      issue({ id: "a", producedBy: "solo" }),
+      issue({ id: "b", producedBy: "solo" }),
+    ]);
+    expect(out).toHaveLength(1);
   });
 });

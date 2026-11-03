@@ -51,6 +51,18 @@ function makeGuardFactory(exceededFrom = Infinity): (b: Budget) => BudgetGuard {
   };
 }
 
+/** Backoff sleeper that records requested delays instead of waiting. */
+function fastSleep(): { sleep: (ms: number) => Promise<void>; delays: number[] } {
+  const delays: number[] = [];
+  return {
+    delays,
+    sleep: async (ms) => {
+      delays.push(ms);
+    },
+  };
+}
+const NO_JITTER = () => 0;
+
 function stage(
   id: string,
   dependsOn: string[] = [],
@@ -162,7 +174,9 @@ describe("DagWorkflowEngine scheduling", () => {
     const { executor } = recordingExecutor({
       a: [{ kind: "retryable", reason: "transient" }, { kind: "completed" }],
     });
-    const engine = new DagWorkflowEngine(executor, makeGuardFactory());
+    const engine = new DagWorkflowEngine(executor, makeGuardFactory(), undefined, {
+      sleep: fastSleep().sleep,
+    });
     const res = await engine.run(
       def([stage("a", [], { maxRetries: 1 })]),
       BUDGET,
@@ -178,7 +192,9 @@ describe("DagWorkflowEngine scheduling", () => {
     const { executor } = recordingExecutor({
       a: [{ kind: "retryable", reason: "always" }],
     });
-    const engine = new DagWorkflowEngine(executor, makeGuardFactory());
+    const engine = new DagWorkflowEngine(executor, makeGuardFactory(), undefined, {
+      sleep: fastSleep().sleep,
+    });
     const res = await engine.run(
       def([stage("a", [], { maxRetries: 2 })]),
       BUDGET,
@@ -212,5 +228,72 @@ describe("DagWorkflowEngine scheduling", () => {
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.value.status).toBe("degraded");
     expect(order).toEqual([]); // nothing executed
+  });
+});
+
+describe("DagWorkflowEngine backoff and optional stages", () => {
+  it("backs off exponentially (capped) between retry attempts only", async () => {
+    const { executor } = recordingExecutor({
+      a: [{ kind: "retryable", reason: "429" }],
+    });
+    const { sleep, delays } = fastSleep();
+    const engine = new DagWorkflowEngine(executor, makeGuardFactory(), undefined, {
+      sleep,
+      random: NO_JITTER,
+    });
+    await engine.run(def([stage("a", [], { maxRetries: 5 })]), BUDGET);
+    expect(delays).toEqual([1000, 2000, 4000, 8000, 8000]);
+  });
+
+  it("tells the executor which attempt is the last", async () => {
+    const seen: Array<{ attempt: number; maxAttempts: number } | undefined> = [];
+    const executor: StageExecutor = {
+      execute: async (_s, _b, attempt) => {
+        seen.push(attempt);
+        return { ok: true, value: { kind: "retryable", reason: "x" } };
+      },
+    };
+    const engine = new DagWorkflowEngine(executor, makeGuardFactory(), undefined, {
+      sleep: fastSleep().sleep,
+    });
+    await engine.run(def([stage("a", [], { maxRetries: 1 })]), BUDGET);
+    expect(seen).toEqual([
+      { attempt: 1, maxAttempts: 2 },
+      { attempt: 2, maxAttempts: 2 },
+    ]);
+  });
+
+  it("does not block dependents on a failed optional stage; run is degraded", async () => {
+    const { executor, order } = recordingExecutor({
+      a: [{ kind: "failed", reason: "boom" }],
+    });
+    const engine = new DagWorkflowEngine(executor, makeGuardFactory());
+    const res = await engine.run(
+      def([
+        stage("a", [], { optional: true }),
+        stage("b", [], { optional: true }),
+        stage("c", ["a", "b"]),
+      ]),
+      BUDGET,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.value.status).toBe("degraded");
+      const c = res.value.stages.find((s) => s.stageId === ("c" as StageId));
+      expect(c?.status).toBe("completed");
+    }
+    expect(order).toContain("c");
+  });
+
+  it("still fails the run when a required stage fails", async () => {
+    const { executor } = recordingExecutor({
+      a: [{ kind: "failed", reason: "boom" }],
+    });
+    const engine = new DagWorkflowEngine(executor, makeGuardFactory());
+    const res = await engine.run(
+      def([stage("a"), stage("b", ["a"], { optional: true })]),
+      BUDGET,
+    );
+    if (res.ok) expect(res.value.status).toBe("failed");
   });
 });

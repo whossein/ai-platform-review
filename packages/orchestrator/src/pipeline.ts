@@ -24,7 +24,45 @@ import {
   type ReviewResult,
 } from "./orchestrator.js";
 
-const llmCache = new InMemoryCache<any>("llm_response");
+// Shared across reviews, so it must be bounded (LRU + TTL).
+const llmCache = new InMemoryCache<any>("llm_response", {
+  maxEntries: 500,
+  defaultTtlMs: 60 * 60 * 1000,
+});
+
+/**
+ * Cache namespace identifying what actually serves routed LLM calls: each
+ * provider's id and models (id + tier), plus any base URLs from the env
+ * (providers do not expose theirs). API keys are never included.
+ */
+function llmCacheNamespace(
+  providers: readonly LLMProvider[],
+  env: Record<string, string | undefined>,
+): string {
+  const parts = providers.map(
+    (p) =>
+      `${p.id}[${p.models()
+        .map((m) => `${m.id}:${m.tier}`)
+        .join(",")}]`,
+  );
+  const urls: string[] = [];
+  for (const [k, v] of Object.entries(env)) {
+    if (v && /BASE_?URL/i.test(k)) urls.push(`${k}=${v}`);
+  }
+  if (env["AI_PROVIDERS_JSON"]) {
+    try {
+      const data = JSON.parse(env["AI_PROVIDERS_JSON"]);
+      if (Array.isArray(data)) {
+        for (const d of data) {
+          if (d && typeof d.baseUrl === "string") urls.push(d.baseUrl);
+        }
+      }
+    } catch {
+      /* unparsable config yields no providers anyway */
+    }
+  }
+  return [...parts, ...urls.sort()].join("|");
+}
 
 function isAgentRegistry(val: unknown): val is AgentRegistry {
   return (
@@ -101,10 +139,16 @@ export async function runReview(
       executionBudgetMs: 100000,
     },
   };
-  const llm = new CachingLLMClient(
-    new RoutingLLMClient(envProviders, router, routingCtx),
-    llmCache,
-  );
+  const routing = new RoutingLLMClient(envProviders, router, routingCtx);
+  const cacheDisabled = opts.env?.["AI_REVIEW_LLM_CACHE"] === "0";
+  const cachingLlm = cacheDisabled
+    ? undefined
+    : new CachingLLMClient(
+        routing,
+        llmCache,
+        llmCacheNamespace(envProviders, opts.env ?? {}),
+      );
+  const llm = cachingLlm ?? routing;
   const memoryStore = opts.memoryStore ?? new PersistentMemoryStore("./.data/memory");
   const toolRegistry = createDefaultToolRegistry(process.cwd());
   const skillRegistry = createDefaultSkillRegistry();
@@ -137,6 +181,10 @@ export async function runReview(
   const result = await orchestrator.review(opts);
   return {
     ...result,
-    metrics: { ...result.metrics, cacheHits: llm.hits, cacheMisses: llm.misses },
+    metrics: {
+      ...result.metrics,
+      cacheHits: cachingLlm?.hits ?? 0,
+      cacheMisses: cachingLlm?.misses ?? 0,
+    },
   };
 }

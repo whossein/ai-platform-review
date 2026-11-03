@@ -11,6 +11,7 @@ import type { SafeUser, ProjectId, IsoTimestamp } from "@ai-review/core";
 import { fetchChangeRequestMeta, fetchChangeRequestCommitMessages, resolveDiffInput } from "@ai-review/git";
 import { providersFromEnv } from "@ai-review/llm";
 import { estimateAiUsage, type AiJudge } from "../ai-usage.js";
+import { buildEffectiveEnv } from "./client-env.js";
 import { optimizeInstructions } from "../instructions-optimizer.js";
 
 export async function listProjectsHandler(
@@ -551,7 +552,7 @@ export async function estimateMergeRequestAiUsageHandler(
     throw error;
   }
 
-  const merged = { ...process.env, ...env } as Record<string, string | undefined>;
+  const merged = buildEffectiveEnv(process.env, env, { targetUrl: mr.url });
   let diff: string;
   try {
     diff = await resolveDiffInput(mr.url, merged);
@@ -647,7 +648,7 @@ export async function optimizeProjectInstructionsHandler(
     throw error;
   }
 
-  const merged = { ...process.env, ...(body.env ?? {}) } as Record<string, string | undefined>;
+  const merged = buildEffectiveEnv(process.env, body.env);
   const provider = providersFromEnv(merged)[0];
   if (!provider) {
     const error = new Error("No AI provider is connected. Add an API key in Settings first.");

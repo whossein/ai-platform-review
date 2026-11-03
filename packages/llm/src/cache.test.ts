@@ -87,3 +87,69 @@ describe("CachingLLMClient", () => {
     );
   });
 });
+
+describe("CachingLLMClient key isolation and bounds", () => {
+  it("misses when the namespace differs, hits when it matches", async () => {
+    const inner = new CountingClient();
+    const shared = new InMemoryCache<LLMResponse>("llm_response");
+    await new CachingLLMClient(inner, shared, "ns-a").complete(REQUEST);
+    await new CachingLLMClient(inner, shared, "ns-b").complete(REQUEST);
+    expect(inner.calls).toBe(2);
+    await new CachingLLMClient(inner, shared, "ns-a").complete(REQUEST);
+    expect(inner.calls).toBe(2);
+  });
+
+  it("misses when preferredTier differs", async () => {
+    const inner = new CountingClient();
+    const client = new CachingLLMClient(
+      inner,
+      new InMemoryCache<LLMResponse>("llm_response"),
+    );
+    await client.complete({ ...REQUEST, preferredTier: "cheap" });
+    await client.complete({ ...REQUEST, preferredTier: "premium" });
+    expect(inner.calls).toBe(2);
+    await client.complete({ ...REQUEST, preferredTier: "cheap" });
+    expect(inner.calls).toBe(2);
+  });
+
+  it("llmRequestKey varies with namespace and preferredTier", () => {
+    expect(llmRequestKey(REQUEST, "a")).not.toBe(llmRequestKey(REQUEST, "b"));
+    expect(llmRequestKey(REQUEST)).toBe(llmRequestKey(REQUEST, ""));
+    expect(llmRequestKey({ ...REQUEST, preferredTier: "cheap" })).not.toBe(
+      llmRequestKey(REQUEST),
+    );
+  });
+
+  it("evicts LRU entries when the backing cache is bounded", async () => {
+    const inner = new CountingClient();
+    const client = new CachingLLMClient(
+      inner,
+      new InMemoryCache<LLMResponse>("llm_response", { maxEntries: 1 }),
+    );
+    const a: Completable = { messages: [{ role: "user", content: "a" }] };
+    const b: Completable = { messages: [{ role: "user", content: "b" }] };
+    await client.complete(a);
+    await client.complete(b); // evicts a
+    await client.complete(a);
+    expect(inner.calls).toBe(3);
+  });
+
+  it("expires entries after the TTL (injected clock)", async () => {
+    let t = 0;
+    const inner = new CountingClient();
+    const client = new CachingLLMClient(
+      inner,
+      new InMemoryCache<LLMResponse>("llm_response", {
+        now: () => t,
+        defaultTtlMs: 100,
+      }),
+    );
+    await client.complete(REQUEST);
+    t = 50;
+    await client.complete(REQUEST);
+    expect(inner.calls).toBe(1);
+    t = 200;
+    await client.complete(REQUEST);
+    expect(inner.calls).toBe(2);
+  });
+});

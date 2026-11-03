@@ -75,6 +75,49 @@ describe("InMemoryCache", () => {
   });
 });
 
+describe("InMemoryCache bounds", () => {
+  const k = (n: string) => buildCacheKey("llm_response", [n]);
+
+  it("evicts the least-recently-used entry beyond maxEntries", async () => {
+    const cache = new InMemoryCache<number>("llm_response", { maxEntries: 2 });
+    await cache.set(k("a"), 1);
+    await cache.set(k("b"), 2);
+    await cache.get(k("a")); // refresh a; b is now LRU
+    await cache.set(k("c"), 3);
+    const has = async (n: string) => {
+      const r = await cache.has(k(n));
+      return r.ok && r.value;
+    };
+    expect(await has("a")).toBe(true);
+    expect(await has("b")).toBe(false);
+    expect(await has("c")).toBe(true);
+  });
+
+  it("applies defaultTtlMs and lets set() override it", async () => {
+    let t = 0;
+    const cache = new InMemoryCache<number>("llm_response", {
+      now: () => t,
+      defaultTtlMs: 100,
+    });
+    await cache.set(k("a"), 1);
+    await cache.set(k("b"), 2, { ttlMs: 1000 });
+    t = 101;
+    const a = await cache.get(k("a"));
+    const b = await cache.get(k("b"));
+    expect(a.ok && a.value).toBeUndefined();
+    expect(b.ok && b.value?.value).toBe(2);
+  });
+
+  it("still accepts a bare clock as the second argument", async () => {
+    let t = 0;
+    const cache = new InMemoryCache<number>("llm_response", () => t);
+    await cache.set(k("a"), 1, { ttlMs: 5 });
+    t = 6;
+    const r = await cache.get(k("a"));
+    expect(r.ok && r.value).toBeUndefined();
+  });
+});
+
 describe("CacheSet", () => {
   it("provides one cache per tier and aggregates totals", async () => {
     const set = new CacheSet();

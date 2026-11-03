@@ -61,6 +61,46 @@ function addedText(diff: string): string {
 }
 
 /**
+ * Extensions of files that carry no executable logic worth a security /
+ * performance / code review: docs, plain text, media, lockfiles and pure
+ * styling. Anything else (including extension-less files such as `Dockerfile`)
+ * is treated as code, so new languages are covered by default.
+ */
+const NON_CODE_EXTS: ReadonlySet<string> = new Set([
+  ".md", ".mdx", ".txt", ".rst", ".adoc",
+  ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".bmp",
+  ".pdf", ".lock",
+  ".css", ".scss", ".sass", ".less",
+]);
+
+/**
+ * Languages other than Python; when one of these is in the change, a bare
+ * `import x` / `def f(` in the added lines is not evidence of Python.
+ */
+const NON_PYTHON_LANG_EXTS: ReadonlySet<string> = new Set([
+  ".kt", ".java", ".xml", ".swift", ".m", ".h", ".ts", ".tsx", ".js", ".jsx",
+  ".mjs", ".cjs", ".go", ".rs", ".php", ".rb", ".c", ".cc", ".cpp", ".cxx",
+  ".hpp", ".dart", ".scala", ".cs", ".sh", ".bash", ".sql", ".lua", ".ex",
+  ".exs", ".clj", ".groovy", ".vue",
+]);
+
+/** Extension of the final path segment (so `a.b/Dockerfile` has none). */
+function baseExt(path: string): string {
+  const base = path.slice(path.lastIndexOf("/") + 1);
+  const i = base.lastIndexOf(".");
+  return i <= 0 ? "" : base.slice(i).toLowerCase();
+}
+
+/**
+ * A change has code unless every changed file is a known non-code type. With no
+ * parsed files (empty diff / parse failure) we stay conservative and say yes.
+ */
+function hasCode(files: readonly string[]): boolean {
+  if (files.length === 0) return true;
+  return files.some((f) => !NON_CODE_EXTS.has(baseExt(f)));
+}
+
+/**
  * Decides whether a specialist is relevant to this change. Kept intentionally
  * simple and conservative: when unsure, include the specialist (a missed review
  * is worse than a few extra tokens). Heuristics are per-focus.
@@ -74,25 +114,7 @@ function isRelevant(
   },
 ): boolean {
   // If there are no files (e.g., empty diff or parsing failed), we might want to default to running general reviewers just in case.
-  const hasCodeFiles =
-    ctx.exts.size === 0 ||
-    [...ctx.exts].some((ext) =>
-      [
-        ".ts",
-        ".tsx",
-        ".js",
-        ".jsx",
-        ".cs",
-        ".py",
-        ".java",
-        ".kt",
-        ".swift",
-        ".m",
-        ".h",
-        ".vue",
-        ".html",
-      ].includes(ext),
-    );
+  const hasCodeFiles = hasCode(ctx.files);
 
   switch (agentId) {
     case "agent.react-reviewer":
@@ -108,18 +130,7 @@ function isRelevant(
     case "agent.python-reviewer":
       return (
         [".py", ".ipynb"].some((e) => ctx.exts.has(e)) ||
-        (![
-          ".kt",
-          ".java",
-          ".xml",
-          ".swift",
-          ".m",
-          ".h",
-          ".ts",
-          ".tsx",
-          ".js",
-          ".jsx",
-        ].some((e) => ctx.exts.has(e)) &&
+        (![...ctx.exts].some((e) => NON_PYTHON_LANG_EXTS.has(e)) &&
           /\bimport\s+[a-zA-Z_]\w*\b|\bdef\s+[a-zA-Z_]\w*\s*\(/.test(ctx.added))
       );
     case "agent.android-reviewer":

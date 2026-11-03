@@ -12,6 +12,8 @@ export {
   type EstimateResponse,
 } from "./estimate.js";
 
+export { buildEffectiveEnv, stripLlmSecrets } from "./client-env.js";
+
 export {
   reviewHandler,
   type ReviewRequest,

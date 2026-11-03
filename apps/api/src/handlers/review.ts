@@ -13,6 +13,7 @@
 import { runReview } from "@ai-review/orchestrator";
 import { resolveDiffInput, parseDiffToFiles } from "@ai-review/git";
 import { providersFromEnv } from "@ai-review/llm";
+import { buildEffectiveEnv } from "./client-env.js";
 import type {
   AgentRegistry,
   LLMProvider,
@@ -81,7 +82,7 @@ export async function reviewHandler(
     throw new Error('field "diff" is required');
   }
 
-  const mergedEnv: Record<string, string> = { ...(process.env as Record<string, string>), ...env };
+  const mergedEnv = buildEffectiveEnv(process.env, env, { targetUrl: diff });
   const rawDiff = await resolveDiffInput(diff, mergedEnv);
   const parsedFiles = parseDiffToFiles(rawDiff);
 

@@ -5,6 +5,7 @@
  * them as inline comments on the corresponding platform.
  */
 
+import { buildEffectiveEnv } from "./client-env.js";
 import { publishReview } from "@ai-review/git";
 
 export interface PublishRequest {
@@ -35,7 +36,7 @@ export async function publishHandler(
     throw new Error('field "issues" is required');
   }
 
-  const mergedEnv = { ...process.env, ...env };
+  const mergedEnv = buildEffectiveEnv(process.env, env, { targetUrl: diff });
   const result = await publishReview({
     diffUrl: diff,
     issues,

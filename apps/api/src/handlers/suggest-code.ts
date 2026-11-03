@@ -15,6 +15,7 @@ import {
   baseUrlFromChangeRequestUrl,
   parseChangeRequestUrl,
 } from "@ai-review/git";
+import { buildEffectiveEnv } from "./client-env.js";
 import { providersFromEnv } from "@ai-review/llm";
 
 const CONTEXT_RADIUS = 15;
@@ -114,7 +115,7 @@ async function resolveGitLab(
   if (ref.provider !== "gitlab") {
     throw new Error(`Provider ${ref.provider} is not currently supported for this action`);
   }
-  const merged = { ...process.env, ...env } as Record<string, string | undefined>;
+  const merged = buildEffectiveEnv(process.env, env, { targetUrl: mrUrl });
   const token = merged["GITLAB_TOKEN"] || merged["GIT_TOKEN"];
   if (!token) throw new Error("GITLAB_TOKEN is not configured in settings or environment");
   const baseUrl = (
@@ -238,7 +239,7 @@ export async function codeContextHandler(
   const needFallback = list.some((i) => !contents.has(i.file));
   if (needFallback) {
     try {
-      reviewDiff = await resolveDiffInput(diff, { ...process.env, ...env } as Record<string, string>);
+      reviewDiff = await resolveDiffInput(diff, buildEffectiveEnv(process.env, env, { targetUrl: diff }));
     } catch {
       // no fallback available
     }
@@ -296,7 +297,7 @@ export async function suggestCodeHandler(
     .map((l, i) => `${start + i}| ${l}`)
     .join("\n");
 
-  const merged = { ...process.env, ...env } as Record<string, string | undefined>;
+  const merged = buildEffectiveEnv(process.env, env, { targetUrl: diff });
   const provider = providersFromEnv(merged)[0];
   const language = merged["AI_REVIEW_COMMENT_LANGUAGE"] === "fa" ? "Persian (Farsi)" : "English";
   const flagged = issue.location.line ?? start;

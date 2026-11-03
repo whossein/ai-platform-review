@@ -119,3 +119,14 @@ describe("specialist response parsing", () => {
     ]);
   });
 });
+
+describe("specialist model tier", () => {
+  const slice = { handle: "ctx.1", version: 1, files: [], rendered: "x", estimatedTokens: 1, compressed: false } as unknown as ContextSlice;
+
+  it("forwards the specialist's preferredTier to the LLM request", async () => {
+    const req = await runWith(slice, "agent.security-reviewer");
+    expect(req.preferredTier).toBe("premium");
+    const cheap = SPECIALISTS.find((s) => s.preferredTier === "cheap")!;
+    expect((await runWith(slice, cheap.id)).preferredTier).toBe("cheap");
+  });
+});

@@ -507,6 +507,8 @@ export function makeSpecialistHandler(
           },
         ],
         temperature: 0,
+        // Let the router honor the specialist's tier (e.g. premium for security).
+        ...(spec.preferredTier ? { preferredTier: spec.preferredTier } : {}),
         // Requesting a schema flips real providers into structured-output mode
         // (ADR-0008). The mock ignores it; both return parseable JSON.
         jsonSchema: SPECIALIST_RESPONSE_SCHEMA,

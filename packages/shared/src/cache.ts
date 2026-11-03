@@ -18,16 +18,35 @@ import type {
 import { sha256, stableStringify } from "./hash.js";
 import { ok } from "./result.js";
 
+export interface InMemoryCacheOptions {
+  /** Injectable clock (ms). Defaults to `Date.now`. */
+  readonly now?: () => number;
+  /** Max entries; the least-recently-used entry is evicted beyond this. */
+  readonly maxEntries?: number;
+  /** TTL applied to `set` calls that do not pass their own `ttlMs`. */
+  readonly defaultTtlMs?: number;
+}
+
 export class InMemoryCache<V> implements Cache<V> {
   readonly tier: CacheTier;
   private readonly store = new Map<string, CacheEntry<V>>();
   private hits = 0;
   private misses = 0;
   private readonly now: () => number;
+  private readonly maxEntries: number | undefined;
+  private readonly defaultTtlMs: number | undefined;
 
-  constructor(tier: CacheTier, now: () => number = Date.now) {
+  /** The second argument may be a bare clock (legacy) or an options object. */
+  constructor(
+    tier: CacheTier,
+    nowOrOpts: (() => number) | InMemoryCacheOptions = Date.now,
+  ) {
     this.tier = tier;
-    this.now = now;
+    const o: InMemoryCacheOptions =
+      typeof nowOrOpts === "function" ? { now: nowOrOpts } : nowOrOpts;
+    this.now = o.now ?? Date.now;
+    this.maxEntries = o.maxEntries;
+    this.defaultTtlMs = o.defaultTtlMs;
   }
 
   private isExpired(entry: CacheEntry<V>): boolean {
@@ -44,18 +63,30 @@ export class InMemoryCache<V> implements Cache<V> {
       return ok(undefined);
     }
     this.hits++;
+    // Refresh recency (Map preserves insertion order; first key = LRU).
+    this.store.delete(key);
+    this.store.set(key, entry);
     return ok(entry);
   }
 
   async set(key: CacheKey, value: V, opts?: { readonly ttlMs?: number }) {
+    const ttlMs = opts?.ttlMs ?? this.defaultTtlMs;
     const entry: CacheEntry<V> = {
       key,
       value,
       hash: sha256(stableStringify(value)),
       storedAt: this.now(),
-      ...(opts?.ttlMs !== undefined ? { ttlMs: opts.ttlMs } : {}),
+      ...(ttlMs !== undefined ? { ttlMs } : {}),
     };
+    this.store.delete(key);
     this.store.set(key, entry);
+    if (this.maxEntries !== undefined) {
+      while (this.store.size > Math.max(1, this.maxEntries)) {
+        const oldest = this.store.keys().next().value;
+        if (oldest === undefined) break;
+        this.store.delete(oldest);
+      }
+    }
     return ok(undefined);
   }
 

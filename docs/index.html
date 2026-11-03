@@ -1178,6 +1178,7 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">What's New</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2">
+          <li><span class="font-mono text-cyan-400">v0.3.2</span> — Security: the server's own AI and Git keys are never sent to an endpoint or host chosen in the request, and requests can only lower budgets. Reviews are more robust: one failing specialist no longer drops the report (its error is listed), retries back off, duplicate findings merge across category names, Go/Rust/PHP/Ruby/C++ changes get the general reviewers, the security reviewer uses the premium model, the chosen comment language is applied, and the AI response cache is per model (<code>AI_REVIEW_LLM_CACHE=0</code> to disable).</li>
           <li><span class="font-mono text-cyan-400">v0.3.1</span> — New no-AI rule <code>security.prompt-injection</code> flags lines that try to instruct AI reviewers (critical); prompt-cache warm-up runs one specialist first so the others reuse the provider cache (<code>AI_REVIEW_CACHE_WARMUP=0</code> to disable).</li>
           <li><span class="font-mono text-cyan-400">v0.3.0</span> — Hardened AI review prompts: MR content (including changed AGENTS.md / CONTRIBUTING.md) can no longer steer reviewers and injection attempts are reported as critical; line-numbered diffs with findings anchored to changed lines; shared prompt prefix for provider prompt caching; strict JSON schema output with automatic fallback.</li>
           <li><span class="font-mono text-cyan-400">v0.2.43</span> — Review &amp; Publish summary panel: MR title/link/author/branches, per-severity counts (selected/total), files, categories, average confidence and Select all / none. The redundant "Pre-Review Findings" box was removed.</li>
@@ -1221,6 +1222,7 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">تازه‌ها</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2 font-sans">
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۳.۲</span> — امنیت: کلیدهای AI و Git خود سرور هرگز به endpoint یا هاستی که در درخواست انتخاب شده ارسال نمی‌شوند و درخواست فقط می‌تواند بودجه را کمتر کند. ریویو پایدارتر شد: خطای یک specialist دیگر گزارش را از بین نمی‌برد (خطایش نمایش داده می‌شود)، تلاش مجدد با فاصله افزایشی است، یافته‌های تکراری با نام دسته متفاوت ادغام می‌شوند، تغییرات Go/Rust/PHP/Ruby/C++ ریویوکننده‌های عمومی را می‌گیرند، ریویوکننده امنیت از مدل premium استفاده می‌کند، زبان انتخابی کامنت‌ها اعمال می‌شود و کش پاسخ AI برای هر مدل جداست (با <code>AI_REVIEW_LLM_CACHE=0</code> خاموش می‌شود).</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۳.۱</span> — قانون جدید بدون AI به نام <code>security.prompt-injection</code> خطوطی را که بخواهند به ریویوکننده AI دستور بدهند علامت می‌زند (critical)؛ گرم‌کردن کش پرامپت: یک specialist اول اجرا می‌شود تا بقیه از کش سرویس‌دهنده استفاده کنند (با <code>AI_REVIEW_CACHE_WARMUP=0</code> خاموش می‌شود).</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۳.۰</span> — سخت‌سازی پرامپت ریویو AI: محتوای MR (از جمله AGENTS.md / CONTRIBUTING.md تغییرکرده) دیگر نمی‌تواند ریویوکننده‌ها را هدایت کند و تلاش برای prompt injection به‌عنوان یافته critical گزارش می‌شود؛ diff با شماره خط و انتقال یافته‌ها به خطوط تغییرکرده؛ ابتدای پرامپت مشترک برای کش پرامپت سرویس‌دهنده؛ خروجی با schema دقیق JSON و بازگشت خودکار.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۲.۴۳</span> — پنل خلاصه Review &amp; Publish: عنوان/لینک/نویسنده/شاخه‌های MR، تعداد هر شدت (انتخاب‌شده/کل)، فایل‌ها، دسته‌ها، میانگین اطمینان و Select all / none. باکس تکراری «Pre-Review Findings» حذف شد.</li>
@@ -1285,7 +1287,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.3.1</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.3.2</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

@@ -5,6 +5,8 @@
  * the list of available models.
  */
 
+import { isTrustedEndpoint, stripLlmSecrets } from "./client-env.js";
+
 export interface ModelsRequest {
   readonly provider: string;
   readonly apiKey?: string;
@@ -32,11 +34,12 @@ export async function modelsHandler(
   const preset = resolveProviderPreset(provider) ?? resolveProviderPreset("openai")!;
 
   const effectiveBaseUrl = baseUrl || preset.defaultBaseUrl;
+  // A client-chosen endpoint must never receive the server's own LLM keys.
   const effectiveApiKey = resolveApiKey(
     provider,
     preset.envPrefix,
     apiKey,
-    process.env,
+    isTrustedEndpoint(provider, baseUrl, process.env) ? process.env : stripLlmSecrets(process.env),
   );
 
   if (!effectiveBaseUrl) {

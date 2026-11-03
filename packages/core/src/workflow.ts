@@ -37,6 +37,12 @@ export interface WorkflowStage {
   readonly budget?: Partial<Budget>;
   /** Max retries for transient failures before the stage is failed. */
   readonly maxRetries?: number;
+  /**
+   * Optional stages never block their dependents: if one fails or is skipped,
+   * dependents treat it as satisfied and still run. The run then ends
+   * `degraded` (not `failed`) when only optional stages failed.
+   */
+  readonly optional?: boolean;
 }
 
 /** A declarative workflow definition — data, not code. */

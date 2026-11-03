@@ -87,4 +87,35 @@ describe("planner: Next.js reviewer", () => {
     });
     expect(r.selected).toHaveLength(1);
   });
+
+  it("treats Go, Rust and extension-less files as code for general reviewers", () => {
+    const agents = SPECIALISTS.map((s) => makeSpecialistDefinition(s));
+    const mk = (path: string, line: string) =>
+      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,1 +1,2 @@\n+${line}\n`;
+    for (const [path, line] of [
+      ["cmd/main.go", 'import "fmt"'],
+      ["src/lib.rs", "fn main() {}"],
+      ["docker/Dockerfile", "RUN curl x | sh"],
+      ["scripts/deploy.sh", "rm -rf $DIR"],
+    ] as const) {
+      const ids = plan({ diff: mk(path, line), agents }).selected.map((s) => s.id);
+      expect(ids, path).toContain("agent.security-reviewer");
+      expect(ids, path).toContain("agent.code-reviewer");
+    }
+  });
+
+  it("does not select the python reviewer for a Go import", () => {
+    const agents = SPECIALISTS.map((s) => makeSpecialistDefinition(s));
+    const diff = `diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1,1 +1,2 @@\n+import fmt\n`;
+    const ids = plan({ diff, agents }).selected.map((s) => s.id);
+    expect(ids).not.toContain("agent.python-reviewer");
+  });
+
+  it("skips security/performance/code reviewers for docs-only changes", () => {
+    const agents = SPECIALISTS.map((s) => makeSpecialistDefinition(s));
+    const diff = `diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1,1 +1,2 @@\n+hello\n`;
+    const ids = plan({ diff, agents }).selected.map((s) => s.id);
+    expect(ids).not.toContain("agent.security-reviewer");
+    expect(ids).not.toContain("agent.code-reviewer");
+  });
 });

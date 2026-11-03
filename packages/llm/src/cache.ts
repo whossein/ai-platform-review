@@ -28,8 +28,13 @@ import { hashObject } from "@ai-review/shared";
 type Completable = Omit<LLMRequest, "model"> & { model?: ModelId };
 
 /** Build a stable key from the parts of a request that change the output. */
-export function llmRequestKey(request: Completable): CacheKey {
+export function llmRequestKey(
+  request: Completable,
+  namespace = "",
+): CacheKey {
   const canonical = {
+    namespace,
+    preferredTier: request.preferredTier ?? null,
     model: request.model ?? "(routed)",
     messages: request.messages.map((m) => ({
       role: m.role,
@@ -49,6 +54,12 @@ export class CachingLLMClient implements LLMClient {
   constructor(
     private readonly inner: LLMClient,
     private readonly cache: Cache<LLMResponse>,
+    /**
+     * Identifies the serving configuration (providers, models, base URLs).
+     * Requests only share cache entries within the same namespace, so
+     * switching provider/model never replays another model's answer.
+     */
+    private readonly namespace: string = "",
   ) {}
 
   get hits(): number {
@@ -59,7 +70,7 @@ export class CachingLLMClient implements LLMClient {
   }
 
   async complete(request: Completable): AsyncResult<LLMResponse> {
-    const key = llmRequestKey(request);
+    const key = llmRequestKey(request, this.namespace);
 
     const cached = await this.cache.get(key);
     if (cached.ok && cached.value) {

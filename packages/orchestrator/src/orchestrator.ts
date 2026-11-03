@@ -38,7 +38,6 @@ import {
   ReviewStageExecutor,
   type ReviewExecutionContext,
   type ModelPricing,
-  adjudicate,
 } from "./executor.js";
 
 export interface ReviewResult {
@@ -276,6 +275,8 @@ export class ReviewOrchestrator {
         dependsOn: [rulesStageId],
         parallelGroup: "specialists",
         maxRetries,
+        // One flaky specialist must not take down critique/judge/reporting.
+        optional: true,
       });
     }
 
@@ -317,10 +318,9 @@ export class ReviewOrchestrator {
     );
     await engine.run(workflowDefinition, budget);
 
-    // If reporting stage did not populate reports (e.g. total failure), ensure fallback reports
-    if (!reviewCtx.adjudicatedIssues.length && reviewCtx.allIssues.length) {
-      reviewCtx.adjudicatedIssues = adjudicate(reviewCtx.allIssues, threshold);
-    }
+    // If reporting did not run (e.g. an upstream stage failed or the budget
+    // ran out), still consolidate, adjudicate and render from collected issues.
+    await executor.finalize();
 
     const accepted = reviewCtx.adjudicatedIssues.filter((i) => i.accepted);
 

@@ -86,7 +86,9 @@ async function runReview(
     runtime,
     pricing,
     createWorkflowEngine: (executor, makeBudgetGuard) =>
-      new DagWorkflowEngine(executor, makeBudgetGuard as any),
+      new DagWorkflowEngine(executor, makeBudgetGuard as any, undefined, {
+        sleep: async () => {},
+      }),
   };
   const orchestrator = new ReviewOrchestrator(ctx);
   return orchestrator.review(opts);
@@ -240,6 +242,38 @@ describe("runReview (end-to-end)", () => {
     expect(callCount).toBeGreaterThan(1);
     expect(result.accepted).toBeGreaterThan(0);
     expect(result.errors.length).toBe(0);
+  });
+
+  it("still renders a report and records the error when a specialist always fails transiently", async () => {
+    let callCount = 0;
+    const alwaysRateLimited: LLMClient = {
+      complete: async () => {
+        callCount++;
+        return {
+          ok: false,
+          error: {
+            category: "provider",
+            code: "llm.rate_limited",
+            message: "Rate limit exceeded (429)",
+            retryable: true,
+          },
+        };
+      },
+    };
+
+    const result = await runReview({
+      diff: DIFF,
+      llm: alwaysRateLimited,
+      selectedSpecialists: ["Security Reviewer"],
+      maxRetries: 2,
+    });
+
+    expect(callCount).toBe(3); // initial + 2 retries
+    expect(result.markdown).not.toContain("(no report generated)");
+    expect(result.markdown.length).toBeGreaterThan(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]!.message).toContain("429");
+    expect(result.metrics.agents).toHaveLength(1);
   });
 
   it("fails fast without retry on non-transient validation/auth errors", async () => {

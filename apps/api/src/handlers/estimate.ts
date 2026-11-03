@@ -21,6 +21,7 @@ import {
 } from "@ai-review/orchestrator";
 import { resolveDiffInput, parseDiffToFiles } from "@ai-review/git";
 import type { AgentRegistry } from "@ai-review/core";
+import { buildEffectiveEnv } from "./client-env.js";
 
 export interface EstimateRequest {
   readonly diff: string;
@@ -50,7 +51,7 @@ export async function estimateHandler(
     throw new Error('field "diff" is required');
   }
 
-  const mergedEnv = { ...process.env, ...env };
+  const mergedEnv = buildEffectiveEnv(process.env, env, { targetUrl: diff });
   const rawDiff = await resolveDiffInput(diff, mergedEnv);
   const files = parseDiffToFiles(rawDiff);
 

@@ -11,6 +11,7 @@ import { MapAgentRegistry } from "@ai-review/agent-runtime";
 import { PersistentMemoryStore } from "@ai-review/memory";
 import type { GitCredentialProvider, ProjectId } from "@ai-review/core";
 import {
+  buildEffectiveEnv,
   estimateHandler,
   reviewHandler,
   publishHandler,
@@ -106,6 +107,20 @@ async function startServer() {
       handler: makeSpecialistHandler(spec, process.env as Record<string, string>),
     });
   }
+
+  // Language (and other prompt-affecting env) is chosen per request, so review
+  // requests get their own registry built from the effective env. The shared one
+  // above only serves definition-only consumers (e.g. estimate).
+  const buildRequestRegistry = (env: Record<string, string>): MapAgentRegistry => {
+    const registry = new MapAgentRegistry();
+    for (const spec of SPECIALISTS) {
+      registry.register({
+        definition: makeSpecialistDefinition(spec, env),
+        handler: makeSpecialistHandler(spec, env),
+      });
+    }
+    return registry;
+  };
 
   // Persistent storage injection at composition root
   const memoryStore = new PersistentMemoryStore("./.data/memory");
@@ -856,7 +871,7 @@ async function startServer() {
           projectName,
           ...(projectContextProvider ? { projectContextProvider } : {}),
         },
-        agentRegistry,
+        buildRequestRegistry(buildEffectiveEnv(process.env, reviewEnv)),
         undefined,
         memoryStore
       );

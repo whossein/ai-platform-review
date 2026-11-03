@@ -5,6 +5,8 @@
  * completion response. Used for validating API keys and endpoint health.
  */
 
+import { isTrustedEndpoint, stripLlmSecrets } from "./client-env.js";
+
 export interface TestProviderRequest {
   readonly provider: string;
   readonly apiKey?: string;
@@ -55,11 +57,13 @@ export async function testProviderHandler(
 
   const effectiveBaseUrl = baseUrl || preset.defaultBaseUrl;
   const effectiveModel = model || preset.defaultModel;
+  // A client-chosen endpoint must never receive the server's own LLM keys.
+  const customEndpoint = !isTrustedEndpoint(provider, baseUrl, process.env);
   const effectiveApiKey = resolveApiKey(
     provider,
     preset.envPrefix,
     apiKey,
-    process.env,
+    customEndpoint ? stripLlmSecrets(process.env) : process.env,
   );
 
   if (!effectiveBaseUrl) {

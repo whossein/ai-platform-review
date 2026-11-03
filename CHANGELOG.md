@@ -15,6 +15,28 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.3.2] - 2026-11-03
+
+### Security
+- **EN:** The server's own AI provider keys are no longer sent to an endpoint chosen in the request: if a review, estimate, model list or provider test points at a custom base URL (not the provider's official one or the server's configured one), only keys supplied with the request are used. Requests can also only lower the token/dollar/time budgets, never raise them.
+- **FA:** کلیدهای AI خود سرور دیگر به endpointی که در درخواست انتخاب شده ارسال نمی‌شوند: اگر ریویو، تخمین، لیست مدل‌ها یا تست provider به base URL دلخواه اشاره کند (نه آدرس رسمی provider و نه آدرس تنظیم‌شده روی سرور)، فقط کلیدهایی که همراه درخواست آمده‌اند استفاده می‌شوند. درخواست همچنین فقط می‌تواند بودجه توکن/دلار/زمان را کم کند، نه زیاد.
+- **EN:** The server's own `GITLAB_TOKEN` / `GITHUB_TOKEN` / `GIT_TOKEN` are only sent to gitlab.com (or the server's `GITLAB_BASE_URL`) and github.com. Self-hosted GitLab setups that rely on a server-level token must set `GITLAB_BASE_URL` on the server; per-user tokens saved in the app are unaffected.
+- **FA:** توکن‌های `GITLAB_TOKEN` / `GITHUB_TOKEN` / `GIT_TOKEN` خود سرور فقط به gitlab.com (یا `GITLAB_BASE_URL` سرور) و github.com ارسال می‌شوند. GitLabهای self-hosted که به توکن سطح سرور متکی‌اند باید `GITLAB_BASE_URL` را روی سرور تنظیم کنند؛ توکن‌های شخصی ذخیره‌شده در برنامه تغییری نمی‌کنند.
+
+### Fixed
+- **EN:** A specialist that keeps failing (e.g. HTTP 429 after all retries) no longer wipes the review: the report is still rendered from the other reviewers and the failure is listed in the errors. Retries now wait 1s, 2s, 4s… (capped at 8s) instead of firing back-to-back.
+- **FA:** specialistی که مدام خطا می‌دهد (مثلاً HTTP 429 بعد از همه تلاش‌ها) دیگر کل ریویو را از بین نمی‌برد: گزارش از بقیه ریویوکننده‌ها ساخته می‌شود و خطا در لیست خطاها نمایش داده می‌شود. تلاش‌های مجدد حالا با فاصله ۱، ۲، ۴ ثانیه… (حداکثر ۸ ثانیه) انجام می‌شوند نه پشت سر هم.
+- **EN:** The comment language chosen in the UI is now applied to the review (it was fixed at server start).
+- **FA:** زبان کامنت انتخاب‌شده در رابط کاربری حالا روی ریویو اعمال می‌شود (قبلاً هنگام شروع سرور ثابت می‌شد).
+- **EN:** Changes in Go, Rust, PHP, Ruby, C/C++, Dart, Scala, SQL, shell, Dockerfiles and other languages now get the Security, Performance and Code reviewers; only docs/images/lockfiles/stylesheet-only changes skip them.
+- **FA:** تغییرات Go، Rust، PHP، Ruby، C/C++، Dart، Scala، SQL، shell، Dockerfile و زبان‌های دیگر حالا ریویوکننده‌های Security، Performance و Code را می‌گیرند؛ فقط تغییراتی که صرفاً مستندات/تصویر/lockfile/استایل هستند آن‌ها را رد می‌کنند.
+- **EN:** Duplicate findings from different reviewers on the same line now merge even when they name the category differently (e.g. "security" vs "vulnerability"), and two different findings from the same reviewer on one line are no longer merged into one.
+- **FA:** یافته‌های تکراری ریویوکننده‌های مختلف روی یک خط حالا حتی با نام دسته متفاوت (مثلاً «security» و «vulnerability») ادغام می‌شوند و دو یافته متفاوت از یک ریویوکننده روی یک خط دیگر یکی نمی‌شوند.
+- **EN:** Each specialist now requests its model tier, so the Security reviewer uses a premium-tier model when one is configured.
+- **FA:** هر specialist حالا سطح مدل خودش را درخواست می‌کند، پس ریویوکننده امنیت در صورت تنظیم بودن، از مدل سطح premium استفاده می‌کند.
+- **EN:** Re-reviewing after switching provider, model or base URL no longer returns the previous model's cached answer. The AI response cache is bounded (500 entries, 1-hour TTL); set `AI_REVIEW_LLM_CACHE=0` to disable it.
+- **FA:** ریویوی مجدد بعد از تغییر provider، مدل یا base URL دیگر پاسخ کش‌شده مدل قبلی را برنمی‌گرداند. کش پاسخ AI محدود شده است (۵۰۰ مورد، اعتبار ۱ ساعت)؛ با `AI_REVIEW_LLM_CACHE=0` خاموش می‌شود.
+
 ## [0.3.1] - 2026-11-03
 
 ### Security
