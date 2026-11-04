@@ -1178,6 +1178,7 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">What's New</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2">
+          <li><span class="font-mono text-cyan-400">v0.5.0</span> — Several AI providers now work predictably: Active Default decides routing (a cheaper or free provider no longer takes over), a failing provider fails over to the next enabled one during reviews, the cost estimate follows the real per-agent model, Settings warns about missing tiers and duplicate models, and the active provider's key is no longer sent to other endpoints.</li>
           <li><span class="font-mono text-cyan-400">v0.4.0</span> — AI Providers: the model field is now a searchable picker (Fetch List) showing context size and, when the provider reports it (OpenRouter, Together), per-model price; picking a model fills Input / Output cost automatically.</li>
           <li><span class="font-mono text-cyan-400">v0.3.2</span> — Security: the server's own AI and Git keys are never sent to an endpoint or host chosen in the request, and requests can only lower budgets. Reviews are more robust: one failing specialist no longer drops the report (its error is listed), retries back off, duplicate findings merge across category names, Go/Rust/PHP/Ruby/C++ changes get the general reviewers, the security reviewer uses the premium model, the chosen comment language is applied, and the AI response cache is per model (<code>AI_REVIEW_LLM_CACHE=0</code> to disable).</li>
           <li><span class="font-mono text-cyan-400">v0.3.1</span> — New no-AI rule <code>security.prompt-injection</code> flags lines that try to instruct AI reviewers (critical); prompt-cache warm-up runs one specialist first so the others reuse the provider cache (<code>AI_REVIEW_CACHE_WARMUP=0</code> to disable).</li>
@@ -1223,6 +1224,7 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">تازه‌ها</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2 font-sans">
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۵.۰</span> — چند AI Provider حالا رفتار قابل‌پیش‌بینی دارد: Active Default مسیر را تعیین می‌کند (provider ارزان‌تر یا رایگان دیگر جای آن را نمی‌گیرد)، هنگام خطای یک provider در ریویو، درخواست به provider فعال بعدی می‌رود، تخمین هزینه از مدل واقعی هر agent پیروی می‌کند، تنظیمات درباره tierهای ناموجود و مدل‌های تکراری هشدار می‌دهد و کلید provider فعال دیگر به endpointهای دیگر فرستاده نمی‌شود.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۴.۰</span> — AI Providers: فیلد مدل حالا یک انتخابگر جستجوپذیر است (Fetch List) که اندازه context و، اگر provider قیمت را اعلام کند (OpenRouter، Together)، قیمت هر مدل را نشان می‌دهد؛ با انتخاب مدل، Input / Output cost خودکار پر می‌شود.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۳.۲</span> — امنیت: کلیدهای AI و Git خود سرور هرگز به endpoint یا هاستی که در درخواست انتخاب شده ارسال نمی‌شوند و درخواست فقط می‌تواند بودجه را کمتر کند. ریویو پایدارتر شد: خطای یک specialist دیگر گزارش را از بین نمی‌برد (خطایش نمایش داده می‌شود)، تلاش مجدد با فاصله افزایشی است، یافته‌های تکراری با نام دسته متفاوت ادغام می‌شوند، تغییرات Go/Rust/PHP/Ruby/C++ ریویوکننده‌های عمومی را می‌گیرند، ریویوکننده امنیت از مدل premium استفاده می‌کند، زبان انتخابی کامنت‌ها اعمال می‌شود و کش پاسخ AI برای هر مدل جداست (با <code>AI_REVIEW_LLM_CACHE=0</code> خاموش می‌شود).</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۳.۱</span> — قانون جدید بدون AI به نام <code>security.prompt-injection</code> خطوطی را که بخواهند به ریویوکننده AI دستور بدهند علامت می‌زند (critical)؛ گرم‌کردن کش پرامپت: یک specialist اول اجرا می‌شود تا بقیه از کش سرویس‌دهنده استفاده کنند (با <code>AI_REVIEW_CACHE_WARMUP=0</code> خاموش می‌شود).</li>
@@ -1289,7 +1291,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.4.0</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.5.0</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

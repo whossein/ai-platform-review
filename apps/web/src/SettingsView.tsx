@@ -22,6 +22,7 @@ import {
   X,
   Power,
 } from "lucide-react";
+import { routingNotices } from "./provider-routing.js";
 import { ModelPicker } from "./ModelPicker.js";
 import type { ModelInfo, ModelListState } from "./ModelPicker.js";
 import { useAppConfig, defaultGitBaseUrl } from "./Settings.js";
@@ -689,6 +690,49 @@ export function SettingsView() {
           </div>
         </div>
 
+        {/* Routing outcome when several providers are enabled */}
+        {(() => {
+          const modelOf = (p: AIProviderConfig) =>
+            p.model ||
+            (PRESET_DEFAULTS[p.provider] || PRESET_DEFAULTS.custom)
+              .defaultModel;
+          const notices = routingNotices(
+            local.AI_PROVIDERS || [],
+            local.AI_REVIEW_LLM_PROVIDER,
+            (p) =>
+              `${(PRESET_DEFAULTS[p.provider] || PRESET_DEFAULTS.custom).label || p.provider} / ${modelOf(p)}`,
+            modelOf,
+          );
+          if (notices.length === 0) return null;
+          return (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.35rem",
+                marginBottom: "1rem",
+                padding: "0.6rem 0.8rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--bg)",
+                fontSize: "0.8rem",
+              }}
+            >
+              {notices.map((n, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: n.kind === "warning" ? "var(--medium)" : "var(--muted)",
+                  }}
+                >
+                  {n.kind === "warning" ? "Warning: " : ""}
+                  {n.text}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* List of Configured Providers */}
         <div
           style={{
@@ -1126,6 +1170,7 @@ export function SettingsView() {
                     )}
                     {isDefault && (
                       <span
+                        title="Used when no enabled provider matches an agent's tier, and wins within its own tier."
                         style={{
                           fontSize: "0.75rem",
                           background: "var(--accent)",
@@ -1179,7 +1224,7 @@ export function SettingsView() {
                     {!isDefault && !isDisabled && (
                       <button
                         onClick={() => handleSetDefaultProvider(p.id)}
-                        title="Set as Active Default Provider"
+                        title="Set as Active Default Provider (used when no provider matches an agent's tier; wins within its own tier)"
                         style={{
                           padding: "0.4rem",
                           background: "transparent",

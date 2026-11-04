@@ -18,12 +18,26 @@ import type {
   ModelId,
   ModelRouter,
   PlatformError,
+  ProviderId,
+  Result,
   RoutingContext,
 } from "@ai-review/core";
 
-/** Selects the cheapest capable model across all registered providers. */
+export interface RouterOptions {
+  /**
+   * The provider the user chose as default. It wins inside its own tier and
+   * serves every call no model of the wanted tier can take. Without one, the
+   * router falls back to the cheapest capable model.
+   */
+  readonly defaultProvider?: ProviderId | undefined;
+}
+
+/** Selects a capable model: by tier first, then the default provider, then cost. */
 export class CheapestFirstRouter implements ModelRouter {
-  constructor(private readonly providers: readonly LLMProvider[]) {}
+  constructor(
+    private readonly providers: readonly LLMProvider[],
+    private readonly options: RouterOptions = {},
+  ) {}
 
   private allModels(): ModelDescriptor[] {
     return this.providers.flatMap((p) => [...p.models()]);
@@ -47,7 +61,14 @@ export class CheapestFirstRouter implements ModelRouter {
     const preferred = capable.find((m) => m.id === ctx.preferredModel);
     if (preferred) return { ok: true, value: preferred };
 
+    const fromDefault = capable.find(
+      (m) => m.provider === this.options.defaultProvider,
+    );
+
     if (ctx.preferredTier) {
+      if (fromDefault?.tier === ctx.preferredTier) {
+        return { ok: true, value: fromDefault };
+      }
       const ofTier = capable.filter((m) => m.tier === ctx.preferredTier);
       if (ofTier.length > 0) {
         const cheapestOfTier = [...ofTier].sort(
@@ -60,6 +81,9 @@ export class CheapestFirstRouter implements ModelRouter {
       }
     }
 
+    // A free local model must not silently take over from the user's choice.
+    if (fromDefault) return { ok: true, value: fromDefault };
+
     // Otherwise cheapest by combined per-1M cost (local/mock = 0 wins).
     const cheapest = [...capable].sort(
       (a, b) =>
@@ -71,22 +95,50 @@ export class CheapestFirstRouter implements ModelRouter {
   }
 }
 
-export class RoutingLLMClient implements LLMClient {
-  private readonly byModel = new Map<ModelId, LLMProvider>();
+/**
+ * Whether another provider could serve a request this one failed. A 400/422
+ * means the request itself was rejected, so resending it only burns time.
+ */
+function canFailOver(error: PlatformError): boolean {
+  if (error.category !== "provider") return false;
+  const status = error.details?.["status"];
+  return status !== 400 && status !== 422;
+}
 
+export class RoutingLLMClient implements LLMClient {
   constructor(
-    providers: readonly LLMProvider[],
+    private readonly providers: readonly LLMProvider[],
     private readonly router: ModelRouter,
     private readonly defaultContext: Omit<RoutingContext, "preferredModel">,
-  ) {
-    for (const p of providers) {
-      for (const m of p.models()) this.byModel.set(m.id, p);
-    }
+  ) {}
+
+  /**
+   * Providers to try for `modelId`, best first: those serving the same model,
+   * then the same tier, then the rest. Provider order breaks ties, so the
+   * default provider leads. An explicitly requested model never changes.
+   */
+  private attemptsFor(
+    modelId: ModelId,
+    pinned: boolean,
+  ): Array<{ provider: LLMProvider; model: ModelId }> {
+    const all = this.providers.flatMap((provider) =>
+      provider.models().map((m) => ({ provider, descriptor: m })),
+    );
+    const tier = all.find((a) => a.descriptor.id === modelId)?.descriptor.tier;
+    const rank = (d: ModelDescriptor) =>
+      d.id === modelId ? 0 : d.tier === tier ? 1 : 2;
+    const required = this.defaultContext.requiredCapabilities;
+    return all
+      .filter((a) => required.every((c) => a.descriptor.capabilities.includes(c)))
+      .filter((a) => !pinned || a.descriptor.id === modelId)
+      .sort((a, b) => rank(a.descriptor) - rank(b.descriptor))
+      .map((a) => ({ provider: a.provider, model: a.descriptor.id }));
   }
 
   async complete(
     request: Omit<LLMRequest, "model"> & { model?: ModelId },
   ): AsyncResult<LLMResponse> {
+    const pinned = Boolean(request.model);
     let modelId = request.model;
     if (!modelId) {
       const selected = await this.router.select({
@@ -100,8 +152,8 @@ export class RoutingLLMClient implements LLMClient {
       modelId = selected.value.id;
     }
 
-    const provider = this.byModel.get(modelId);
-    if (!provider) {
+    const attempts = this.attemptsFor(modelId, pinned);
+    if (!attempts.some((a) => a.model === modelId)) {
       const error: PlatformError = {
         category: "provider",
         code: "llm.unknown_model",
@@ -110,6 +162,22 @@ export class RoutingLLMClient implements LLMClient {
       return { ok: false, error };
     }
 
-    return provider.complete({ ...request, model: modelId });
+    // The caller sees the first failure: it names the provider the user expects.
+    let firstFailure: Result<LLMResponse> | undefined;
+    for (const { provider, model } of attempts) {
+      const result = await provider.complete({ ...request, model });
+      if (result.ok) return result;
+      firstFailure ??= result;
+      if (!canFailOver(result.error)) break;
+      // Code and status only: provider messages can embed the request URL.
+      console.warn(
+        `[llm] ${provider.id} failed (${result.error.code}${
+          result.error.details?.["status"]
+            ? ` ${result.error.details["status"]}`
+            : ""
+        }), trying the next provider`,
+      );
+    }
+    return firstFailure!;
   }
 }

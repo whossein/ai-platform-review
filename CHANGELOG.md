@@ -15,6 +15,28 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.5.0] - 2026-11-04
+
+### Added
+- **EN:** Review failover: when a provider fails (network error, timeout, HTTP 401/403/404/429/5xx), a specialist's call moves to the next enabled provider: the same model first, then the same tier, then the rest. HTTP 400/422 is not retried elsewhere. The review diff can therefore reach every enabled provider, so disable any you don't want to receive it.
+- **FA:** Failover در ریویو: وقتی یک provider خطا بدهد (خطای شبکه، timeout، HTTP 401/403/404/429/5xx)، درخواست متخصص به provider فعال بعدی می‌رود: اول همان مدل، بعد همان tier و بعد بقیه. خطای HTTP 400/422 به provider دیگری فرستاده نمی‌شود. به همین دلیل diff ریویو ممکن است به هر provider فعالی برسد؛ هر کدام را که نمی‌خواهید diff دریافت کند غیرفعال کنید.
+- **EN:** Settings → AI Providers warns when no enabled provider covers the `mid` or `premium` tier, or when two entries share a model.
+- **FA:** تنظیمات ← AI Providers وقتی هیچ provider فعالی tier `mid` یا `premium` را پوشش ندهد، یا دو ورودی مدل یکسانی داشته باشند، هشدار می‌دهد.
+
+### Changed
+- **EN:** Active Default now decides routing: it wins within its own tier and serves any agent whose tier no enabled provider has. A cheaper or free provider (e.g. Ollama) no longer takes over a review just by being added; give it its own tier if you want agents to use it.
+- **FA:** Active Default حالا واقعاً مسیر را تعیین می‌کند: در tier خودش اولویت دارد و agentهایی را که هیچ provider فعالی tier موردنیازشان را ندارد سرویس می‌دهد. یک provider ارزان‌تر یا رایگان (مثل Ollama) دیگر صرفاً با اضافه شدن، ریویو را در اختیار نمی‌گیرد؛ اگر می‌خواهید agentها از آن استفاده کنند، tier جدا به آن بدهید.
+
+### Fixed
+- **EN:** With two entries of the same vendor, or the same model on two providers, the chosen default is now the one used. AI fixes and other single-provider features follow it too.
+- **FA:** با دو ورودی از یک سرویس، یا یک مدل روی دو provider، حالا همان پیش‌فرض انتخاب‌شده استفاده می‌شود. پیشنهاد اصلاح AI و قابلیت‌های تک‌providerی دیگر هم از آن پیروی می‌کنند.
+- **EN:** The cost estimate prices each agent at the model it will really use, instead of pricing all of them at the Active Default's rate.
+- **FA:** تخمین هزینه هر agent را با مدلی که واقعاً استفاده می‌کند حساب می‌کند، نه همه را با قیمت Active Default.
+
+### Security
+- **EN:** A provider entry with no API key no longer receives the active provider's key through `AI_REVIEW_LLM_API_KEY`, so that key is not sent to another provider's endpoint.
+- **FA:** ورودی provider بدون کلید API دیگر کلید provider فعال را از طریق `AI_REVIEW_LLM_API_KEY` نمی‌گیرد، پس آن کلید به endpoint یک provider دیگر فرستاده نمی‌شود.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added
