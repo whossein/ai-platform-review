@@ -15,6 +15,12 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.6.1] - 2026-11-04
+
+### Changed
+- **EN:** New app icon, used as the browser favicon (including Apple touch icon), in the sidebar and mobile header, on the sign-in and first-run setup screens, and on the GitHub Pages landing page.
+- **FA:** آیکون جدید برنامه به‌عنوان favicon مرورگر (و آیکون Apple)، در نوار کناری و هدر موبایل، صفحه‌های ورود و راه‌اندازی اولیه و صفحهٔ GitHub Pages استفاده شده است.
+
 ## [0.6.0] - 2026-11-04
 
 ### Added

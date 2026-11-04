@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" alt="AI Code Review Platform" width="120"></p>
+
 # 🤖 AI Code Review Platform
 
 **[English & Persian Documentation]**
@@ -187,4 +189,4 @@ Visit [http://localhost:4000](http://localhost:4000) in your browser.
 
 ## 📄 License
 
-Private repository maintained for automated AI code review workflows. Version **0.6.0**.
+Private repository maintained for automated AI code review workflows. Version **0.6.1**.

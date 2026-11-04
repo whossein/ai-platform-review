@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Lock, Mail, ArrowRight, AlertCircle, Shield } from "lucide-react";
+import { Lock, Mail, ArrowRight, AlertCircle } from "lucide-react";
 import { useAuth } from "./AuthContext.js";
 
 export function LoginView(): JSX.Element {
@@ -33,7 +33,7 @@ export function LoginView(): JSX.Element {
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-icon-badge">
-            <Shield size={32} className="text-blue-400" />
+            <img src="/icon-192.png" alt="AI Review" width={48} height={48} style={{ borderRadius: 10 }} />
           </div>
           <h2>Sign In to AI Review</h2>
           <p>Enter your account credentials to access your code reviews and repositories.</p>
