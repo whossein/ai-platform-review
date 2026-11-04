@@ -938,3 +938,12 @@ input[type="text"],
 .git-conn-row select {
   width: auto;
 }
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

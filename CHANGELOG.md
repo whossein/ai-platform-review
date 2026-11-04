@@ -15,6 +15,14 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.4.0] - 2026-11-04
+
+### Added
+- **EN:** Settings → AI Providers: "Fetch List" now opens a searchable model picker (type to filter, arrow keys + Enter) showing each model's context size. When the provider reports prices (OpenRouter, Together), the price per 1M tokens is shown and picking a model fills the Input / Output cost fields. `POST /api/models` additionally returns `modelInfos` (`id`, `name`, `inputCostPer1M`, `outputCostPer1M`, `contextLength`); `models` is unchanged.
+- **FA:** تنظیمات ← AI Providers: دکمه «Fetch List» حالا یک انتخابگر جستجوپذیر مدل باز می‌کند (تایپ برای فیلتر، کلیدهای جهت‌نما + Enter) و اندازه context هر مدل را نشان می‌دهد. اگر provider قیمت را اعلام کند (OpenRouter، Together) قیمت هر ۱M توکن نمایش داده می‌شود و با انتخاب مدل فیلدهای Input / Output cost پر می‌شوند. `POST /api/models` علاوه بر آن `modelInfos` را هم برمی‌گرداند (`id`، `name`، `inputCostPer1M`، `outputCostPer1M`، `contextLength`)؛ فیلد `models` تغییری نکرده است.
+- **EN:** Gemini model ids are listed without the `models/` prefix.
+- **FA:** شناسه مدل‌های Gemini بدون پیشوند `models/` نمایش داده می‌شوند.
+
 ## [0.3.2] - 2026-11-03
 
 ### Security
