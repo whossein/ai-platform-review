@@ -59,6 +59,7 @@ export {
   findOrCreateProjectHandler,
   recordReviewHandler,
   submitFeedbackHandler,
+  removeSuppressedRuleHandler,
   deleteProjectHandler,
   attachMergeRequestMeta,
   gradeMergeRequestHandler,

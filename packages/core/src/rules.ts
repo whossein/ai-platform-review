@@ -34,6 +34,16 @@ export interface RuleContext {
   readonly changedPaths?: readonly string[];
 }
 
+/**
+ * A rule a project manager silenced after rejecting one of its findings. With
+ * `file` it applies to that file only (always the case for security rules);
+ * without it, to the whole project.
+ */
+export interface RuleSuppression {
+  readonly ruleId: string;
+  readonly file?: string | undefined;
+}
+
 /** A single deterministic check. Implementations live in `config`/plugins. */
 export interface Rule {
   readonly kind: RuleKind;

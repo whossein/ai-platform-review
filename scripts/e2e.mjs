@@ -114,7 +114,7 @@ try {
   const r1 = await api("POST", "/api/review", { diff: mr, env }, admin);
   check("review from MR URL succeeds", r1.status === 200, JSON.stringify(r1.body));
   check("project auto-registered from URL", r1.body.project?.repositoryPath === "team/app" && r1.body.mergeRequest?.mrNumber === "7");
-  check("multiple specialist agents ran", new Set(llmPrompts.map((p) => p.slice(0, 60))).size >= 2, `prompts=${llmPrompts.length}`);
+  check("multiple specialist agents ran", new Set(llmPrompts.map((p) => /You are the (.+?)\. FOCUS/.exec(p)?.[1])).size >= 2, `prompts=${llmPrompts.length}`);
   check("duplicate findings are consolidated", (r1.body.issues ?? []).filter((i) => /sql/i.test(i.title)).length === 1);
   check("cache metrics are reported", typeof r1.body.metrics?.cacheMisses === "number" && r1.body.metrics.cacheMisses > 0, JSON.stringify(r1.body.metrics));
 

@@ -255,7 +255,9 @@ export function PublishIssueCard({
         verdict === "up"
           ? "Thanks — marked as useful."
           : r.ruleAdded
-            ? "Saved, and added to the project rules."
+            ? issue.producedBy === "agent.rule-engine"
+              ? "Saved. This rule is now silenced; re-enable it from the project page."
+              : "Saved, and added to the project rules."
             : (r.ruleDenied ?? "Feedback saved."),
       );
       setFbOpen(false);

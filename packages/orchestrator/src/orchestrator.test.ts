@@ -438,6 +438,46 @@ describe("runReview (end-to-end)", () => {
   });
 });
 
+describe("rule suppression", () => {
+  const TWO_FILES = [
+    "+++ b/src/a.ts",
+    "@@ -0,0 +1 @@",
+    '+const API_KEY = "sk-live-abcdef123456";',
+    "+++ b/src/b.ts",
+    "@@ -0,0 +1 @@",
+    '+const API_KEY = "sk-live-abcdef123456";',
+  ].join("\n");
+
+  const ruleHits = async (suppressedRules?: RunOptions["suppressedRules"]) => {
+    const r = await runReview({
+      diff: TWO_FILES,
+      ...(suppressedRules ? { suppressedRules } : {}),
+    });
+    const parsed = JSON.parse(r.json) as {
+      issues: { title: string; producedBy?: string; location: { file: string } }[];
+    };
+    return parsed.issues.filter((i) => i.producedBy === "agent.rule-engine");
+  };
+
+  it("drops a suppressed rule only for the scoped file", async () => {
+    const all = await ruleHits();
+    expect(all.length).toBeGreaterThan(0);
+    const { title: ruleId, location } = all[0]!;
+
+    // A different file's suppression leaves the finding in place.
+    const other = await ruleHits([{ ruleId, file: "src/unrelated.ts" }]);
+    expect(other).toHaveLength(all.length);
+    // A different rule id never matches.
+    expect(await ruleHits([{ ruleId: "no.such.rule" }])).toHaveLength(all.length);
+
+    const scoped = await ruleHits([{ ruleId, file: location.file }]);
+    expect(scoped.some((i) => i.title === ruleId && i.location.file === location.file)).toBe(false);
+
+    const wide = await ruleHits([{ ruleId }]);
+    expect(wide.some((i) => i.title === ruleId)).toBe(false);
+  });
+});
+
 describe("prompt-cache warm-up", () => {
   /** An LLM that records call windows, answering after a short delay. */
   function timedLlm() {

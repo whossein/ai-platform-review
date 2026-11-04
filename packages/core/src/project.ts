@@ -10,6 +10,7 @@
  */
 
 import type { IsoTimestamp, ProjectId } from "./ids.js";
+import type { RuleSuppression } from "./rules.js";
 
 /**
  * Normalized repository identity parsed from a repository URL or MR/PR URL.
@@ -78,6 +79,8 @@ export interface Project {
    */
   readonly compactInstructions?: string | undefined;
   readonly compactSourceHash?: string | undefined;
+  /** Deterministic rules silenced for this project after reviewer feedback. */
+  readonly suppressedRules?: readonly RuleSuppression[] | undefined;
   /** Optional default Git branch (e.g., "main", "master") for indexing. */
   readonly defaultBranch?: string | undefined;
   /** Optional local filesystem path when indexing a local checkout. */

@@ -84,6 +84,10 @@ const NON_PYTHON_LANG_EXTS: ReadonlySet<string> = new Set([
   ".exs", ".clj", ".groovy", ".vue",
 ]);
 
+const JS_TS_EXTS: ReadonlySet<string> = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+]);
+
 /** Extension of the final path segment (so `a.b/Dockerfile` has none). */
 function baseExt(path: string): string {
   const base = path.slice(path.lastIndexOf("/") + 1);
@@ -117,15 +121,28 @@ function isRelevant(
   const hasCodeFiles = hasCode(ctx.files);
 
   switch (agentId) {
-    case "agent.react-reviewer":
-      return (
-        [".tsx", ".jsx"].some((e) => ctx.exts.has(e)) ||
-        /\buse[A-Z]\w*\(|<[A-Z][A-Za-z0-9]*/.test(ctx.added)
+    case "agent.react-reviewer": {
+      if ([".tsx", ".jsx"].some((e) => ctx.exts.has(e))) return true;
+      // Added-line evidence only counts inside JS/TS files: `List<String>` in
+      // Java or `#include <Foo.h>` in C are generics/includes, not JSX.
+      if (![...JS_TS_EXTS].some((e) => ctx.exts.has(e))) return false;
+      const hasReactImport = /\bfrom\s+["']react(?:-dom)?(?:\/[^"']*)?["']|\brequire\(\s*["']react["']/.test(
+        ctx.added,
       );
+      return (
+        hasReactImport ||
+        /\buse(?:State|Effect|Memo|Callback|Ref|Context|Reducer|LayoutEffect)\s*\(/.test(
+          ctx.added,
+        ) ||
+        // Real JSX: a self-closing element or one with attributes. A bare
+        // `<Foo>` is as likely to be a generic (`Promise<Foo>`).
+        /<[A-Z][A-Za-z0-9.]*(?:\s+[A-Za-z_:-]+\s*=|\s*\/>)/.test(ctx.added)
+      );
+    }
     case "agent.dotnet-reviewer":
       return (
-        [".cs", ".csproj"].some((e) => ctx.exts.has(e)) ||
-        /\busing\s+System\b|\bnamespace\b/.test(ctx.added)
+        [".cs", ".csproj", ".sln", ".cshtml"].some((e) => ctx.exts.has(e)) ||
+        /\busing\s+System\b/.test(ctx.added)
       );
     case "agent.python-reviewer":
       return (
@@ -134,16 +151,22 @@ function isRelevant(
           /\bimport\s+[a-zA-Z_]\w*\b|\bdef\s+[a-zA-Z_]\w*\s*\(/.test(ctx.added))
       );
     case "agent.android-reviewer":
+      // Plain .java/.xml are everywhere (servers, Maven); require Android evidence.
       return (
-        [".kt", ".java", ".xml"].some((e) => ctx.exts.has(e)) ||
-        /\bimport\s+android\b|\bimport\s+androidx\b/.test(ctx.added)
+        [".kt", ".kts"].some((e) => ctx.exts.has(e)) ||
+        ctx.files.some(
+          (f) =>
+            /(^|\/)AndroidManifest\.xml$/.test(f) || /(^|\/)res\/.+\.xml$/.test(f),
+        ) ||
+        /\bimport\s+androidx?\./.test(ctx.added)
       );
     case "agent.ios-reviewer":
       return (
-        [".swift", ".m", ".h"].some((e) => ctx.exts.has(e)) ||
-        /\bimport\s+UIKit\b|\bimport\s+SwiftUI\b|\bimport\s+Foundation\b/.test(
-          ctx.added,
-        )
+        [".swift", ".m", ".mm"].some((e) => ctx.exts.has(e)) ||
+        // A bare .h is usually plain C/C++.
+        (ctx.exts.has(".h") &&
+          /@interface\b|#import\s*<(?:UIKit|Foundation)/.test(ctx.added)) ||
+        /\bimport\s+(?:UIKit|SwiftUI|Foundation)\b/.test(ctx.added)
       );
     case "agent.nextjs-reviewer":
       // Only real Next.js evidence: a plain React app also has `app/` or `pages/`
@@ -166,8 +189,9 @@ function isRelevant(
       );
     case "agent.vue-reviewer":
       return (
-        [".vue"].some((e) => ctx.exts.has(e)) ||
-        /\bdefineComponent\b|\bref\(|\breactive\(/.test(ctx.added)
+        ctx.exts.has(".vue") ||
+        // Bare `ref(` / `reactive(` are common names in non-Vue code.
+        /\bfrom\s+["']vue["']|\bdefineComponent\b/.test(ctx.added)
       );
     case "agent.typescript-reviewer":
       return [".ts", ".tsx"].some((e) => ctx.exts.has(e));

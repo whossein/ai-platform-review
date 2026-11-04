@@ -15,6 +15,38 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.6.0] - 2026-11-04
+
+### Added
+- **EN:** A project manager who rejects a rule finding with "Add to project rules" now really silences that rule. Security rules are silenced only for that file; other rules for the whole project. Project scans respect it too. The project page lists silenced rules with a Remove button (API: `DELETE /api/projects/:id/suppressed-rules`).
+- **FA:** مدیر پروژه با رد یک یافتهٔ Rule و زدن «Add to project rules» حالا واقعاً آن Rule را خاموش می‌کند. Ruleهای امنیتی فقط برای همان فایل خاموش می‌شوند و بقیه برای کل پروژه. اسکن پروژه هم همین را رعایت می‌کند. صفحهٔ پروژه فهرست Ruleهای خاموش را با دکمهٔ Remove نشان می‌دهد (API: `DELETE /api/projects/:id/suppressed-rules`).
+- **EN:** New `npm run eval:rules` (no AI, no key) and `npm run eval:live` (uses your configured provider and spends tokens) measure review precision and recall on a set of 11 synthetic samples.
+- **FA:** دستورهای جدید `npm run eval:rules` (بدون AI و بدون کلید) و `npm run eval:live` (از provider تنظیم‌شده استفاده می‌کند و توکن مصرف می‌کند) دقت و پوشش ریویو را روی ۱۱ نمونهٔ ساختگی می‌سنجند.
+
+### Changed
+- **EN:** AI specialists now receive a goal and a checklist for their focus, plus shared definitions of severity and confidence and an instruction to report only problems the change introduces. Expect different, and usually fewer, findings than before.
+- **FA:** متخصص‌های AI حالا هدف و چک‌لیست حوزهٔ خودشان را می‌گیرند، به‌علاوهٔ تعریف مشترک severity و confidence و این دستور که فقط مشکلاتی را گزارش کنند که همین تغییر ایجاد کرده. یافته‌ها با قبل فرق می‌کنند و معمولاً کمتر می‌شوند.
+- **EN:** Specialists are chosen on real evidence: Java/TS generics no longer trigger the React reviewer, `.h`, `.java`, `.xml` and `pom.xml` alone no longer trigger iOS or Android, and `namespace` and `ref(` no longer trigger .NET or Vue. This lowers cost.
+- **FA:** انتخاب متخصص‌ها حالا بر اساس شواهد واقعی است: generic در Java/TS دیگر React Reviewer را اجرا نمی‌کند، `.h`، `.java`، `.xml` و `pom.xml` به‌تنهایی iOS یا Android را فعال نمی‌کنند و `namespace` و `ref(` هم دیگر .NET یا Vue را فعال نمی‌کنند. این هزینه را کم می‌کند.
+- **EN:** The `governance.require-release-change` rule fires only when the project's saved guidelines ask for a changelog, as one `medium` finding on the MR. The Contributing reviewer no longer treats a missing changelog as a violation on every project.
+- **FA:** Rule مربوط به `governance.require-release-change` فقط وقتی فعال می‌شود که دستورالعمل ذخیره‌شدهٔ پروژه Changelog را بخواهد و یک یافتهٔ `medium` روی MR ثبت می‌کند. Contributing Reviewer هم دیگر نبود Changelog را در هر پروژه‌ای تخلف حساب نمی‌کند.
+- **EN:** When specialists are ticked manually they run by priority, so a tight budget drops the least important ones first and not Security.
+- **FA:** وقتی متخصص‌ها دستی انتخاب شوند به ترتیب اولویت اجرا می‌شوند، پس اگر بودجه کم بیاید اول کم‌اهمیت‌ترها حذف می‌شوند، نه Security.
+
+### Fixed
+- **EN:** Rule false positives removed: `/task-identifier` as a secret, placeholder values like `${PASSWORD}`, the word "debugger" in text, `Modal.confirm(`, a local `prompt(` function, JS `exec(` reported as `eval`, and code rules firing on comment lines.
+- **FA:** هشدارهای غلط Ruleها حذف شد: `/task-identifier` به‌عنوان secret، مقدارهای placeholder مثل `${PASSWORD}`، کلمهٔ «debugger» در متن، `Modal.confirm(`، تابع محلی `prompt(`، گزارش `exec(` در JS به‌عنوان `eval` و اجرای Ruleهای کد روی خطوط کامنت.
+- **EN:** Two different problems reported by two specialists on the same line are no longer merged into one finding with inflated confidence.
+- **FA:** دو مشکل متفاوت که دو متخصص روی یک خط گزارش می‌کنند دیگر در یک یافته با confidence بادشده ادغام نمی‌شوند.
+- **EN:** Project guideline headings route correctly: "Formatting", "Platform" and "Information" are no longer database rules, "Authors" is not security, and "Git hooks" goes to governance instead of React. A section whose specialist is not running now reaches the Code Reviewer.
+- **FA:** تیترهای دستورالعمل پروژه درست مسیردهی می‌شوند: «Formatting»، «Platform» و «Information» دیگر قانون دیتابیس نیستند، «Authors» امنیتی نیست و «Git hooks» به‌جای React به governance می‌رود. بخشی که متخصصش اجرا نمی‌شود حالا به Code Reviewer می‌رسد.
+- **EN:** Specialist prompts no longer contain the literal text `undefined`, and diff statistics no longer count project-structure bullets as deleted lines.
+- **FA:** پرامپت متخصص‌ها دیگر متن `undefined` ندارد و آمار diff هم بولت‌های ساختار پروژه را خط حذف‌شده حساب نمی‌کند.
+
+### Security
+- **EN:** Secret detection now catches `sk-proj-`, `sk-ant-`, `ghp_`, `github_pat_`, `glpat-`, `AIza` and Slack `xox*` keys in plain strings, and prompt-injection detection covers Persian text.
+- **FA:** تشخیص secret حالا کلیدهای `sk-proj-`، `sk-ant-`، `ghp_`، `github_pat_`، `glpat-`، `AIza` و `xox*` اسلک را در رشتهٔ معمولی هم می‌گیرد و تشخیص تزریق پرامپت متن فارسی را هم پوشش می‌دهد.
+
 ## [0.5.1] - 2026-11-04
 
 ### Changed

@@ -122,4 +122,32 @@ describe("critic / consolidation", () => {
     ]);
     expect(out).toHaveLength(1);
   });
+
+  it("keeps two different defects from different agents on one line separate", () => {
+    const a = { ...issue({ id: "a", producedBy: "agent.x", confidence: 0.4 }), title: "SQL injection via string concat", description: "query built from user input", fingerprint: "f1" as ContentHash };
+    const b = { ...issue({ id: "b", producedBy: "agent.y", confidence: 0.4 }), title: "Missing rate limiting", description: "endpoint allows unlimited attempts", fingerprint: "f2" as ContentHash };
+    const out = critique([a, b]);
+    expect(out).toHaveLength(2);
+    expect(out.map((o) => o.confidence)).toEqual([0.4, 0.4]);
+  });
+
+  it("merges differently-titled findings that share enough wording", () => {
+    const a = { ...issue({ id: "a", producedBy: "agent.x" }), title: "Hardcoded API key in source", description: "secret token committed", fingerprint: "f1" as ContentHash };
+    const b = { ...issue({ id: "b", producedBy: "agent.y" }), title: "API key hardcoded in source", description: "secret token committed", fingerprint: "f2" as ContentHash };
+    expect(critique([a, b])).toHaveLength(1);
+  });
+
+  it("merges a rule-engine security finding with an agent finding at the same location", () => {
+    const rule = { ...issue({ id: "r", producedBy: "agent.rule-engine", confidence: 1 }), title: "secrets.aws-key", fingerprint: "f1" as ContentHash };
+    const llm = { ...issue({ id: "l", producedBy: "agent.security-reviewer" }), title: "Leaked cloud credential", description: "unrelated words entirely", fingerprint: "f2" as ContentHash };
+    const out = critique([rule, llm]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.corroboratedBy).toHaveLength(2);
+  });
+
+  it("does not merge a rule-engine finding with an agent finding outside security", () => {
+    const rule = { ...issue({ id: "r", producedBy: "agent.rule-engine", category: "code" }), title: "code.todo", fingerprint: "f1" as ContentHash };
+    const llm = { ...issue({ id: "l", producedBy: "agent.code-reviewer", category: "code" }), title: "Poor naming", description: "variable unclear", fingerprint: "f2" as ContentHash };
+    expect(critique([rule, llm])).toHaveLength(2);
+  });
 });

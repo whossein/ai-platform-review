@@ -25,6 +25,7 @@ import type {
   MergeRequestAiUsage,
   ProjectWithStats,
   IsoTimestamp,
+  RuleSuppression,
 } from "@ai-review/core";
 import {
   extractRepositoryIdentity,
@@ -45,6 +46,10 @@ export interface FeedbackRecord {
   readonly file: string;
   readonly ruleAdded: boolean;
   readonly author?: string | undefined;
+}
+
+function sameSuppression(a: RuleSuppression, b: RuleSuppression): boolean {
+  return a.ruleId === b.ruleId && (a.file ?? "") === (b.file ?? "");
 }
 
 const RULES_HEADING = "Learned from reviewer feedback:";
@@ -365,12 +370,30 @@ export class ProjectStore {
     projectId: string,
     input: Omit<FeedbackRecord, "id" | "projectId" | "timestamp" | "ruleAdded">,
     rule?: string,
+    suppression?: RuleSuppression,
   ): Promise<{ record: FeedbackRecord; project: Project }> {
     await this.ensureLoaded();
     const project = this.data.projects[projectId];
     if (!project) throw new Error(`Project with ID "${projectId}" not found`);
 
     let updated = project;
+    if (suppression) {
+      const existing = project.suppressedRules ?? [];
+      if (!existing.some((s) => sameSuppression(s, suppression))) {
+        updated = {
+          ...project,
+          suppressedRules: [
+            ...existing,
+            {
+              ruleId: suppression.ruleId,
+              ...(suppression.file ? { file: suppression.file } : {}),
+            },
+          ],
+          updatedAt: new Date().toISOString() as IsoTimestamp,
+        };
+        this.data.projects[projectId] = updated;
+      }
+    }
     const cleanRule = rule?.replace(/\s+/g, " ").trim();
     if (cleanRule) {
       const current = project.customInstructions ?? "";
@@ -384,7 +407,7 @@ export class ProjectStore {
           project.compactInstructions &&
           project.compactSourceHash === hashText(current);
         updated = {
-          ...project,
+          ...updated,
           customInstructions: body,
           ...(compactValid
             ? {
@@ -403,7 +426,7 @@ export class ProjectStore {
       id: `fb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       projectId,
       timestamp: Date.now(),
-      ruleAdded: Boolean(cleanRule),
+      ruleAdded: Boolean(cleanRule) || Boolean(suppression),
     };
     const list = (this.data.feedback ??= {})[projectId] ?? [];
     list.unshift(record);
@@ -411,6 +434,33 @@ export class ProjectStore {
     this.data.feedback[projectId] = list;
     await this.persist();
     return { record, project: updated };
+  }
+
+  /**
+   * Re-enables a silenced rule. Matches the exact entry: without `file` only the
+   * project-wide one is removed. Returns the project (unchanged if no match).
+   */
+  async removeRuleSuppression(
+    projectId: string,
+    ruleId: string,
+    file?: string,
+  ): Promise<Project> {
+    await this.ensureLoaded();
+    const project = this.data.projects[projectId];
+    if (!project) throw new Error(`Project with ID "${projectId}" not found`);
+    const target: RuleSuppression = { ruleId, ...(file ? { file } : {}) };
+    const existing = project.suppressedRules ?? [];
+    const kept = existing.filter((s) => !sameSuppression(s, target));
+    if (kept.length === existing.length) return project;
+    const { suppressedRules: _drop, ...rest } = project;
+    const updated: Project = {
+      ...rest,
+      ...(kept.length > 0 ? { suppressedRules: kept } : {}),
+      updatedAt: new Date().toISOString() as IsoTimestamp,
+    };
+    this.data.projects[projectId] = updated;
+    await this.persist();
+    return updated;
   }
 
   /**

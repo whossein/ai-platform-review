@@ -30,6 +30,7 @@ import {
   findOrCreateProjectHandler,
   recordReviewHandler,
   submitFeedbackHandler,
+  removeSuppressedRuleHandler,
   deleteProjectHandler,
   attachMergeRequestMeta,
   gradeMergeRequestHandler,
@@ -561,6 +562,16 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/projects/:id/suppressed-rules", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await removeSuppressedRuleHandler(projectStore, req.params.id, req.body || {}, security, user);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to remove suppressed rule" });
+    }
+  });
+
   app.patch("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
@@ -869,6 +880,7 @@ async function startServer() {
           selectedSpecialists: req.body?.selectedSpecialists,
           customInstructions,
           projectName,
+          suppressedRules: preProject?.suppressedRules,
           ...(projectContextProvider ? { projectContextProvider } : {}),
         },
         buildRequestRegistry(buildEffectiveEnv(process.env, reviewEnv)),

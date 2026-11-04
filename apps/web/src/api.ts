@@ -33,6 +33,8 @@ export interface ReviewIssue {
   };
   readonly location: { readonly file: string; readonly line?: number };
   readonly category: string;
+  /** Producer agent id; "agent.rule-engine" marks a deterministic rule finding. */
+  readonly producedBy?: string | undefined;
   readonly accepted: boolean;
   readonly rankScore: number;
 }
@@ -303,7 +305,7 @@ export interface FeedbackInput {
 export interface FeedbackResult {
   ruleAdded: boolean;
   ruleDenied?: string;
-  project?: { id: string; customInstructions?: string };
+  project?: { id: string; customInstructions?: string; suppressedRules?: readonly SuppressedRule[] };
 }
 
 export function requestFeedback(
@@ -406,8 +408,15 @@ export interface Project {
   /** Token-saving version sent to reviewers while present (cleared when the full text changes). */
   readonly compactInstructions?: string | undefined;
   readonly userRole?: string | undefined;
+  /** Deterministic rules a manager silenced; `file` absent means the whole project. */
+  readonly suppressedRules?: readonly SuppressedRule[] | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface SuppressedRule {
+  readonly ruleId: string;
+  readonly file?: string | undefined;
 }
 
 export interface MergeRequestAuthor {
@@ -640,6 +649,23 @@ export async function estimateMergeRequestAiUsage(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Estimate failed (${res.status})`);
   return data.mergeRequest;
+}
+
+/** Re-enables a silenced rule (managers only). Returns the updated project. */
+export async function removeSuppressedRule(
+  projectId: string,
+  rule: SuppressedRule,
+): Promise<Project> {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(projectId)}/suppressed-rules`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(rule),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to remove silenced rule (${res.status})`);
+  }
+  return data.project as Project;
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

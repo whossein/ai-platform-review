@@ -1178,6 +1178,7 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">What's New</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2">
+          <li><span class="font-mono text-cyan-400">v0.6.0</span> — More accurate reviews: fewer rule false alarms, detection of modern key formats and Persian prompt injection, a real checklist and clear severity/confidence definitions for each specialist, and no irrelevant specialists. A manager can silence a rule by rejecting its finding (security rules per file only) and re-enable it from the project page. New <code>npm run eval:rules</code> and <code>npm run eval:live</code> measure quality on sample changes.</li>
           <li><span class="font-mono text-cyan-400">v0.5.1</span> — AI Providers: each routing notice in Settings now also has a plain-language Persian explanation.</li>
           <li><span class="font-mono text-cyan-400">v0.5.0</span> — Several AI providers now work predictably: Active Default decides routing (a cheaper or free provider no longer takes over), a failing provider fails over to the next enabled one during reviews, the cost estimate follows the real per-agent model, Settings warns about missing tiers and duplicate models, and the active provider's key is no longer sent to other endpoints.</li>
           <li><span class="font-mono text-cyan-400">v0.4.0</span> — AI Providers: the model field is now a searchable picker (Fetch List) showing context size and, when the provider reports it (OpenRouter, Together), per-model price; picking a model fills Input / Output cost automatically.</li>
@@ -1225,6 +1226,7 @@
         </div>
         <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">تازه‌ها</h2>
         <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2 font-sans">
+          <li><span class="font-mono text-cyan-400">نسخه ۰.۶.۰</span> — ریویو دقیق‌تر: هشدار غلط Ruleها کمتر شده، فرمت‌های جدید کلید و تزریق پرامپت فارسی شناسایی می‌شوند، هر متخصص چک‌لیست واقعی و تعریف روشن severity و confidence دارد و متخصص بی‌ربط اجرا نمی‌شود. مدیر پروژه می‌تواند با رد یافتهٔ یک Rule آن را خاموش کند (Ruleهای امنیتی فقط برای همان فایل) و از صفحهٔ پروژه دوباره روشنش کند. دستورهای جدید <code>npm run eval:rules</code> و <code>npm run eval:live</code> کیفیت را روی تغییرات نمونه می‌سنجند.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۵.۱</span> — AI Providers: هر پیام مسیریابی در تنظیمات حالا یک توضیح ساده فارسی هم دارد.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۵.۰</span> — چند AI Provider حالا رفتار قابل‌پیش‌بینی دارد: Active Default مسیر را تعیین می‌کند (provider ارزان‌تر یا رایگان دیگر جای آن را نمی‌گیرد)، هنگام خطای یک provider در ریویو، درخواست به provider فعال بعدی می‌رود، تخمین هزینه از مدل واقعی هر agent پیروی می‌کند، تنظیمات درباره tierهای ناموجود و مدل‌های تکراری هشدار می‌دهد و کلید provider فعال دیگر به endpointهای دیگر فرستاده نمی‌شود.</li>
           <li><span class="font-mono text-cyan-400">نسخه ۰.۴.۰</span> — AI Providers: فیلد مدل حالا یک انتخابگر جستجوپذیر است (Fetch List) که اندازه context و، اگر provider قیمت را اعلام کند (OpenRouter، Together)، قیمت هر مدل را نشان می‌دهد؛ با انتخاب مدل، Input / Output cost خودکار پر می‌شود.</li>
@@ -1293,7 +1295,7 @@
 
   <!-- Footer -->
   <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.5.1</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
+    <p>AI Code Review Platform v<span id="app-version">0.6.0</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
 
   <!-- Scroll Animation Script -->

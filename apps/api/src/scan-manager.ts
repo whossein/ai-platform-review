@@ -318,6 +318,14 @@ export class ScanJobManager {
         const res = await engine.run(ctx);
         if (res.ok) {
           for (const f of res.value.findings) {
+            // Rules a manager silenced via review feedback stay silent in scans too.
+            if (
+              input.project.suppressedRules?.some(
+                (s) => s.ruleId === f.ruleId && (!s.file || s.file === f.location.file),
+              )
+            ) {
+              continue;
+            }
             if (findings.length >= MAX_SCAN_FINDINGS) {
               truncated = true;
               break;

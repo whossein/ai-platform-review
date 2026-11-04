@@ -26,6 +26,7 @@ import type {
   MemoryStore,
   WorkflowEngine,
   BudgetGuard,
+  RuleSuppression,
 } from "@ai-review/core";
 import type { StageExecutor } from "@ai-review/workflow-engine";
 import type { SourceFile } from "@ai-review/context-engine";
@@ -93,6 +94,8 @@ export interface RunOptions {
   readonly projectName?: string;
   /** Optional structural context (e.g. from the project index) appended to every reviewer's input. */
   readonly projectContext?: string;
+  /** Deterministic rules silenced for this project. */
+  readonly suppressedRules?: readonly RuleSuppression[];
 }
 
 export class ReviewOrchestrator {
@@ -140,7 +143,24 @@ export class ReviewOrchestrator {
       ? `\n\n${untrustedBlock("project_structure", opts.projectContext.trim())}`
       : "";
 
+    // Plan smart routing for specialists
+    const registry = this.ctx.registry;
+    const availableAgents = registry.list();
+    const reviewPlan: ReviewPlan = plan({
+      diff: opts.diff,
+      agents: availableAgents,
+    });
+
+    // Highest priority first, so a tight budget drops the least important reviewers.
+    const agentsToRun = opts.selectedSpecialists
+      ? availableAgents
+          .filter((s) => opts.selectedSpecialists?.includes(s.name))
+          .sort((a, b) => b.priority - a.priority)
+      : reviewPlan.selected;
+
     const instructionFields = {
+      rawDiff: opts.diff,
+      activeAgentIds: agentsToRun.map((a) => a.id as string),
       ...(projectInstructions ? { projectInstructions } : {}),
       ...(opts.projectName ? { projectName: opts.projectName } : {}),
     };
@@ -188,7 +208,6 @@ export class ReviewOrchestrator {
       set: (key, value) => memoryStore.set("review", key, value),
       delete: (key) => memoryStore.delete("review", key),
     };
-    const registry = this.ctx.registry;
     const runtime = this.ctx.runtime;
     const pricing = this.ctx.pricing;
     // Base execution context passed into agents through AgentRuntime
@@ -211,21 +230,11 @@ export class ReviewOrchestrator {
       seedSlice: slice,
     };
 
-    // Plan smart routing for specialists
-    const availableAgents = registry.list();
-    const reviewPlan: ReviewPlan = plan({
-      diff: opts.diff,
-      agents: availableAgents,
-    });
-
-    const agentsToRun = opts.selectedSpecialists
-      ? availableAgents.filter((s) => opts.selectedSpecialists?.includes(s.name))
-      : reviewPlan.selected;
-
     // Construct ReviewExecutionContext
     const reviewCtx: ReviewExecutionContext = {
       diff: opts.diff,
       governanceRules: opts.env?.AI_REVIEW_GOVERNANCE_RULES === "1",
+      suppressedRules: opts.suppressedRules ?? [],
       files: opts.files,
       slice,
       baseCtx,

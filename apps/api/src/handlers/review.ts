@@ -19,6 +19,7 @@ import type {
   LLMProvider,
   MemoryStore,
   Project,
+  RuleSuppression,
 } from "@ai-review/core";
 
 export interface ReviewRequest {
@@ -30,6 +31,8 @@ export interface ReviewRequest {
   readonly projectId?: string;
   readonly projectName?: string;
   readonly customInstructions?: string;
+  /** Deterministic rules the project's managers silenced via feedback. */
+  readonly suppressedRules?: readonly RuleSuppression[] | undefined;
   /**
    * Called with the changed file paths once the diff is resolved; may return
    * extra structural context (e.g. from the project index) for the reviewers.
@@ -75,6 +78,7 @@ export async function reviewHandler(
     selectedSpecialists,
     customInstructions,
     projectName,
+    suppressedRules,
   } = request;
   const effectiveMemoryStore = memoryStore || request.memoryStore;
 
@@ -112,6 +116,7 @@ export async function reviewHandler(
       ...(effectiveMemoryStore ? { memoryStore: effectiveMemoryStore } : {}),
       ...(customInstructions ? { customInstructions } : {}),
       ...(projectName ? { projectName } : {}),
+      ...(suppressedRules?.length ? { suppressedRules } : {}),
       ...(projectContext ? { projectContext } : {}),
     },
     extraProviders

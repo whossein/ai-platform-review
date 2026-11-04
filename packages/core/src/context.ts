@@ -94,6 +94,10 @@ export interface ContextSlice {
    */
   readonly projectInstructions?: string;
   readonly projectName?: string;
+  /** The unified diff before fencing and line numbering, for deterministic skills. */
+  readonly rawDiff?: string;
+  /** Specialists running in this review, so guidelines can reach a stand-in when an owner is off. */
+  readonly activeAgentIds?: readonly string[];
 }
 
 /**

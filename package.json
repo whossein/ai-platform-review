@@ -1,6 +1,6 @@
 {
   "name": "ai-review-platform",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "description": "Modular, plugin-based, event-driven, provider-agnostic Multi-Agent AI Code Review Platform.",
   "type": "module",
@@ -21,6 +21,8 @@
     "reset-password": "tsx scripts/reset-password.ts",
     "e2e": "node scripts/e2e.mjs",
     "eval:mock": "tsx packages/eval/src/cli.ts",
+    "eval:rules": "tsx packages/eval/src/rules-cli.ts",
+    "eval:live": "tsx packages/eval/src/live-cli.ts",
     "start": "node dist/server.cjs",
     "clean": "turbo run clean && rm -rf node_modules",
     "desktop": "concurrently \"npm run start -- --port 4000\" \"wait-on http://localhost:4000 && electron .\"",

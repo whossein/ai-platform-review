@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { ProjectStore, instructionsForPrompt } from "./project-store.js";
+import { submitFeedbackHandler, removeSuppressedRuleHandler } from "./handlers/projects.js";
 
 const base = {
   verdict: "down" as const,
@@ -60,5 +61,96 @@ describe("ProjectStore feedback", () => {
     const edited = (await store.getProject(id))!.project;
     expect(edited.compactInstructions).toBeUndefined();
     expect(instructionsForPrompt(edited)).toBe("Completely new rules");
+  });
+});
+
+describe("rule suppression via feedback", () => {
+  let dir: string;
+  let store: ProjectStore;
+  let id: string;
+  const ruleIssue = (category: string, title = "style.console-log") => ({
+    title,
+    category,
+    severity: "low",
+    producedBy: "agent.rule-engine",
+    location: { file: "src/a.ts" },
+  });
+  const body = (issue: ReturnType<typeof ruleIssue>) => ({
+    verdict: "down" as const,
+    addToRules: true,
+    rule: "Do not report this",
+    issue,
+  });
+  const stubSecurity = (canManage: boolean) =>
+    ({
+      canAccessProject: async (_u: unknown, _p: unknown, perm: string) => (perm === "project:manage" ? canManage : true),
+      auditStore: { log: async () => {} },
+    }) as any;
+  const user = { id: "u1", name: "U", email: "u@x.io" } as any;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), "suppress-test-"));
+    store = new ProjectStore(dir);
+    id = (await store.createProject({ name: "P", repositoryUrl: "https://gitlab.example.com/a/b" })).id;
+  });
+  afterEach(() => fs.rm(dir, { recursive: true, force: true }));
+
+  it("store adds without duplicates and removes the exact entry", async () => {
+    await store.addFeedback(id, base, undefined, { ruleId: "r1" });
+    await store.addFeedback(id, base, undefined, { ruleId: "r1" });
+    await store.addFeedback(id, base, undefined, { ruleId: "r1", file: "a.ts" });
+    expect((await store.getProject(id))!.project.suppressedRules).toEqual([
+      { ruleId: "r1" },
+      { ruleId: "r1", file: "a.ts" },
+    ]);
+    await store.removeRuleSuppression(id, "r1");
+    expect((await store.getProject(id))!.project.suppressedRules).toEqual([{ ruleId: "r1", file: "a.ts" }]);
+    await store.removeRuleSuppression(id, "r1", "a.ts");
+    expect((await store.getProject(id))!.project.suppressedRules).toBeUndefined();
+  });
+
+  it("a manager silences a non-security rule project-wide, without touching the guidelines", async () => {
+    const r = await submitFeedbackHandler(store, id, body(ruleIssue("code")), stubSecurity(true), user);
+    expect(r.ruleAdded).toBe(true);
+    const project = (await store.getProject(id))!.project;
+    expect(project.suppressedRules).toEqual([{ ruleId: "style.console-log" }]);
+    expect(project.customInstructions).toBeUndefined();
+  });
+
+  it("security rules are always scoped to the file", async () => {
+    await submitFeedbackHandler(store, id, body(ruleIssue("security", "secret.hardcoded")), stubSecurity(true), user);
+    expect((await store.getProject(id))!.project.suppressedRules).toEqual([
+      { ruleId: "secret.hardcoded", file: "src/a.ts" },
+    ]);
+  });
+
+  it("a request cannot widen a security rule by sending another category", async () => {
+    await submitFeedbackHandler(store, id, body(ruleIssue("code", "secret.hardcoded")), stubSecurity(true), user);
+    expect((await store.getProject(id))!.project.suppressedRules).toEqual([
+      { ruleId: "secret.hardcoded", file: "src/a.ts" },
+    ]);
+  });
+
+  it("a non-manager cannot suppress; feedback is still saved", async () => {
+    const r = await submitFeedbackHandler(store, id, body(ruleIssue("code")), stubSecurity(false), user);
+    expect(r.ruleDenied).toBeTruthy();
+    expect((await store.getProject(id))!.project.suppressedRules).toBeUndefined();
+  });
+
+  it("LLM findings still append learned text instead", async () => {
+    const llm = { ...ruleIssue("code", "Some LLM finding"), producedBy: "agent.code-reviewer" };
+    await submitFeedbackHandler(store, id, body(llm), stubSecurity(true), user);
+    const project = (await store.getProject(id))!.project;
+    expect(project.suppressedRules).toBeUndefined();
+    expect(project.customInstructions).toContain("Do not report this");
+  });
+
+  it("removal endpoint handler is manager-only", async () => {
+    await store.addFeedback(id, base, undefined, { ruleId: "r1" });
+    await expect(
+      removeSuppressedRuleHandler(store, id, { ruleId: "r1" }, stubSecurity(false), user),
+    ).rejects.toMatchObject({ status: 403 });
+    const ok = await removeSuppressedRuleHandler(store, id, { ruleId: "r1" }, stubSecurity(true), user);
+    expect(ok.project.suppressedRules).toBeUndefined();
   });
 });

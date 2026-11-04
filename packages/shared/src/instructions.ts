@@ -37,21 +37,21 @@ export interface InstructionSection {
 }
 
 const TOPIC_PATTERNS: readonly { topic: InstructionTopic; re: RegExp }[] = [
-  { topic: "security", re: /secur|owasp|auth|secret|crypto|xss|csrf|injection|امنیت|احراز|رمز/i },
+  { topic: "security", re: /secur|owasp|\bauth\b|authn|authz|authenticat|authoriz|secret|crypto|xss|csrf|injection|امنیت|احراز|رمز/i },
   { topic: "performance", re: /perform|\bperf\b|speed|optimi[sz]|latency|memory leak|عملکرد|کارایی|بهینه/i },
-  { topic: "database", re: /database|\bsql\b|quer(y|ies)|\bdb\b|migration|orm|دیتابیس|پایگاه/i },
+  { topic: "database", re: /database|\bsql\b|quer(y|ies)|\bdb\b|migration|\borms?\b|دیتابیس|پایگاه/i },
   { topic: "testing", re: /\btests?\b|testing|coverage|\bspec\b|تست|آزمون/i },
-  { topic: "governance", re: /governance|commit|branch|contribut|release|changelog|pull request|\bpr\b|\bmr\b|merge request|کامیت|برنچ|شاخه/i },
-  { topic: "style", re: /style|naming|format|lint|convention|readab|comment|نام‌?گذاری|سبک|خوانایی/i },
-  { topic: "architecture", re: /architect|layer|structure|design|pattern|module|معماری|لایه/i },
+  { topic: "governance", re: /governance|commit|branch|contribut|release|changelog|git hooks?|husky|pull request|\bpr\b|\bmr\b|merge request|کامیت|برنچ|شاخه/i },
+  { topic: "style", re: /style|naming|\bformat(ting)?\b|\blint|convention|readab|comment|نام‌?گذاری|سبک|خوانایی/i },
+  { topic: "architecture", re: /architect|\blayers?\b|\bstructure\b|\bdesign\b|\bpatterns?\b|\bmodules?\b|معماری|لایه/i },
   { topic: "react-native", re: /react[\s-]?native/i },
   { topic: "nextjs", re: /next\.?js/i },
-  { topic: "react", re: /\breact\b|\bhooks?\b|jsx/i },
+  { topic: "react", re: /\breact\b|(?<!git |commit |pre-commit )\bhooks?\b|jsx/i },
   { topic: "angular", re: /angular|rxjs/i },
   { topic: "vue", re: /\bvue(js)?\b|nuxt|pinia/i },
-  { topic: "typescript", re: /typescript|\btsx?\b|typing|تایپ/i },
+  { topic: "typescript", re: /typescript|\btsx?\b|\btyping\b|تایپ/i },
   { topic: "python", re: /python|django|flask|fastapi|pydantic/i },
-  { topic: "dotnet", re: /\.net|dotnet|c#|csharp|asp\.net|entity framework/i },
+  { topic: "dotnet", re: /\.net\b|dotnet|c#|csharp|asp\.net|entity framework/i },
   { topic: "android", re: /android|kotlin|jetpack/i },
   { topic: "ios", re: /\bios\b|swift|xcode|uikit/i },
 ];
@@ -65,7 +65,9 @@ const AGENT_TOPICS: Readonly<Record<string, readonly InstructionTopic[]>> = {
   "agent.security-reviewer": ["security"],
   "agent.performance-reviewer": ["performance", "database"],
   "agent.contributing-reviewer": ["governance"],
-  // The catch-all reviewer also gets framework rules, so a rule is never unreachable.
+  // The catch-all reviewer also gets framework rules. Sections no *running*
+  // specialist accepts are routed to it too (see `activeAgentIds`), so a rule is
+  // never unreachable even when its specialist is unticked.
   "agent.code-reviewer": ["style", "testing", "architecture", "database", ...FRAMEWORK_TOPICS],
   "agent.react-reviewer": ["react"],
   "agent.react-native-reviewer": ["react-native"],
@@ -129,16 +131,36 @@ export function splitInstructionSections(text: string): InstructionSection[] {
   return sections;
 }
 
-/** The part of the project instructions relevant to one specialist. */
-export function instructionsForAgent(text: string | undefined, agentId: string): string {
+/**
+ * The part of the project instructions relevant to one specialist.
+ * `activeAgentIds` (the specialists running in this review) lets the catch-all
+ * code reviewer also pick up sections that no running specialist accepts.
+ */
+export function instructionsForAgent(
+  text: string | undefined,
+  agentId: string,
+  activeAgentIds?: readonly string[],
+): string {
   const trimmed = text?.trim();
   if (!trimmed) return "";
   const accepted = AGENT_TOPICS[agentId];
   // Unknown (plugin) specialists get everything rather than risk missing rules.
   if (!accepted) return trimmed;
 
+  // Unknown (plugin) specialists receive everything, so then nothing is orphaned.
+  const others = agentId === "agent.code-reviewer" ? activeAgentIds?.filter((id) => id !== agentId) : undefined;
+  const covered =
+    others && !others.some((id) => !AGENT_TOPICS[id])
+      ? new Set(others.flatMap((id) => AGENT_TOPICS[id] ?? []))
+      : undefined;
+
   return splitInstructionSections(trimmed)
-    .filter((s) => s.topics.length === 0 || s.topics.some((t) => accepted.includes(t)))
+    .filter(
+      (s) =>
+        s.topics.length === 0 ||
+        s.topics.some((t) => accepted.includes(t)) ||
+        (covered !== undefined && !s.topics.some((t) => covered.has(t))),
+    )
     .map((s) => (s.heading !== undefined ? `${s.heading}\n${s.body}` : s.body).trim())
     .filter(Boolean)
     .join("\n\n");

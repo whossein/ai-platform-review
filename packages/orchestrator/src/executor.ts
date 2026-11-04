@@ -17,6 +17,7 @@ import type {
   LLMClient,
   ReviewMetrics,
   ReviewId,
+  RuleSuppression,
   WorkflowStage,
 } from "@ai-review/core";
 
@@ -47,6 +48,8 @@ export interface ReviewExecutionContext {
   readonly governanceRules?: boolean | undefined;
   readonly files?: readonly { path: string; text: string }[] | undefined;
   readonly slice: ContextSlice;
+  /** Rules a project manager silenced; matching deterministic findings are dropped. */
+  readonly suppressedRules?: readonly RuleSuppression[] | undefined;
   readonly baseCtx: AgentExecutionContext;
   readonly runtime: AgentRuntime;
   readonly reservableGuard: ReservableBudgetGuard;
@@ -159,10 +162,21 @@ export class ReviewStageExecutor implements StageExecutor {
       const ruleCtx: FileRuleContext = {
         repositoryId: "repo.local",
         files: filesToScan,
+        projectInstructions: this.ctx.slice.projectInstructions,
       };
       const ruleRes = await ruleEngine.run(ruleCtx);
       if (ruleRes.ok) {
+        const suppressed = this.ctx.suppressedRules ?? [];
         for (const finding of ruleRes.value.findings) {
+          if (
+            suppressed.some(
+              (s) =>
+                s.ruleId === finding.ruleId &&
+                (!s.file || s.file === finding.location.file),
+            )
+          ) {
+            continue;
+          }
           const issue = ruleFindingToIssue(finding);
           this.ctx.deterministicIssues.push(issue);
           this.ctx.allIssues.push(issue);

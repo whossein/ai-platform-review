@@ -119,3 +119,63 @@ describe("planner: Next.js reviewer", () => {
     expect(ids).not.toContain("agent.code-reviewer");
   });
 });
+
+describe("planner: framework specialists need real evidence", () => {
+  const agents = SPECIALISTS.map((s) => makeSpecialistDefinition(s));
+  const mkDiff = (files: Array<[string, string]>) =>
+    files
+      .map(
+        ([f, l]) =>
+          `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -0,0 +1 @@\n+${l}\n`,
+      )
+      .join("");
+  const picks = (files: Array<[string, string]>, id: string) =>
+    plan({ diff: mkDiff(files), agents }).selected.some((s) => s.id === id);
+
+  const cases: Array<[string, string, Array<[string, string]>, boolean]> = [
+    // react
+    ["agent.react-reviewer", ".tsx file", [["src/A.tsx", "export const a = 1;"]], true],
+    ["agent.react-reviewer", "hook in .ts with react import", [["src/h.ts", 'import { useState } from "react";']], true],
+    ["agent.react-reviewer", "JSX self-closing in .js", [["src/a.js", "return <Foo />;"]], true],
+    ["agent.react-reviewer", "JSX with props in .ts", [["src/a.ts", "return <Foo bar={1}>x</Foo>;"]], true],
+    ["agent.react-reviewer", "Java generic", [["A.java", "List<String> xs;"]], false],
+    ["agent.react-reviewer", "Go generic", [["a.go", "var m Map<String>"]], false],
+    ["agent.react-reviewer", "TS Promise generic", [["a.ts", "const p: Promise<Foo> = f();"]], false],
+    ["agent.react-reviewer", "C include", [["a.c", "#include <Foo.h>"]], false],
+    ["agent.react-reviewer", "custom useThing helper without react", [["a.ts", "const x = useThing(1);"]], false],
+    // android
+    ["agent.android-reviewer", "Kotlin", [["A.kt", "val a = 1"]], true],
+    ["agent.android-reviewer", "gradle kts", [["build.gradle.kts", "plugins {}"]], true],
+    ["agent.android-reviewer", "manifest", [["app/src/main/AndroidManifest.xml", "<manifest/>"]], true],
+    ["agent.android-reviewer", "res xml", [["app/src/main/res/layout/a.xml", "<View/>"]], true],
+    ["agent.android-reviewer", "java with androidx import", [["A.java", "import androidx.core.app.X;"]], true],
+    ["agent.android-reviewer", "plain java", [["A.java", "class A {}"]], false],
+    ["agent.android-reviewer", "pom.xml", [["pom.xml", "<project/>"]], false],
+    // ios
+    ["agent.ios-reviewer", "swift", [["A.swift", "let a = 1"]], true],
+    ["agent.ios-reviewer", "objc .m", [["A.m", "int a;"]], true],
+    ["agent.ios-reviewer", "objc++ .mm", [["A.mm", "int a;"]], true],
+    ["agent.ios-reviewer", ".h with @interface", [["A.h", "@interface A : NSObject"]], true],
+    ["agent.ios-reviewer", ".h with UIKit import", [["A.h", "#import <UIKit/UIKit.h>"]], true],
+    ["agent.ios-reviewer", ".h next to .m", [["A.h", "int a;"], ["A.m", "int b;"]], true],
+    ["agent.ios-reviewer", "import SwiftUI in non-swift file", [["a.txt", "import SwiftUI"]], true],
+    ["agent.ios-reviewer", "plain C header", [["a.h", "int a(void);"]], false],
+    // dotnet
+    ["agent.dotnet-reviewer", ".cs", [["A.cs", "class A {}"]], true],
+    ["agent.dotnet-reviewer", ".csproj", [["A.csproj", "<Project/>"]], true],
+    ["agent.dotnet-reviewer", ".sln", [["A.sln", "x"]], true],
+    ["agent.dotnet-reviewer", ".cshtml", [["A.cshtml", "<p/>"]], true],
+    ["agent.dotnet-reviewer", "using System", [["a.txt", "using System.Linq;"]], true],
+    ["agent.dotnet-reviewer", "TS namespace", [["a.ts", "namespace Foo {}"]], false],
+    // vue
+    ["agent.vue-reviewer", ".vue", [["A.vue", "<template/>"]], true],
+    ["agent.vue-reviewer", "import from vue", [["a.ts", 'import { ref } from "vue";']], true],
+    ["agent.vue-reviewer", "defineComponent", [["a.ts", "export default defineComponent({})"]], true],
+    ["agent.vue-reviewer", "bare ref()", [["a.ts", "const r = ref(1);"]], false],
+    ["agent.vue-reviewer", "bare reactive()", [["a.ts", "const r = reactive({});"]], false],
+  ];
+
+  it.each(cases)("%s: %s -> %s", (id, _label, files, expected) => {
+    expect(picks(files, id)).toBe(expected);
+  });
+});
