@@ -25,6 +25,14 @@ describe("routingNotices", () => {
     expect(n[n.length - 1]!.text).toContain("failover");
   });
 
+  it("gives every notice a Persian version that keeps the names", () => {
+    const n = routingNotices([p("a", "same", "cheap"), p("b", "same", "cheap")], "a");
+    expect(n).toHaveLength(4);
+    for (const notice of n) expect(notice.textFa).toMatch(/[؀-ۿ]/);
+    expect(n[0]!.textFa).toContain("(same)");
+    expect(n[2]!.textFa).toContain("«same»");
+  });
+
   it("no tier warnings when premium and mid exist", () => {
     const n = routingNotices([p("a", "m1", "mid"), p("b", "m2", "premium")], "a");
     expect(n).toHaveLength(1);

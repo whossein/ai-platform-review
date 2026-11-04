@@ -709,7 +709,7 @@ export function SettingsView() {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.35rem",
+                gap: "0.7rem",
                 marginBottom: "1rem",
                 padding: "0.6rem 0.8rem",
                 borderRadius: "8px",
@@ -725,8 +725,20 @@ export function SettingsView() {
                     color: n.kind === "warning" ? "var(--medium)" : "var(--muted)",
                   }}
                 >
-                  {n.kind === "warning" ? "Warning: " : ""}
-                  {n.text}
+                  <div>
+                    {n.kind === "warning" ? "Warning: " : ""}
+                    {n.text}
+                  </div>
+                  <div
+                    dir="rtl"
+                    style={{
+                      marginTop: "0.2rem",
+                      textAlign: "right",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {n.textFa}
+                  </div>
                 </div>
               ))}
             </div>

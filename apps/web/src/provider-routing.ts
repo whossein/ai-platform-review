@@ -17,6 +17,8 @@ export interface RoutingProvider {
 export interface RoutingNotice {
   readonly kind: "warning" | "info";
   readonly text: string;
+  /** Plain-language Persian version, shown under `text`. */
+  readonly textFa: string;
 }
 
 /**
@@ -51,12 +53,14 @@ export function routingNotices<T extends RoutingProvider>(
     notices.push({
       kind: "warning",
       text: `No enabled provider has the premium tier, so the Security Reviewer will use the default provider (${defName}).`,
+      textFa: `هیچ مدل قوی‌ای (Tier: Premium) نداری، پس بررسی امنیتی کد هم با مدل پیش‌فرض (${defName}) انجام می‌شود. review کار می‌کند؛ ولی اگر بررسی امنیتی دقیق‌تری می‌خواهی، Tier یک مدل قوی را Premium بگذار.`,
     });
   }
   if (!tiers.has("mid")) {
     notices.push({
       kind: "warning",
       text: `No enabled provider has the mid tier, so most reviewers will use the default provider (${defName}).`,
+      textFa: `هیچ مدلی با سطح متوسط (Tier: Mid) نداری، پس بیشتر بررسی‌ها با مدل پیش‌فرض (${defName}) انجام می‌شود. review کار می‌کند؛ اگر می‌خواهی این بررسی‌ها با مدل دیگری انجام شود، Tier آن مدل را Mid بگذار.`,
     });
   }
 
@@ -73,6 +77,7 @@ export function routingNotices<T extends RoutingProvider>(
       notices.push({
         kind: "warning",
         text: `${describe(first)} and ${describe(p)} both use model "${model}": the earlier entry is used and the other is only a failover.`,
+        textFa: `«${describe(first)}» و «${describe(p)}» هر دو یک مدل دارند. همیشه اولی استفاده می‌شود و دومی فقط وقتی به کار می‌آید که اولی خطا بدهد.`,
       });
     }
   }
@@ -80,6 +85,8 @@ export function routingNotices<T extends RoutingProvider>(
   notices.push({
     kind: "info",
     text: "The other enabled providers act as failover when a provider fails, so the review diff may be sent to them.",
+    textFa:
+      "اگر یک provider خطا بدهد، review خودکار با provider فعال بعدی ادامه پیدا می‌کند. پس کد تو ممکن است به آن provider هم فرستاده شود. اگر این را نمی‌خواهی، آن provider را غیرفعال کن.",
   });
   return notices;
 }

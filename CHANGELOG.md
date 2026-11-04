@@ -15,6 +15,12 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.5.1] - 2026-11-04
+
+### Changed
+- **EN:** Settings → AI Providers: each routing notice now also has a plain-language Persian explanation under the English text.
+- **FA:** تنظیمات ← AI Providers: هر پیام مسیریابی حالا زیر متن انگلیسی یک توضیح ساده فارسی هم دارد.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added
