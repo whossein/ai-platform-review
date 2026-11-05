@@ -1,19 +1,4 @@
-# Changelog / تاریخچه تغییرات
-
-All notable changes to the AI Code Review Platform. Newest first. Every entry is bilingual (**EN** / **FA**).
-Rules for adding entries are in [AGENTS.md](AGENTS.md); `npm run changelog:check` verifies the current version is documented.
-
-تمام تغییرات مهم پروژه، جدیدترین در بالا. هر ورودی دو‌زبانه است (**EN** / **FA**).
-
-<!--
-Entry template (copy to the top, below this comment):
-
-## [x.y.z] - YYYY-MM-DD
-
-### Added | Changed | Fixed | Security
-- **EN:** ...
-- **FA:** ...
--->
+# Changelog
 
 ## [0.3.2] - 2026-11-03
 
