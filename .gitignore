@@ -17,3 +17,7 @@ tsconfig.tsbuildinfo
 # Runtime data (users, sessions, encrypted credentials, keys, projects)
 .data/
 release/
+
+# local code-intel indexes
+graphify-out/
+.codegraph/

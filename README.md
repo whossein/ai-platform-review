@@ -1,185 +1,192 @@
 # 🤖 AI Code Review Platform
 
-**[English & Persian Documentation]**
+> Self-hosted, multi-agent AI code review for GitLab merge requests, GitHub pull requests and raw diffs. Bring any LLM provider and keep every review under a hard budget.
+>
+> ریویوی کد با هوش مصنوعی برای MRهای گیت‌لب، PRهای گیت‌هاب و Diffها؛ روی سرور خودت، با هر سرویس هوش مصنوعی که دوست داری و با سقف هزینه‌ای که خودت تعیین می‌کنی.
 
-The **AI Code Review Platform** is an agentic, scalable, and multi-provider code review application designed to automatically detect security vulnerabilities, performance regressions, logical bugs, architectural antipatterns, and style violations across Git diffs and codebases.
-
-**🔗 [View Official Landing Page](https://whossein.github.io/ai-platform-review-gemini-2/)**
-
----
-
-## 🌍 About the Project (English)
-
-The **AI Code Review Platform** is a powerful, multi-agent automated code review system. It acts as an intelligent pair programmer, seamlessly integrating with your git workflow (GitLab, local diffs, etc.) to analyze code changes, detect bugs, and suggest improvements.
-
-### ✨ Key Features
-
-- 🤖 **13 Specialized Review Personas**: Focused agents tailored for React, TypeScript, Next.js, Angular, Vue, .NET/C#, Python, Android (Kotlin/Java), iOS (Swift), React Native, Security, Performance, and General Code Quality.
-- ⚡ **Pre-LLM Deterministic Rule Engine**: Zero-cost regex and pattern analysis (run before any LLM call) that detects hardcoded secrets, string-built SQL (SQL injection), wildcard CORS, `eval`, `debugger`, `console` calls, `any` types, TODO comments and leftover `.only`/`.skip` tests.
-- 🛡️ **Hardened Review Prompts (v0.3.0)**: The diff, project structure and tool output are sent as fenced data blocks the model must never obey; docs changed in the MR (AGENTS.md, CONTRIBUTING.md, .cursorrules) are reviewed, not adopted as rules, and injection attempts are reported as critical findings. The diff carries new-file line numbers and findings are anchored to changed lines. All specialists share one prompt prefix so provider prompt caching applies, and output uses a strict JSON schema with automatic fallback. Since v0.3.1 the first specialist runs alone to warm the cache (`AI_REVIEW_CACHE_WARMUP=0` disables it) and a no-AI rule, `security.prompt-injection`, flags lines that try to instruct AI reviewers. Since v0.3.2 one failing specialist no longer drops the report, retries back off exponentially, the security reviewer uses the premium-tier model, Go/Rust/PHP/Ruby/C++ changes get the general reviewers, and the response cache is per model (`AI_REVIEW_LLM_CACHE=0` disables it).
-- 🎯 **Smart Routing & Planner**: Evaluates diffs and changed file extensions to invoke only relevant specialists, minimizing latency and LLM token usage.
-- 🔌 **Provider-Agnostic LLM Engine**: Native support for **Google Gemini, OpenAI, Anthropic, OpenRouter, Avalai, DeepSeek, Ollama (Local AI), Azure**, and custom OpenAI-compatible proxies.
-- 📁 **Project Registry & Custom AI System Instructions**: First-class Project entities uniquely identified by `gitHost + repositoryPath`. Supports custom per-project AI System Instructions and architectural guidelines injected into model prompts during reviews. To keep cost down, guidelines are split by `##` headings (Security, Performance, Git & Commits, a framework name…) and each specialist only receives the sections that concern it; an **Fix, improve & shorten with AI** button rewrites them into clean sections plus a terse version sent to reviewers, and the editor shows an estimated token count.
-- 🔐 **User Management, Authentication & RBAC (v0.2.0)**: Complete user lifecycle with secure PBKDF2 password hashing, session tokens, fixed-window rate limiting with temporary blocks, and first-run initial admin setup wizard.
-- 🛡️ **Multi-Tier Authorization & Project Access**: System roles (`ADMIN`, `MEMBER`) and project-level roles (`OWNER`, `MANAGER`, `REVIEWER`, `VIEWER`). Full backend enforcement of access control and last-admin protection.
-- 🔑 **Encrypted User Git Credentials**: AES-256-GCM encrypted Personal Access Tokens (PATs) for GitHub and GitLab associated directly with individual users, masked in UI and never leaked in API payloads or logs.
-- 🤖 **AI-written likelihood (v0.2.31)**: next to the grade card (Review page and project MR list) reviewers get an **Estimate / Re-estimate** button that returns the estimated chance (%) that the MR was written with AI, with reasons. It combines built-in rules (AI trailers like Co-Authored-By: Claude, comment density, boilerplate comments…) with an AI judge on the diff (uses your configured AI provider; rules only if none). It runs only on click, is stored on the MR and is separate from the review and cost estimate. It is an estimate, not proof. Endpoint: `POST /api/projects/:id/merge-requests/:mrId/ai-usage`. / کنار کارت نمره (صفحه Review و لیست MR پروژه) دکمه **Estimate / Re-estimate** برای ریویوکننده‌ها: درصد احتمال اینکه MR با AI نوشته شده را با دلیل نشان می‌دهد. ترکیبی از قوانین داخلی (مثل Co-Authored-By: Claude، تراکم کامنت، کامنت‌های قالبی …) و یک قاضی AI روی diff است (با ارائه‌دهنده AI تنظیم‌شده شما؛ بدون آن فقط قوانین). فقط با کلیک اجرا می‌شود، روی MR ذخیره می‌شود و از ریویو و برآورد هزینه جداست. این یک برآورد است، نه مدرک.
-- 🧑‍💻 **Author on URL entry (v0.2.30)**: the MR author is now fetched as soon as you enter an MR/PR URL on the Review page (using your Git connection token), not only after a review. / نویسنده MR همین‌که لینک را در صفحه Review وارد می‌کنید (با توکن اتصال Git شما) گرفته می‌شود، نه فقط بعد از ریویو.
-- 📝 **Grade on the Review page (v0.2.29)**: after reviewing an MR/PR URL, a card above the results shows the author, the system-suggested grade with its reason, and lets reviewers set the 0-10 task grade right there. / بعد از ریویوی لینک MR/PR، کارتی بالای نتایج نویسنده، نمره پیشنهادی سیستم با دلیل را نشان می‌دهد و ریویوکننده همان‌جا نمره ۰ تا ۱۰ را ثبت می‌کند.
-- 👥 **Developers tab (v0.2.28)**: new **Developers / توسعه‌دهندگان** tab in each project lists MR authors with MR count, graded count, average grade and average suggested grade; expand a developer to see their MRs and grades. / تب جدید **Developers / توسعه‌دهندگان** در هر پروژه، نویسندگان MR را با تعداد MR، تعداد نمره‌داده‌شده‌ها، میانگین نمره و میانگین نمره پیشنهادی نشان می‌دهد؛ با باز کردن هر دولوپر، MRها و نمره‌هایش دیده می‌شود.
-- 🎯 **MR task grades & authors (v0.2.27)**: every MR in a project now shows its author (name/username fetched from GitLab/GitHub) and a task-completion grade (0-10). Reviewers (REVIEWER role and above) set the grade with an optional short note; the system also suggests a grade with a short reason from the latest review (severity-based). Authors are saved in a separate developer registry (no login account is created automatically) and a per-developer MR count / average grade strip appears above the list. Endpoints: `PUT/DELETE /api/projects/:id/merge-requests/:mrId/grade`, `GET /api/projects/:id/developers`. Needs a Git token for private repos. / هر MR در پروژه حالا نویسنده (نام/یوزرنیم از GitLab/GitHub) و نمره انجام تسک (۰ تا ۱۰) را نشان می‌دهد. ریویوکننده (نقش REVIEWER به بالا) نمره را با توضیح کوتاه ثبت می‌کند و سیستم هم بر اساس آخرین ریویو (وابسته به شدت یافته‌ها) نمره‌ای پیشنهادی همراه دلیل کوتاه می‌دهد. نویسندگان در یک رجیستری جدا از کاربران اپ ذخیره می‌شوند (حساب ورود خودکار ساخته نمی‌شود) و بالای لیست، تعداد MR و میانگین نمره هر دولوپر دیده می‌شود. برای ریپوهای خصوصی توکن Git لازم است.
-- 🔎 **Project Rule Scan (v0.2.25)**: new **Scan** tab in a project — pick a branch, scan every text file with the built-in multi-language rules (no AI, no tokens) and get a filterable report (severity, file, rule) with JSON download and scan history. Secret lines are never stored. Endpoints: `GET/POST /api/projects/:id/scan`, `DELETE /api/projects/:id/scan/job`. / تب جدید **Scan** در پروژه: برنچ را انتخاب کنید، همه فایل‌های متنی با قوانین چندزبانه (بدون AI و بدون توکن) اسکن می‌شود و گزارش قابل فیلتر (شدت، فایل، قانون) با دانلود JSON و تاریخچه اسکن نمایش داده می‌شود. خطوط حاوی secret هرگز ذخیره نمی‌شوند.
-- 🧾 **Rule checks without AI (v0.2.24)**: tick **Rules only (no AI)** on the Review page for an instant, free review of Python, Java, C#, PHP, Go, Kotlin, Swift, JS/TS, shell and Dockerfile code (API: `selectedSpecialists: []`); built-in rules only inspect lines added in the diff, and each occurrence stays a separate finding. Optional `AI_REVIEW_GOVERNANCE_RULES=1` also checks the MR/PR source-branch name and title (Conventional Commits). / با چک‌باکس «Rules only (no AI)» ریویو فوری و رایگان برای زبان‌های مختلف انجام می‌شود؛ بررسی‌های قطعی بدون AI فقط خطوط اضافه‌شده را می‌بینند و هر مورد جدا گزارش می‌شود؛ با `AI_REVIEW_GOVERNANCE_RULES=1` نام برنچ و عنوان MR/PR هم بررسی می‌شود.
-- ✨ **Review & Publish redesign + AI sample fix (v0.2.19)**: each finding card shows the flagged code, the full description/confidence that go into the PR comment, an exact comment preview, and RTL layout for Persian comments. For GitLab MR URLs, **Get AI sample fix** asks your configured AI for a corrected snippet (copy / regenerate / **Commit to branch**, which creates a real commit on the MR source branch after confirmation and refuses if the lines changed meanwhile). Endpoints: `POST /api/code-context`, `/api/suggest-code`, `/api/commit-suggestion`.
-- 📝 **Release notes (v0.2.18)**: [`CHANGELOG.md`](CHANGELOG.md) is the single bilingual (EN/FA) history of every release, mirrored in the **Release Notes** section of the landing page. It is updated with every feature or notable fix (rule in `AGENTS.md`), and `npm run changelog:check` fails if the current version has no entry.
-- 🕘 **Index history (v0.2.16)**: every finished indexing job (succeeded/failed/cancelled) is kept per project (last 50) with branch, commit, files, symbols, reused files and duration; see **Index history** in the Index tab (`GET /api/projects/:id/index/history`).
-- 🔄 **Fresher index + diff overlay (v0.2.15)**: the index is refreshed when the target branch head moves (max every 5 min; 24h fallback if the head cannot be read), and review context overlays the diff on the index — new/renamed/deleted files, newly added imports, unresolved relative imports, and untouched files still importing a deleted or moved file.
-- 🌿 **Per-branch index for reviews (v0.2.14)**: every branch keeps its own index (`refs.json`); reviews use the index of the MR/PR target branch, falling back to the default branch and then the latest index, and indexing a feature branch no longer changes other reviews. Auto-indexing now also uses the Git token from Settings.
-- 🔗 **Deep links + Index token fix (v0.2.13)**: the URL now tracks the tab, project and project sub-tab (`#/projects/<id>/index`, back/forward supported); the Index tab uses the matching Git connection from Settings, fixing `404 Project Not Found` when no token is stored in Profile; Index inputs now match the app styling.
-- 🔑 **Multiple Git connections + Test Connection (v0.2.12)**: Settings → Git Provider Settings now supports any number of GitLab/GitHub connections (name, base URL, token); the one matching the MR/PR host is used automatically, and a **Test Connection** button verifies each token (`POST /api/test-git-connection`). Existing single tokens migrate automatically.
-- 🐞 **Fixes (v0.2.11)**: the Index tab no longer blanks the screen when the API returns a non-JSON page (e.g. a dev server that was not restarted after an update): the client now reports a clear error, a React error boundary keeps a crash inside one view from taking down the whole app, and `npm run dev` now uses `tsx watch` so server changes restart automatically.
-- 🌿 **Branch picker for indexing (v0.2.10)**: the Index tab now loads the repository's branches from GitHub/GitLab (`GET /api/projects/:id/index/branches`), pre-fills the default branch and offers a searchable list; typing any branch, tag or SHA still works if the host cannot be reached. There is no cron-style scheduler yet: indexing starts manually or automatically when a review runs on an unindexed/stale (>24h) project.
-- 🔑 **Local password recovery (v0.2.9)**: `npm run reset-password` lists users; `npm run reset-password -- <email> <newPassword>` resets a password and signs that user out everywhere. It is a local CLI (no HTTP endpoint, so nothing to disable in production). Stop the server first.
-- 🧠 **Index-aware reviews (v0.2.8)**: Reviews of a registered project now include, for every changed file, its exports, imports and the files that depend on it (from the project index), flagging dependants outside the change. A background index job starts automatically for unindexed projects or when the index is older than 24h (10-minute back-off after a failure). Model prices now come from the configured providers so dollar budgets and cost metrics are real, cache hit/miss metrics are reported, a `.../merge_requests/latest` URL that cannot be resolved now fails with a clear error instead of reviewing a fabricated diff, and `npm run e2e` runs an end-to-end smoke test (after `npm run build`).
-- 🐞 **Fixes (v0.2.7)**: Submitting a new MR/PR URL as a non-admin user now registers the project and makes that user its OWNER (previously the review was denied with 403 and the project was orphaned); the saved Git token is chosen by the repository host, so self-hosted GitLab domains that do not contain "gitlab" work; the Index tab no longer lists files with zero importers as "most imported".
-- 🧭 **Project Index in the app (v0.2.6)**: project-index is now wired into the API and web UI (see the Structural Project Index entry); local filesystem paths are never accepted from API requests.
-- 🐞 **Fixes (v0.2.5)**: Server honors the `PORT` env var (fixes `npm run desktop`), the settings budget limit is now sent to the backend as `AI_REVIEW_DOLLAR_BUDGET`, and the `eval`/`debugger` rules plus new SQL-injection and wildcard-CORS rules are registered in the default rule set.
-- 📜 **Security Audit Trail**: Append-only logging (capped at the latest 10,000 entries) of authentication, user mutations, membership adjustments, credential lifecycle events, and review activities with sensitive data sanitization.
-- 🛡️ **API Hardening (v0.2.4)**: All project, review, estimate, publish, model-listing and apply-local endpoints now require authentication; `apply-local` only edits files inside the given repository root (path traversal and escaping symlinks are rejected); `.data/` runtime storage is no longer tracked by git.
-- 📊 **Benchmark Dataset & Evaluation Harness (v0.2.2)**: Empirical evaluation harness (`@ai-review/eval`) featuring ground-truth schemas, Kuhn-Munkres (Hungarian) maximum-weight bipartite matching with $O((m+n)^3)$ equality-subgraph tie-breaking, strict (`>`) dual-match quarantine, and unbiased precision, recall, F1, AFTR, FDPC, UAR, and filteredRecallLoss metrics. _Status: offline CLI/test tooling (`npm run eval:mock`), not part of the running app._
-- 🧭 **Structural Project Index (`@ai-review/project-index` — v0.2.3)**: Multi-source repository indexing across GitLab REST v4, GitHub Trees/Blobs API, and local checkouts with `.gitignore` filtering, TypeScript/JS AST extraction, monorepo workspace & `tsconfig` path-alias dependency graphs, incremental `gitBlobSha`/`contentHash` reuse, atomic snapshot storage with retention, and rate-limit-aware cancellable jobs. Available in the app via the project **Index** tab and `GET/POST /api/projects/:id/index` (`DELETE .../index/job` cancels); indexing uses the requesting user's encrypted Git token and requires `project:manage` to start, `project:view` to read.
-- 🧠 **Durable Multi-Scope Memory**: Crash-safe persistent memory partitioned by scope (`session`, `review`, `repository`, `organization`, `global`) surviving server restarts.
-- 🦊 **GitLab Integration**: Fetches MR diffs and publishes inline discussions and review summaries directly via GitLab REST API v4. GitHub PR URLs can be fetched for review, but publishing comments back is GitLab-only for now.
-- 🖥️ **Interactive Web & Desktop UI**: Multi-mode review input (diff, PR/MR URL, ZIP, local path, repository), historical review archive, per-request budget limit, and Electron desktop packaging. (Live streaming of pipeline stages via SSE is planned, not yet implemented.)
+**[English](#-english) · [فارسی](#-فارسی) · [Landing page](https://whossein.github.io/ai-platform-review/) · [Changelog](CHANGELOG.md)**
 
 ---
 
-## 🇮🇷 درباره پروژه (فارسی)
+## 🇬🇧 English
 
-**پلتفرم بررسی هوشمند کد (AI Code Review)** یک سیستم خودکار و چندعامله (Multi-Agent) است که مانند یک برنامه‌نویس ارشد در کنار شما قرار می‌گیرد. این پلتفرم با تحلیل کدهای جدید (از طریق GitLab یا فایل‌های Local)، باگ‌ها را شناسایی کرده و راهکارهای بهینه‌سازی پیشنهاد می‌دهد.
+### What it does
 
-### ✨ ویژگی‌های کلیدی
+Paste a diff or an MR/PR link. The platform runs free deterministic checks first, then sends the change only to the specialist AI reviewers that match the files you touched. A critic merges duplicate findings, a judge keeps the confident ones, and you get a report you can publish back to the merge request as inline comments.
 
-- 🤖 **۱۳ ارزیاب متخصص**: شامل ایجنت‌های تخصصی برای React، TypeScript، Python، Android، امنیت (Security)، پرفورمنس و ...
-- ⚡ **موتور بررسی قطعی (بدون هزینه)**: شناسایی فوری و بدون مصرف توکن: کلیدهای لو رفته، SQL Injection (ساخت کوئری با الحاق رشته)، CORS با wildcard، `eval`، `debugger`، `console`، نوع `any`، کامنت‌های TODO و تست‌های `.only`/`.skip`.
-- 📊 **سامانه ارزیابی قطعی و بنچ‌مارک (نسخه ۰.۲.۲)**: پکیج تخصصی (`@ai-review/eval`) با معماری تطبیق وزن‌دار دوبخشی (الگوریتم مجارستانی و شکست تساوی $O((m+n)^3)$ روی زیرگراف برابری)، قرنطینه دوگانه اکید (`>`) برای پیشگیری از تایید کاذب خطاها، و محاسبه دقیق سنجه‌های آماری و اقتصادی (Precision, Recall, F1, AFTR, FDPC, UAR, filteredRecallLoss). _وضعیت: ابزار آفلاین (CLI و تست) و بخشی از اپلیکیشن در حال اجرا نیست._
-- 🧭 **ایندکس ساختاری مخازن پروژه (`@ai-review/project-index` — نسخه ۰.۲.۳)**: موتور ایندکسینگ ساختاری پروژه‌ها با پشتیبانی از GitLab، GitHub و مسیرهای Local، فیلترهای `.gitignore` و حجم فایل، استخراج AST برای TypeScript/JS، ساخت گراف وابستگی و معکوس با پشتیبانی از Workspaces و `tsconfig` paths، بازاستفاده افزایشی بر پایه `gitBlobSha` و `contentHash` بدون دانلود مجدد، ذخیره‌سازی اتمیک اسنپ‌شات‌ها و مدیریت Job با قابلیت لغو و رعایت محدودیت نرخ (`429 Retry-After`). اکنون از تب **Index** در صفحه پروژه و endpointهای `GET/POST /api/projects/:id/index` (و `DELETE .../index/job` برای لغو) قابل استفاده است؛ ایندکس با توکن رمزنگاری‌شده Git کاربر درخواست‌دهنده انجام می‌شود، شروع آن نیازمند `project:manage` و مشاهده آن نیازمند `project:view` است.
-- 🧠 **حافظه پایدار چندلایه‌ای (Phase 5)**: ذخیره‌سازی بادوام و مقاوم در برابر خاموشی برای نگهداری یادگیری‌ها، تاریخچه مخازن و تنظیمات در اسکوپ‌های مجزا.
-- 🛡️ **پرامپت ریویو سخت‌سازی‌شده (نسخه ۰.۳.۰)**: diff، ساختار پروژه و خروجی ابزارها در بلوک‌های داده جداشده ارسال می‌شوند که مدل نباید از آن‌ها دستور بگیرد؛ مستندات تغییرکرده در MR (AGENTS.md، CONTRIBUTING.md، .cursorrules) بررسی می‌شوند ولی قانون ریویو حساب نمی‌شوند و تلاش برای prompt injection به‌عنوان یافته critical گزارش می‌شود. diff شماره خط فایل جدید را دارد و یافته‌ها به خطوط تغییرکرده متصل می‌شوند. همه specialistها ابتدای پرامپت مشترک دارند تا کش پرامپت سرویس‌دهنده فعال شود و خروجی با schema دقیق JSON و بازگشت خودکار گرفته می‌شود. از نسخه ۰.۳.۱ اولین specialist تنها اجرا می‌شود تا کش گرم شود (`AI_REVIEW_CACHE_WARMUP=0` آن را خاموش می‌کند) و قانون بدون AI به نام `security.prompt-injection` خطوطی را که بخواهند به ریویوکننده AI دستور بدهند علامت می‌زند. از نسخه ۰.۳.۲ خطای یک specialist دیگر گزارش را از بین نمی‌برد، تلاش مجدد با فاصله افزایشی انجام می‌شود، ریویوکننده امنیت از مدل سطح premium استفاده می‌کند، تغییرات Go/Rust/PHP/Ruby/C++ هم ریویوکننده‌های عمومی را می‌گیرند و کش پاسخ‌ها برای هر مدل جداست (`AI_REVIEW_LLM_CACHE=0` آن را خاموش می‌کند).
-- 🎯 **مسیریابی هوشمند**: بررسی نوع فایل‌های تغییر یافته و ارجاع آن‌ها فقط به متخصص مربوطه برای کاهش هزینه و افزایش سرعت.
-- 🔌 **پشتیبانی از انواع هوش مصنوعی**: پشتیبانی کامل از **Gemini، OpenAI، Anthropic، OpenRouter، سیستم ایرانی Avalai، DeepSeek، و Ollama (برای پردازش آفلاین/رایگان)**.
-- 🎛️ **مدیریت پیشرفته سرویس‌دهنده‌ها**: قابلیت روشن/خاموش کردن، تعیین هوش مصنوعی پیش‌فرض، دریافت مستقیم لیست مدل‌ها و کنترل سقف بودجه (Budget Limit).
-- 📁 **رجیستری پروژه‌ها و دستورات سیستمی هوش مصنوعی**: موجودیت سطح اول پروژه با شناسه یکتای `gitHost + repositoryPath`، امکان ثبت دستی و ایجاد خودکار، تعیین دستورالعمل‌ها و کانتکست سیستمی اختصاصی برای هر پروژه (انتقال مستقیم به پرامپت ایجنت‌های هوش مصنوعی).
-- 🔐 **احراز هویت و مدیریت کاربران (نسخه ۰.۲.۰)**: چرخه کامل مدیریت کاربران با هش ایمن گذرواژه به روش PBKDF2 (SHA-512)، توکن‌های سشن ۲۵۶ بیتی با امکان لغو، محدودکننده نرخ ورود (Rate Limiter) و صفحه راه‌اندازی اولیه اولین ادمین سیستم (First-Run Wizard).
-- 🛡️ **سطوح دسترسی سازمانی و چندلایه‌ای (RBAC)**: نقش‌های سیستمی (`ADMIN` و `MEMBER`) و نقش‌های اختصاصی سطح پروژه (`OWNER`، `MANAGER`، `REVIEWER`، `VIEWER`) با اعتبارسنجی قطعی در سمت سرور و محافظت از حذف آخرین ادمین سیستم.
-- 🔑 **ذخیره‌سازی رمزنگاری‌شده دسترسی‌های گیت**: اتصال Personal Access Token برای GitHub و GitLab با رمزنگاری پیشرفته متقارن AES-256-GCM در دیسک، نمایش ماسک‌شده و تضمین عدم افشا در خروجی APIها و لاگ‌ها.
-- 🐞 **اصلاحات (نسخه ۰.۲.۱۱)**: تب Index دیگر هنگام دریافت پاسخ غیر JSON از API (مثلاً سرور توسعه‌ای که بعد از به‌روزرسانی ری‌استارت نشده) صفحه را سیاه نمی‌کند: کلاینت خطای واضح می‌دهد، یک Error Boundary در React مانع از خراب‌شدن کل اپ با کرش یک بخش می‌شود و `npm run dev` اکنون از `tsx watch` استفاده می‌کند تا تغییرات سرور خودکار ری‌استارت شوند.
-- 🌿 **انتخاب برنچ برای ایندکس (نسخه ۰.۲.۱۰)**: تب Index اکنون لیست برنچ‌های مخزن را از GitHub/GitLab می‌گیرد (`GET /api/projects/:id/index/branches`)، برنچ پیش‌فرض را از قبل پر می‌کند و لیست قابل جستجو نشان می‌دهد؛ اگر اتصال به هاست ممکن نباشد همچنان می‌توان برنچ، تگ یا SHA را تایپ کرد. هنوز زمان‌بند (cron) نداریم: ایندکس دستی شروع می‌شود یا وقتی ریویو روی پروژه‌ی بدون ایندکس یا قدیمی‌تر از ۲۴ ساعت اجرا شود، خودکار.
-- 🔑 **بازیابی رمز عبور محلی (نسخه ۰.۲.۹)**: دستور `npm run reset-password` کاربران را لیست می‌کند و `npm run reset-password -- <email> <newPassword>` رمز را عوض کرده و همه‌ی نشست‌های آن کاربر را خارج می‌کند. این یک CLI محلی است (بدون endpoint HTTP، پس برای پروداکشن چیزی برای غیرفعال‌کردن نیست). قبل از اجرا سرور را متوقف کنید.
-- 🧠 **ریویو آگاه از ایندکس (نسخه ۰.۲.۸)**: ریویو پروژه‌های ثبت‌شده اکنون برای هر فایل تغییرکرده، exportها، importها و فایل‌های وابسته به آن را (از ایندکس پروژه) به ایجنت‌ها می‌دهد و وابسته‌های خارج از تغییر را مشخص می‌کند. برای پروژه‌های بدون ایندکس یا با ایندکس قدیمی‌تر از ۲۴ ساعت، ایندکس به‌صورت خودکار در پس‌زمینه اجرا می‌شود (بعد از شکست ۱۰ دقیقه صبر می‌کند). قیمت مدل‌ها از پروایدرهای تنظیم‌شده خوانده می‌شود تا سقف بودجه و هزینه‌ها واقعی باشند، متریک‌های cache گزارش می‌شوند، لینک `.../merge_requests/latest` که حل نشود به‌جای ریویوی یک دیف ساختگی خطای واضح می‌دهد، و `npm run e2e` یک تست سرتاسری اجرا می‌کند (بعد از `npm run build`).
-- 💸 **کاهش هزینه دستورالعمل‌های پروژه (نسخه ۰.۲.۳۹)**: متن دستورالعمل‌ها با سرتیتر `##` (Security، Performance، Git & Commits، نام فریم‌ورک و…) تقسیم می‌شود و هر specialist فقط بخش‌های مربوط به خودش را می‌گیرد، نه کل متن را. دکمه **Fix, improve & shorten with AI** متن را به بخش‌های مرتب بازنویسی می‌کند و یک نسخه فشرده برای ریویوها می‌سازد؛ متن کامل برای شما می‌ماند. ویرایشگر تعداد توکن تقریبی را هم نشان می‌دهد. مسیر: `POST /api/projects/:id/instructions/optimize`.
-- ✨ **بازطراحی Review & Publish + کد نمونه از AI (نسخه ۰.۲.۱۹)**: هر کارت یافته، کد مشکل‌دار، توضیح کامل و درصد اطمینانی که در کامنت PR می‌رود، پیش‌نمایش دقیق کامنت و چیدمان راست‌چین برای کامنت‌های فارسی را نشان می‌دهد. برای آدرس MR در GitLab، دکمه **دریافت کد نمونه از AI** یک تکه کد اصلاح‌شده از AI تنظیم‌شده می‌گیرد (کپی / تولید مجدد / **کامیت روی branch**؛ پس از تأیید یک کامیت واقعی روی branch مبدأ MR می‌سازد و اگر خطوط در این فاصله تغییر کرده باشند رد می‌کند). مسیرها: `POST /api/code-context`، `/api/suggest-code`، `/api/commit-suggestion`.
-- 📝 **یادداشت‌های انتشار (نسخه ۰.۲.۱۸)**: فایل [`CHANGELOG.md`](CHANGELOG.md) تاریخچه دو‌زبانه (EN/FA) همه نسخه‌هاست و در بخش **Release Notes** صفحه معرفی هم نمایش داده می‌شود. با هر فیچر یا اصلاح مهم به‌روز می‌شود (قانون در `AGENTS.md`) و دستور `npm run changelog:check` در نبود ورودی نسخه فعلی خطا می‌دهد.
-- 🕘 **تاریخچه ایندکس (نسخه ۰.۲.۱۶)**: هر Job ایندکس پایان‌یافته (موفق/ناموفق/لغوشده) برای هر پروژه (۵۰ مورد آخر) با برنچ، commit، تعداد فایل و سیمبل، فایل‌های بازاستفاده‌شده و مدت زمان ذخیره می‌شود؛ بخش **Index history** در تب Index (`GET /api/projects/:id/index/history`).
-- 🔄 **ایندکس تازه‌تر + اعمال دیف روی ایندکس (نسخه ۰.۲.۱۵)**: ایندکس با تغییر commit سر برنچ مقصد به‌روز می‌شود (حداکثر هر ۵ دقیقه؛ در صورت ناتوانی در خواندن آن، fallback ۲۴ ساعته) و کانتکست ریویو دیف را روی ایندکس اعمال می‌کند: فایل‌های جدید/تغییرنام‌یافته/حذف‌شده، importهای تازه، importهای نسبی بدون مقصد و فایل‌های دست‌نخورده‌ای که هنوز فایل حذف‌شده یا جابه‌جاشده را import می‌کنند.
-- 🌿 **ایندکس مجزا برای هر برنچ در ریویو (نسخه ۰.۲.۱۴)**: هر برنچ ایندکس مخصوص خود را دارد؛ ریویو از ایندکس برنچ مقصد MR/PR استفاده می‌کند (در صورت نبود، برنچ پیش‌فرض و سپس آخرین ایندکس) و ایندکس‌کردن یک فیچر‌برنچ روی ریویوهای دیگر اثر نمی‌گذارد. ایندکس خودکار هم از توکن Git تنظیمات استفاده می‌کند.
-- 🔗 **لینک مستقیم + رفع خطای توکن Index (نسخه ۰.۲.۱۳)**: آدرس اکنون تب، پروژه و زیرتب پروژه را دنبال می‌کند (`#/projects/<id>/index`، با پشتیبانی back/forward)؛ تب Index از اتصال Git مطابق در Settings استفاده می‌کند و خطای `404 Project Not Found` را رفع می‌کند؛ ظاهر اینپوت‌های Index هم با بقیه برنامه یکی شد.
-- 🔑 **چند اتصال Git + تست اتصال (نسخه ۰.۲.۱۲)**: در تنظیمات → Git Provider Settings می‌توانید چندین اتصال GitLab/GitHub (نام، آدرس پایه، توکن) تعریف کنید؛ اتصال مطابق با host لینک MR/PR خودکار انتخاب می‌شود و دکمه **Test Connection** اعتبار هر توکن را بررسی می‌کند (`POST /api/test-git-connection`). توکن‌های تکی قبلی خودکار منتقل می‌شوند.
-- 🐞 **اصلاحات (نسخه ۰.۲.۷)**: ثبت لینک MR/PR جدید توسط کاربر غیرادمین اکنون پروژه را ثبت کرده و او را OWNER می‌کند (قبلاً ریویو با خطای ۴۰۳ رد می‌شد و پروژه بدون مالک می‌ماند)؛ توکن ذخیره‌شده Git بر اساس host مخزن انتخاب می‌شود تا GitLabهای self-hosted با دامنه‌ای که «gitlab» ندارد هم کار کنند؛ تب Index دیگر فایل‌های بدون importer را «پرایمپورت‌ترین» نشان نمی‌دهد.
-- 🧭 **ایندکس پروژه در اپلیکیشن (نسخه ۰.۲.۶)**: project-index به API و رابط وب متصل شد (به بخش ایندکس ساختاری مراجعه کنید)؛ مسیر محلی فایل‌سیستم هرگز از درخواست‌های API پذیرفته نمی‌شود.
-- 🐞 **اصلاحات (نسخه ۰.۲.۵)**: سرور متغیر `PORT` را می‌خواند (رفع مشکل `npm run desktop`)، سقف بودجه تنظیمات به‌صورت `AI_REVIEW_DOLLAR_BUDGET` به بک‌اند ارسال می‌شود و قوانین `eval`/`debugger` به‌همراه قوانین جدید SQL Injection و CORS با wildcard در مجموعه پیش‌فرض ثبت شدند.
-- 📜 **ثبت رویدادهای امنیتی (Audit Logs)**: رهگیری و ثبت (فقط‌افزودنی، حداکثر ۱۰٬۰۰۰ رکورد آخر) وقایع حیاتی سیستم اعم از ورود/خروج، تغییر نقش‌ها، مدیریت پروژه‌ها، ثبت یا حذف توکن‌ها با فیلترسازی و حذف خودکار اطلاعات حساس.
-- 🛡️ **سخت‌سازی API (نسخه ۰.۲.۴)**: همه endpointهای پروژه، ریویو، برآورد، انتشار، لیست مدل‌ها و apply-local اکنون نیازمند ورود کاربر هستند؛ `apply-local` فقط فایل‌های داخل ریشه مخزن را تغییر می‌دهد (path traversal و symlink خارج از ریشه رد می‌شود)؛ پوشه `.data/` دیگر در git ردیابی نمی‌شود.
-- 🦊 **یکپارچگی با گیت‌لب (GitLab)**: امکان دریافت مستقیم Merge Request ها و ثبت خودکار کامنت روی کدهای تغییر یافته در GitLab. دریافت دیف PR در GitHub پشتیبانی می‌شود، اما ثبت کامنت فعلاً فقط برای GitLab است.
-- 🖥️ **رابط کاربری تعاملی (وب و دسکتاپ)**: ورودی چندحالته (diff، لینک PR/MR، ZIP، مسیر محلی، مخزن)، تاریخچه ریویوها، سقف بودجه برای هر درخواست و نسخه دسکتاپ (Electron). (نمایش زنده مراحل با SSE برنامه‌ریزی شده و هنوز پیاده‌سازی نشده است.)
+### Features
 
----
+**Review pipeline**
+- 🤖 **14 specialist reviewers:** React, Next.js, React Native, Angular, Vue, TypeScript, .NET/C#, Python, Android, iOS, Security, Performance, general code quality, and contributing/governance.
+- ⚡ **34 built-in rules that cost nothing.** They run before any AI call and only on added lines: hardcoded secrets, SQL injection, wildcard CORS, disabled TLS checks, `eval`, prompt-injection attempts, plus language rules for Python, Java, C#, PHP, Go, Kotlin, Swift, shell and Dockerfiles. Tick **Rules only (no AI)** for an instant, free review.
+- 🎯 **Smart routing:** a planner reads the changed files and wakes only the relevant specialists.
+- 🛡️ **Hardened prompts:** the diff is treated as data, never as instructions. Docs changed in the MR (`AGENTS.md`, `.cursorrules`…) are reviewed, not obeyed, and injection attempts are reported as critical findings.
+- 🧠 **Index-aware context:** each project keeps a per-branch structural index (exports, imports, dependants), so reviewers see which untouched files a change can break.
 
-## 🏗️ Architecture & Package Status
+**Inputs and outputs**
+- 📥 Review a raw diff, a GitLab MR or GitHub PR URL, a ZIP, a local path, or a repository.
+- 💬 Publish accepted findings to GitLab as inline discussions plus a summary. GitHub PRs can be reviewed, but publishing back is GitLab-only for now.
+- 🩹 **AI sample fix:** ask for a corrected snippet on a finding and, for GitLab MRs, commit it to the source branch after confirmation.
+- 🔎 **Project scan:** run the built-in rules over every file of a branch and get a filterable report.
 
-```
-├── apps/
-│   ├── web/               # [Active] React + Tailwind CSS + Vite frontend
-│   └── api/               # [Active] Standalone Express API definitions
-├── packages/
-│   ├── project-index/     # [Active] Structural repository indexer, import graph, & snapshot store (wired to API + UI)
-│   ├── eval/              # [Active] Benchmark dataset & Kuhn-Munkres evaluation harness
-│   ├── orchestrator/      # [Active] Multi-agent pipeline coordinator, planner, & critic
-│   ├── config/            # [Active] Deterministic rule registry & engine
-│   ├── context-engine/    # [Active] TypeScript AST extraction & context slicing
-│   ├── core/              # [Active] Domain types, result types, & interface definitions
-│   ├── git/               # [Active] GitLab provider, URL parser, & review publisher
-│   ├── llm/               # [Active] Multi-provider OpenAI-compatible LLM client & cache
-│   ├── memory/            # [Active] Multi-scope memory store (in-memory + persistent file backend)
-│   ├── repository/        # [Active] Unified diff parser & local file resolver
-│   ├── reporting/         # [Active] Markdown & JSON review renderers
-│   ├── shared/            # [Active] Environment loaders, hashing, & telemetry utilities
-│   ├── workflow-engine/   # [Abstraction] Graph/DAG execution engine (compiled)
-│   ├── agent-runtime/     # [Abstraction] Capability gating runtime (compiled)
-│   ├── prompts/           # [Stub] Reserved for externalized prompt templates
-│   ├── skills/            # [Active] Diff/import/symbol skills used by the orchestrator pipeline
-│   ├── tools/             # [Active] Tool registry, filesystem & AST tools used by the pipeline
-│   ├── ui/                # [Stub] Reserved for cross-framework UI components
-│   └── plugins/           # [Draft] Architecture documentation for plugin ecosystem
-├── server.ts              # Full-stack API & development web server
-├── main.cjs               # Electron desktop main process entry
-└── turbo.json             # Turborepo task pipeline configuration
+**Teams and projects**
+- 📁 **Projects** with per-project guidelines. Guidelines are split by heading so each specialist only receives the sections that concern it.
+- 🔐 **Users and roles:** first-run admin setup, system roles (`ADMIN`, `MEMBER`) and project roles (`OWNER`, `MANAGER`, `REVIEWER`, `VIEWER`), rate-limited login and an append-only audit log.
+- 🔑 **Encrypted Git tokens:** personal GitLab/GitHub tokens are stored with AES-256-GCM and never returned by the API.
+- 📊 **MR grades and developers:** reviewers grade each MR 0-10 (the system suggests a grade), see per-developer averages, and can estimate how likely an MR was AI-written.
+
+**Cost control**
+- 🔌 **Any LLM provider:** Gemini, OpenAI, Anthropic, OpenRouter, DeepSeek, Azure OpenAI, Avalai, Ollama (local), or any OpenAI-compatible gateway. With no key configured it falls back to an offline mock.
+- 💰 **Hard budgets** on tokens, dollars and wall-clock time per review, with cheapest-capable model routing, provider prompt caching and a response cache.
+
+**Also included**
+- 🖥️ Electron desktop app.
+- 📐 An offline evaluation harness (`@ai-review/eval`) that scores reviewer precision and recall against ground-truth datasets.
+
+Version-by-version details are in [CHANGELOG.md](CHANGELOG.md).
+
+### How it works
+
+```mermaid
+flowchart LR
+    A[Diff / MR / PR] --> B[Context + project index]
+    B --> C[Rule engine<br/>free, deterministic]
+    C --> D1[Specialist 1]
+    C --> D2[Specialist 2]
+    C --> D3[Specialist N]
+    D1 & D2 & D3 --> E[Critic<br/>merge duplicates]
+    E --> F[Judge<br/>confidence filter]
+    F --> G[Report<br/>Markdown / JSON / MR comments]
 ```
 
----
+Specialists run in parallel. Each AI call goes through a router that picks the cheapest model able to do the job; the Security reviewer gets a premium-tier model when one is configured.
 
-## 🚀 Getting Started
+### Quick start
 
-### Prerequisites
-
-- **Node.js**: `v18.0.0` or higher
-- **npm** (v10+) or **bun**
-
-### 1. Installation
-
-Clone the repository and install dependencies:
+Requires **Node.js 18+** and npm 10+.
 
 ```bash
-git clone <repository-url>
-cd ai-review-platform
+git clone https://github.com/whossein/ai-platform-review.git
+cd ai-platform-review
 npm install
-```
-
-### 2. Environment Configuration
-
-Copy `.env.example` to `.env` and set your API keys (can also be done directly in the UI Settings):
-
-```bash
-cp .env.example .env
-```
-
-### 3. Running Development Server
-
-Start the full-stack server (Express API + Vite React Frontend on port `4000`):
-
-```bash
 npm run dev
 ```
 
-Visit [http://localhost:4000](http://localhost:4000) in your browser.
+Open <http://localhost:4000>. On first run you create the admin account, then add AI provider keys and Git connections under **Settings** (or use the environment variables below).
+
+Forgot the admin password? Stop the server and run `npm run reset-password -- <email> <newPassword>`.
+
+### Configuration
+
+| Variable | Purpose | Default |
+| :--- | :--- | :--- |
+| `AI_REVIEW_LLM_PROVIDER` | `openai`, `anthropic`, `gemini`, `openrouter`, `deepseek`, `azure`, `avalai`, `ollama`, `custom`, or `mock` | `openai` |
+| `AI_REVIEW_<PROVIDER>_API_KEY` | Provider key, e.g. `AI_REVIEW_GEMINI_API_KEY`. Standard names like `GEMINI_API_KEY` / `OPENAI_API_KEY` also work. | none |
+| `AI_REVIEW_<PROVIDER>_BASE_URL` | Point a provider at a proxy or gateway | provider default |
+| `AI_REVIEW_LLM_API_KEY` / `_BASE_URL` / `_MODEL` | Provider-agnostic fallbacks | none |
+| `AI_REVIEW_COMMENT_LANGUAGE` | Default language of review comments (`fa`, `en`, …); can also be chosen per review in the UI | `fa` |
+| `AI_REVIEW_TOKEN_BUDGET` / `_DOLLAR_BUDGET` / `_EXECUTION_BUDGET_MS` | Per-review limits | `2000000` / `25` / `600000` |
+| `AI_REVIEW_LLM_CACHE` | Set `0` to disable the AI response cache | on |
+| `AI_REVIEW_CACHE_WARMUP` | Set `0` to skip the prompt-cache warm-up call | on |
+| `AI_REVIEW_GOVERNANCE_RULES` | Set `1` to also check branch names and MR titles | off |
+| `GITLAB_TOKEN` / `GITHUB_TOKEN` | Server-level Git tokens (per-user tokens in the app are preferred) | none |
+| `GITLAB_BASE_URL` | Self-hosted GitLab URL | `https://gitlab.com` |
+| `CREDENTIAL_ENCRYPTION_KEY` | Key for encrypting stored Git tokens. **Set this in production**; otherwise a key is generated in `.data/security.key`. | generated |
+| `PORT` | Server port | `4000` |
+
+All runtime data (users, projects, encrypted tokens, review memory) lives in `./.data/`. Back it up, and keep `security.key` with it.
+
+### Scripts
+
+| Command | Description |
+| :--- | :--- |
+| `npm run dev` | Full-stack dev server with auto-restart on port 4000 |
+| `npm run build` | Build all packages and bundle the server to `dist/server.cjs` |
+| `npm start` | Run the production build |
+| `npm test` | Run all package tests |
+| `npm run lint` | Type-check all packages |
+| `npm run e2e` | End-to-end smoke test (after `npm run build`) |
+| `npm run reset-password` | List users, or reset one user's password |
+| `npm run eval:mock` | Run the evaluation harness on synthetic cases |
+| `npm run desktop` | Run the server and the Electron desktop app |
+| `npm run build:desktop` | Package the desktop app for macOS, Windows, or Linux |
+
+### Project structure
+
+```
+apps/
+  web/               React + Vite UI
+  api/               Auth, users, projects, security
+packages/
+  orchestrator/      Review pipeline: planner, specialists, critic, judge
+  workflow-engine/   DAG stage executor
+  agent-runtime/     Agent registry and capability-gated runtime
+  llm/               Provider adapters, routing, budgets, caches
+  config/            Rule engine and built-in rules
+  project-index/     Per-branch structural repository index
+  context-engine/    Context extraction and slicing
+  git/               GitLab/GitHub access, MR URL parsing, publisher
+  repository/        Unified diff parser
+  reporting/         Markdown and JSON renderers
+  memory/            Durable multi-scope memory
+  skills/ tools/     Diff, import, symbol and filesystem helpers for agents
+  eval/              Offline evaluation harness
+  core/ shared/      Domain types, contracts and utilities
+  prompts/ ui/ plugins/   Reserved for future work
+server.ts            Express server used by `npm run dev` / `npm start`
+main.cjs             Electron main process
+```
 
 ---
 
-## 🛠️ Available Scripts
+<div dir="rtl">
 
-| Command                 | Description                                                                           |
-| :---------------------- | :------------------------------------------------------------------------------------ |
-| `npm run dev`           | Starts the unified full-stack server in development mode (`tsx server.ts`)            |
-| `npm run build`         | Builds all packages with Turborepo and compiles the server bundle (`dist/server.cjs`) |
-| `npm run start`         | Launches the compiled production server (`node dist/server.cjs`)                      |
-| `npm run eval`          | Runs unit test suite for the deterministic evaluation harness (`@ai-review/eval`)     |
-| `npm run eval:mock`     | Executes the benchmark evaluation CLI harness on synthetic test cases                 |
-| `npm run clean`         | Cleans build caches and generated artifacts                                           |
-| `npm run desktop`       | Launches the full-stack server and the Electron desktop application                   |
-| `npm run build:desktop` | Packages the desktop application for macOS, Windows, or Linux                         |
+## 🇮🇷 فارسی
+
+### این پروژه چیه؟
+
+یه ابزار ریویوی کد با هوش مصنوعیه که روی سرور خودت اجرا می‌شه. یه Diff یا لینک MR/PR بهش می‌دی؛ اول خودش با چندتا قانون ساده و رایگان کد رو چک می‌کنه، بعد فقط ریویوکننده‌هایی رو صدا می‌زنه که به فایل‌های تغییرکرده‌ت ربط دارن. آخرش یافته‌های تکراری رو یکی می‌کنه، موردهای مطمئن رو نگه می‌داره و یه گزارش تمیز تحویلت می‌ده که می‌تونی مستقیم به‌شکل کامنت روی MR بذاری.
+
+### چه کارهایی می‌کنه؟
+
+**ریویو**
+- 🤖 **۱۴ تا ریویوکننده‌ی متخصص** داره: برای React، Next.js، React Native، Angular، Vue، TypeScript، ‏.NET/C#‏، Python، Android، iOS، امنیت، پرفورمنس، کیفیت کلی کد و قوانین تیم.
+- ⚡ **۳۴ تا قانون رایگان** قبل از هوش مصنوعی اجرا می‌شن و فقط خط‌های جدید رو می‌بینن؛ مثلاً کلید API لو رفته، SQL Injection، ‏`eval`، یا کامنتی که بخواد هوش مصنوعی رو گول بزنه. اگه فقط همینا رو می‌خوای، تیک **Rules only (no AI)** رو بزن: فوریه و هیچ هزینه‌ای نداره.
+- 🎯 فقط ریویوکننده‌هایی که لازمن صدا زده می‌شن، پس هم سریع‌تره هم ارزون‌تر.
+- 🛡️ اگه کسی توی کد یا مستندات MR بخواد به هوش مصنوعی دستور بده، اون دستور اجرا نمی‌شه و به‌عنوان یه مشکل جدی گزارش می‌شه.
+- 🧠 ساختار پروژه‌ت رو می‌شناسه (کدوم فایل کدوم رو import کرده)، پس می‌فهمه تغییرت ممکنه کدوم فایل‌های دیگه رو خراب کنه.
+
+**ورودی و خروجی**
+- 📥 می‌تونی Diff، لینک MR گیت‌لب، لینک PR گیت‌هاب، فایل ZIP، یه پوشه روی سیستمت یا یه مخزن بهش بدی.
+- 💬 یافته‌هایی که تأیید کردی رو مستقیم روی MR گیت‌لب کامنت می‌کنه. برای گیت‌هاب فعلاً فقط ریویو می‌کنه و کامنت نمی‌ذاره.
+- 🩹 برای هر یافته می‌تونی ازش بخوای یه نسخه‌ی اصلاح‌شده‌ی کد پیشنهاد بده و اگه خواستی، با تأیید خودت مستقیم روی برنچ MR کامیتش کنه.
+- 🔎 می‌تونی کل یه برنچ رو با همون قانون‌های رایگان اسکن کنی.
+
+**تیم و پروژه‌ها**
+- 📁 هر پروژه می‌تونه راهنمای مخصوص خودش رو داشته باشه و هر ریویوکننده فقط بخشی رو می‌گیره که به کارش میاد.
+- 🔐 کاربر و نقش داره: بار اول یه حساب مدیر می‌سازی، بعد برای هر نفر و هر پروژه سطح دسترسی تعیین می‌کنی.
+- 🔑 توکن‌های گیت‌لب و گیت‌هابت رمزنگاری‌شده ذخیره می‌شن و هیچ‌وقت از API بیرون نمی‌آن.
+- 📊 می‌تونی به هر MR از ۰ تا ۱۰ نمره بدی (خود سیستم هم یه نمره پیشنهاد می‌ده)، میانگین هر توسعه‌دهنده رو ببینی و حتی تخمین بزنی MR با هوش مصنوعی نوشته شده یا نه.
+
+**هزینه**
+- 🔌 با هر سرویسی کار می‌کنه: Gemini، OpenAI، Anthropic، OpenRouter، DeepSeek، Azure، آوال‌ای (Avalai)، Ollama روی سیستم خودت، یا هر Gateway سازگار با OpenAI.
+- 💰 برای هر ریویو سقف توکن، دلار و زمان می‌ذاری و خودش ارزون‌ترین مدلی رو انتخاب می‌کنه که از پس کار برمیاد.
+
+تغییرات هر نسخه توی [CHANGELOG.md](CHANGELOG.md) هست.
+
+### چطوری راهش بندازم؟
+
+فقط Node.js نسخه‌ی ۱۸ به بالا لازم داری. دستورها توی بخش [Quick start](#quick-start) هست. بعد از اجرا برو سراغ `http://localhost:4000`، حساب مدیر رو بساز و از قسمت **Settings** کلیدهای API و اتصال گیت رو وارد کن.
+
+> **چندتا نکته:**
+> - کامنت‌های ریویو به‌طور پیش‌فرض **فارسی** هستن. برای عوض کردنش، توی صفحه‌ی ریویو زبان رو انتخاب کن یا `AI_REVIEW_COMMENT_LANGUAGE` رو مثلاً روی `en` بذار.
+> - اگه روی سرور واقعی نصبش می‌کنی، حتماً `CREDENTIAL_ENCRYPTION_KEY` رو تنظیم کن و از پوشه‌ی `.data` بکاپ بگیر.
+> - رمز مدیر یادت رفت؟ سرور رو خاموش کن و `npm run reset-password` رو بزن.
+
+</div>
 
 ---
 
 ## 📄 License
 
-Private repository maintained for automated AI code review workflows. Version **0.3.2**.
+No license has been chosen yet. Until one is added, all rights are reserved by the author.
