@@ -270,6 +270,7 @@ export class ReviewOrchestrator {
     const reviewCtx: ReviewExecutionContext = {
       diff: opts.diff,
       governanceRules: opts.env?.AI_REVIEW_GOVERNANCE_RULES === "1",
+      llmDedup: opts.env?.AI_REVIEW_LLM_DEDUP === "1",
       language: ruleLanguageFromEnv({ ...process.env, ...opts.env }),
       suppressedRules: opts.suppressedRules ?? [],
       files: opts.files,

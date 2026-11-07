@@ -95,7 +95,7 @@ function normalizeTitle(title: string): string {
  * reader as `performance`, `resource-management` and `security`); the category
  * is compared inside `isSameDefect`, not used to keep findings apart.
  */
-function groupKey(issue: Issue): string {
+export function groupKey(issue: Issue): string {
   return [issue.location.file, issue.location.line ?? -1].join("|");
 }
 
@@ -224,6 +224,47 @@ function corroborate(base: number, agreementCount: number): number {
   return Math.min(1, Number(c.toFixed(4)));
 }
 
+/**
+ * Merges members of one defect into a single representative: highest severity
+ * (then confidence), union of producers, corroboration-boosted confidence.
+ * Members may already be critiqued clusters (the optional LLM merge step), in
+ * which case their `corroboratedBy` producers are carried over.
+ */
+export function mergeDefect(
+  bucket: readonly (Issue & { readonly corroboratedBy?: readonly AgentId[] })[],
+  options: { readonly maxConfidence?: boolean } = {},
+): CritiquedIssue {
+  // Representative = highest severity, then highest confidence.
+  const rep = [...bucket].sort((a, b) => {
+    const s = SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
+    return s !== 0 ? s : b.confidence - a.confidence;
+  })[0]!;
+
+  const contributors = [
+    ...new Set(bucket.flatMap((i) => i.corroboratedBy ?? [i.producedBy])),
+  ];
+  const alreadyCounted = rep.corroboratedBy?.length ?? 1;
+  const base = options.maxConfidence
+    ? Math.max(...bucket.map((i) => i.confidence))
+    : rep.confidence;
+  const confidence =
+    contributors.length > alreadyCounted
+      ? corroborate(base, contributors.length - alreadyCounted + 1)
+      : base;
+  const baseReason = rep.reason.replace(/ \(corroborated by \d+ reviewers\)$/, "");
+
+  return {
+    ...rep,
+    confidence,
+    corroboratedBy: contributors,
+    ...(contributors.length > 1
+      ? {
+          reason: `${baseReason} (corroborated by ${contributors.length} reviewers)`,
+        }
+      : {}),
+  };
+}
+
 export function critique(issues: readonly Issue[]): CritiquedIssue[] {
   const groups = new Map<string, Issue[]>();
   for (const issue of issues) {
@@ -233,31 +274,5 @@ export function critique(issues: readonly Issue[]): CritiquedIssue[] {
     else groups.set(key, [issue]);
   }
 
-  const merged: CritiquedIssue[] = [];
-  for (const bucket of [...groups.values()].flatMap(cluster)) {
-    // Representative = highest severity, then highest confidence.
-    const rep = [...bucket].sort((a, b) => {
-      const s = SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
-      return s !== 0 ? s : b.confidence - a.confidence;
-    })[0]!;
-
-    const contributors = [...new Set(bucket.map((i) => i.producedBy))];
-    const confidence =
-      contributors.length > 1
-        ? corroborate(rep.confidence, contributors.length)
-        : rep.confidence;
-
-    merged.push({
-      ...rep,
-      confidence,
-      corroboratedBy: contributors,
-      ...(contributors.length > 1
-        ? {
-            reason: `${rep.reason} (corroborated by ${contributors.length} reviewers)`,
-          }
-        : {}),
-    });
-  }
-
-  return merged;
+  return [...groups.values()].flatMap(cluster).map((b) => mergeDefect(b));
 }

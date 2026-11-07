@@ -6,13 +6,27 @@ import type { BenchmarkCase } from "./types.js";
 describe("synthetic v2 dataset", () => {
   const cases = loadDataset();
 
-  it("has about ten uniquely named cases, honestly labelled synthetic", () => {
+  it("has uniquely named cases, honestly labelled synthetic or real", () => {
     expect(cases.length).toBeGreaterThanOrEqual(10);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
     for (const c of cases) {
-      expect(c.origin).toBe("synthetic_unit");
-      expect(c.tags).toContain("synthetic");
+      if (c.origin === "real_oss") {
+        expect(c.tags, c.id).toContain("real");
+        expect(c.source?.repo, c.id).toBeTruthy();
+        expect(c.source?.commit, c.id).toMatch(/^https:\/\/github\.com\//);
+        expect(c.source?.license, c.id).toBeTruthy();
+      } else {
+        expect(c.origin).toBe("synthetic_unit");
+        expect(c.tags).toContain("synthetic");
+      }
     }
+  });
+
+  it("includes at least four real open-source cases in several languages", () => {
+    const real = cases.filter((c) => c.origin === "real_oss");
+    expect(real.length).toBeGreaterThanOrEqual(4);
+    const langs = new Set(real.flatMap((c) => c.tags).filter((t) => ["typescript", "javascript", "python", "java", "go"].includes(t)));
+    expect(langs.size).toBeGreaterThanOrEqual(4);
   });
 
   it("every diff parses to at least one file that exists in inputFiles", () => {

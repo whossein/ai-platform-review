@@ -24,7 +24,7 @@ export async function runRulesOnCase(c: BenchmarkCase): Promise<CandidateFinding
 export async function runRulesEvaluation(datasetPath: string = SYNTHETIC_V2_PATH) {
   const cases = loadDataset(datasetPath);
   console.log(`\nRule-engine evaluation (no LLM) — ${cases.length} cases from ${datasetPath}`);
-  console.log(`Origin: synthetic, hand-written; scores are only meaningful relative to each other.\n`);
+  console.log(`Origin: hand-written synthetic cases plus a few real open-source bug fixes (tag "real"); scores are only meaningful relative to each other.\n`);
 
   const reports: Array<{ c: BenchmarkCase; report: EvaluationReport }> = [];
   for (const c of cases) {

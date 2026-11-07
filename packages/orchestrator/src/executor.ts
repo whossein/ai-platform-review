@@ -35,6 +35,7 @@ import { MarkdownReporter, JsonReporter } from "@ai-review/reporting";
 import type { ReservableBudgetGuard } from "./budget.js";
 import { isTransientError } from "./budget.js";
 import { critique } from "./critic.js";
+import { candidateGroups, estimateDedupTokens, llmDedup } from "./llm-dedup.js";
 import { anchorIssues } from "./diff-anchor.js";
 
 /**
@@ -54,6 +55,8 @@ export interface ReviewExecutionContext {
   readonly diff: string;
   /** Enables MR metadata (branch/title) governance rules. */
   readonly governanceRules?: boolean | undefined;
+  /** Enables the optional LLM merge of same-line findings after the critic. */
+  readonly llmDedup?: boolean | undefined;
   /** Language of deterministic rule messages (`fa`/`en`); English when omitted. */
   readonly language?: string | undefined;
   readonly files?: readonly { path: string; text: string }[] | undefined;
@@ -385,8 +388,70 @@ export class ReviewStageExecutor implements StageExecutor {
   }
 
   private async executeCritic(): AsyncResult<StageOutcome> {
-    this.ctx.consolidatedIssues = critique(this.ctx.allIssues);
+    const critiqued = critique(this.ctx.allIssues);
+    this.ctx.consolidatedIssues = this.ctx.llmDedup
+      ? await this.runLlmDedup(critiqued)
+      : critiqued;
     return { ok: true, value: { kind: "completed" } };
+  }
+
+  /**
+   * Optional LLM merge of same-line duplicates. Best effort: a refused budget,
+   * failed call or bad answer keeps the deterministic result and is NOT an
+   * agent error (it must not invalidate eval runs).
+   */
+  private async runLlmDedup(
+    critiqued: ReturnType<typeof critique>,
+  ): Promise<ReturnType<typeof critique>> {
+    const eligible = (i: { confidence: number }) =>
+      i.confidence >= this.ctx.threshold;
+    const groups = candidateGroups(critiqued, eligible);
+    if (groups.length === 0) return critiqued;
+
+    const estimatedTokens = estimateDedupTokens(critiqued, groups);
+    const reservation = this.ctx.reservableGuard.reserve({
+      tokens: estimatedTokens,
+      dollars: (estimatedTokens / 1_000_000) * 2.0,
+    });
+    if (!reservation.ok) return critiqued;
+
+    const start = Date.now();
+    let res: Awaited<ReturnType<typeof llmDedup>>;
+    try {
+      res = await llmDedup(critiqued, this.ctx.baseCtx.llm, { eligible });
+    } catch {
+      this.ctx.reservableGuard.release(reservation.reservationId);
+      return critiqued;
+    }
+
+    const usage = res.response?.usage;
+    if (!res.response || !usage) {
+      this.ctx.reservableGuard.release(reservation.reservationId);
+      return res.issues;
+    }
+    const promptTokens = usage.promptTokens ?? 0;
+    const completionTokens = usage.completionTokens ?? 0;
+    const price = this.ctx.pricing.get(res.response.model);
+    const costUsd =
+      (promptTokens / 1_000_000) *
+        (price?.inputCostPer1M ?? FALLBACK_INPUT_COST_PER_1M) +
+      (completionTokens / 1_000_000) *
+        (price?.outputCostPer1M ?? FALLBACK_OUTPUT_COST_PER_1M);
+    this.ctx.reservableGuard.reconcile(reservation.reservationId, {
+      tokensUsed: promptTokens + completionTokens,
+      dollarsSpent: costUsd,
+    });
+    this.ctx.agentMetrics.push({
+      agentId: "llm-dedup" as AgentId,
+      executionMs: Date.now() - start,
+      promptTokens,
+      completionTokens,
+      costUsd,
+      ...(price ? {} : { costEstimated: true }),
+      cacheHits: 0,
+      cacheMisses: 0,
+    });
+    return res.issues;
   }
 
   private async executeJudge(): AsyncResult<StageOutcome> {

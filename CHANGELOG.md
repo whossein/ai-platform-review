@@ -15,6 +15,14 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.9.0] - 2026-11-07
+
+### Added
+- **EN:** Optional AI merge of duplicate findings: with `AI_REVIEW_LLM_DEDUP=1`, findings on the same file and line that the rules could not join are sent in one cheap-tier call, and only those the model says are the same defect are merged. It never merges across lines, and if the call fails the findings stay as they were. Off by default. In a live comparison on 16 cases, delivered findings fell from 33 to 22 with the same 13 of 15 expected defects found, for about 4% more tokens.
+- **FA:** ادغام اختیاری یافته‌های تکراری با AI: با `AI_REVIEW_LLM_DEDUP=1`، یافته‌هایی که در یک فایل و یک خط هستند و Ruleها نتوانسته‌اند ادغامشان کنند، در یک فراخوانی ارزان به مدل فرستاده می‌شوند و فقط مواردی که مدل یکی بداند ادغام می‌شوند. هیچ‌وقت بین خط‌های مختلف ادغام نمی‌کند و اگر فراخوانی شکست بخورد، یافته‌ها همان‌طور می‌مانند. به‌طور پیش‌فرض خاموش است. در مقایسهٔ زنده روی ۱۶ نمونه، یافته‌های تحویل‌شده از ۳۳ به ۲۲ رسید و همان ۱۳ از ۱۵ مشکل مورد انتظار پیدا شد، با حدود ۴٪ توکن بیشتر.
+- **EN:** The evaluation set (`npm run eval:live`, `eval:rules`) now has 16 cases: 5 come from real bug-fix commits in open-source projects (TypeScript, JavaScript, Go, Python, Java; MIT, BSD and Apache licenses), each with its source commit recorded. Two real defects that reviewers found in case `v2-03` are now counted as correct instead of false positives.
+- **FA:** مجموعهٔ ارزیابی (`npm run eval:live` و `eval:rules`) حالا ۱۶ نمونه دارد: ۵ نمونه از commitهای واقعی رفع باگ در پروژه‌های متن‌باز آمده‌اند (TypeScript، JavaScript، Go، Python و Java؛ با مجوزهای MIT، BSD و Apache) و commit منبع هر کدام ثبت شده است. دو مشکل واقعی که ریویوکننده‌ها در نمونهٔ `v2-03` پیدا کرده بودند حالا درست شمرده می‌شوند، نه هشدار غلط.
+
 ## [0.8.0] - 2026-11-07
 
 ### Added
