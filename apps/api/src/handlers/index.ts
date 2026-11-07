@@ -68,6 +68,13 @@ export {
   estimateMergeRequestAiUsageHandler,
 } from "./projects.js";
 
+export {
+  reviewCatalogHandler,
+  updateReviewConfigHandler,
+  type ReviewCatalog,
+  type ReviewConfigBody,
+} from "./review-config.js";
+
 export * from "./auth-handlers.js";
 export * from "./user-handlers.js";
 export * from "./credential-handlers.js";

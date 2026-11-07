@@ -1817,6 +1817,9 @@ export function ProjectsView({
                     <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text)" }}>
                       Silenced rules / قوانین خاموش‌شده
                     </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                      Includes rules switched off project-wide in Skills & Rules.
+                    </div>
                     {projectDetails.project.suppressedRules!.map((s) => (
                       <div
                         key={`${s.ruleId}|${s.file ?? ""}`}

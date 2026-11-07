@@ -464,6 +464,43 @@ export class ProjectStore {
   }
 
   /**
+   * Stores the per-project review configuration. Each given field replaces the
+   * stored value; an empty value removes the field, so projects without any
+   * configuration keep the exact shape they had before.
+   */
+  async setReviewConfig(
+    projectId: string,
+    patch: {
+      disabledAgents?: readonly string[];
+      agentInstructions?: Readonly<Record<string, string>>;
+      suppressedRules?: readonly RuleSuppression[];
+    },
+  ): Promise<Project> {
+    await this.ensureLoaded();
+    const project = this.data.projects[projectId];
+    if (!project) throw new Error(`Project with ID "${projectId}" not found`);
+    const {
+      disabledAgents: _a,
+      agentInstructions: _i,
+      suppressedRules: _s,
+      ...rest
+    } = project;
+    const disabledAgents = patch.disabledAgents ?? project.disabledAgents ?? [];
+    const agentInstructions = patch.agentInstructions ?? project.agentInstructions ?? {};
+    const suppressedRules = patch.suppressedRules ?? project.suppressedRules ?? [];
+    const updated: Project = {
+      ...rest,
+      ...(disabledAgents.length > 0 ? { disabledAgents: [...disabledAgents] } : {}),
+      ...(Object.keys(agentInstructions).length > 0 ? { agentInstructions: { ...agentInstructions } } : {}),
+      ...(suppressedRules.length > 0 ? { suppressedRules: [...suppressedRules] } : {}),
+      updatedAt: new Date().toISOString() as IsoTimestamp,
+    };
+    this.data.projects[projectId] = updated;
+    await this.persist();
+    return updated;
+  }
+
+  /**
    * Short text of the most recent rejected findings that were NOT promoted to
    * rules, for the review prompt. Keeps recent feedback in play without
    * touching the project's permanent instructions.

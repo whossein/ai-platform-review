@@ -129,6 +129,14 @@ export class ReviewStageExecutor implements StageExecutor {
       }
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
+      // A specialist that throws must still show up in `errors`; the retry and
+      // permanent-failure paths of runAgent already record theirs before returning.
+      if (stage.kind === "agent") {
+        const agentId = (stage.agentId ?? stage.id) as AgentId;
+        if (!this.ctx.agentErrors.some((e) => e.agentId === agentId)) {
+          this.recordAgentFailure(agentId, reason, 0);
+        }
+      }
       return { ok: true, value: { kind: "failed", reason } };
     }
   }
@@ -269,10 +277,17 @@ export class ReviewStageExecutor implements StageExecutor {
       complete: (req) => this.ctx.baseCtx.llm.complete(req),
     };
 
-    const execResult = await this.ctx.runtime.execute(agentId, {
-      ...this.ctx.baseCtx,
-      llm: agentLlm,
-    });
+    let execResult: Awaited<ReturnType<AgentRuntime["execute"]>>;
+    try {
+      execResult = await this.ctx.runtime.execute(agentId, {
+        ...this.ctx.baseCtx,
+        llm: agentLlm,
+      });
+    } catch (err) {
+      // Do not leak the reservation; execute() records the failure.
+      this.ctx.reservableGuard.release(reservationId);
+      throw err;
+    }
 
     const executionMs = Date.now() - agentStart;
 

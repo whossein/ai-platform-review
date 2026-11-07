@@ -29,6 +29,7 @@ import type {
   ProviderId,
 } from "@ai-review/core";
 import { resolveProviderPreset } from "./provider-catalog.js";
+import { rateLimitWaitMs } from "./rate-limit.js";
 
 /** One entry per model the caller wants to expose from this provider. */
 export interface OpenAICompatibleModel {
@@ -334,7 +335,21 @@ export class OpenAICompatibleProvider implements LLMProvider {
             "llm.http_error",
             `LLM API (${targetEndpoint}) returned HTTP ${res.status}${authHint}: ${text.slice(0, 300)}`,
           ),
-          details: { status: res.status },
+          details: {
+            status: res.status,
+            // Rate-limit hints let the router wait once, in one place. Header
+            // values only: never the request headers (they carry the key).
+            ...(res.status === 429
+              ? {
+                  ...(rateLimitWaitMs(res.headers) !== undefined
+                    ? { retryAfterMs: rateLimitWaitMs(res.headers) }
+                    : {}),
+                  ...(/insufficient_quota/i.test(text)
+                    ? { quotaExhausted: true }
+                    : {}),
+                }
+              : {}),
+          },
         },
       };
     }

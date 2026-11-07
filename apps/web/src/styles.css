@@ -459,49 +459,6 @@ button:disabled {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.skills-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.5rem;
-}
-
-.skill-card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-/* Skills View Responsive */
-@media (max-width: 768px) {
-  .skills-view .view-header {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .skills-view .view-header > div:last-child {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
-  .skills-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .skill-editor .form-group {
-    flex-direction: column;
-  }
-
-  .skill-editor > div > div[style*="display: flex"] {
-    flex-direction: column;
-    gap: 0 !important;
-  }
-
-  .skill-editor .form-group[style*="width: 200px"] {
-    width: 100% !important;
-  }
-}
-
 /* Modern Radio Buttons & Segmented Control */
 .radio-cards-grid {
   display: grid;

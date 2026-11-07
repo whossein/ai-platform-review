@@ -1,0 +1,41 @@
+# Keeps the GitHub repo description/topics in line with the code (specialist and rule counts).
+# Needs a repository secret REPO_ADMIN_TOKEN (fine-grained PAT with "Administration: write" on this repo).
+# Without the secret the sync step is skipped, so the workflow never fails a push.
+name: Repo sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/shared/src/agents.ts"
+      - "packages/config/src/rules.ts"
+      - "scripts/repo-sync.ts"
+      - ".github/workflows/repo-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check README/docs counts match the code
+        run: npx tsx scripts/repo-sync.ts --check
+      - name: Update repo description and topics
+        if: env.HAS_TOKEN == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+          REPO_SYNC_TARGET: ${{ github.repository }}
+        run: npx tsx scripts/repo-sync.ts --apply
+      - name: Skipped (no token)
+        if: env.HAS_TOKEN != 'true'
+        run: echo "REPO_ADMIN_TOKEN is not set; skipping repo description update."

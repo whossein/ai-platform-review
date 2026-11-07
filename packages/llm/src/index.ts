@@ -21,7 +21,12 @@ export {
   type OpenAICompatibleOptions,
   type OpenAICompatibleModel,
 } from "./openai-provider.js";
-export { CheapestFirstRouter, RoutingLLMClient } from "./client.js";
+export {
+  CheapestFirstRouter,
+  RoutingLLMClient,
+  type RoutingClientOptions,
+} from "./client.js";
+export { resolveMaxConcurrency } from "./rate-limit.js";
 export { CachingLLMClient, llmRequestKey } from "./cache.js";
 export {
   PROVIDER_CATALOG,

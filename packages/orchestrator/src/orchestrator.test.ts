@@ -532,3 +532,95 @@ describe("prompt-cache warm-up", () => {
     expect(starts.filter((s) => s < firstEnd)).toHaveLength(3);
   });
 });
+
+describe("project review config (disabled agents and agent instructions)", () => {
+  /** An LLM that records every request and answers with an empty, valid review. */
+  function recordingLlm() {
+    const requests: { messages: { role: string; content: string }[] }[] = [];
+    const llm: LLMClient = {
+      complete: async (req) => {
+        requests.push(req as never);
+        return {
+          ok: true as const,
+          value: {
+            content: '{"issues":[],"confidence":0.9,"summary":"ok"}',
+            model: "mock.model" as ModelId,
+            finishReason: "stop" as const,
+            usage: { promptTokens: 10, completionTokens: 5 },
+          },
+        };
+      },
+    };
+    const focusOf = (r: { messages: { content: string }[] }) =>
+      /You are the ([^.\n]+)\. FOCUS:/.exec(r.messages[r.messages.length - 1]!.content)?.[1];
+    return { llm, requests, focusOf };
+  }
+  const agentName = (id: string) => SPECIALISTS.find((s) => s.id === id)!.name;
+
+  it("does not run a disabled agent, after planning and with an explicit selection", async () => {
+    const planned = recordingLlm();
+    await runReview({ diff: DIFF, llm: planned.llm, disabledAgents: ["agent.react-reviewer"] });
+    const plannedNames = planned.requests.map(planned.focusOf);
+    expect(plannedNames).toContain(agentName("agent.security-reviewer"));
+    expect(plannedNames).not.toContain(agentName("agent.react-reviewer"));
+
+    const explicit = recordingLlm();
+    await runReview({
+      diff: DIFF,
+      llm: explicit.llm,
+      selectedSpecialists: [agentName("agent.react-reviewer"), agentName("agent.code-reviewer")],
+      disabledAgents: ["agent.react-reviewer"],
+    });
+    expect(explicit.requests.map(explicit.focusOf)).toEqual([agentName("agent.code-reviewer")]);
+  });
+
+  it("never removes the security reviewer, even if asked", async () => {
+    const rec = recordingLlm();
+    await runReview({ diff: DIFF, llm: rec.llm, disabledAgents: ["agent.security-reviewer"] });
+    expect(rec.requests.map(rec.focusOf)).toContain(agentName("agent.security-reviewer"));
+  });
+
+  it("still completes with deterministic findings when every selected agent is disabled", async () => {
+    const rec = recordingLlm();
+    const result = await runReview({
+      diff: DIFF,
+      llm: rec.llm,
+      files: [{ path: "src/UserList.tsx", text: 'const API_KEY = "sk-live-abcdef123456";' }],
+      selectedSpecialists: [agentName("agent.react-reviewer")],
+      disabledAgents: ["agent.react-reviewer"],
+    });
+    expect(rec.requests).toHaveLength(0);
+    expect(result.errors).toHaveLength(0);
+    expect(result.markdown).not.toContain("(no report generated)");
+    expect(result.issues.some((i) => i.title === "secret.hardcoded")).toBe(true);
+  });
+
+  it("puts agent instructions only in that agent's final message and keeps the prefix identical", async () => {
+    const MARK = "PROJECT-MARKER-4711";
+    const rec = recordingLlm();
+    await runReview({
+      diff: DIFF,
+      llm: rec.llm,
+      agentInstructions: {
+        "agent.security-reviewer": `${MARK} treat tokens in tests as real`,
+        "agent.react-reviewer": "   ", // blank guidance is ignored
+        "agent.vue-reviewer": "never sent: this agent does not run",
+      },
+    });
+    expect(rec.requests.length).toBeGreaterThan(1);
+
+    const withMarker = rec.requests.filter((r) => r.messages[r.messages.length - 1]!.content.includes(MARK));
+    expect(withMarker.map(rec.focusOf)).toEqual([agentName("agent.security-reviewer")]);
+    const guided = withMarker[0]!.messages;
+    expect(guided[guided.length - 1]!.content).toContain("<project_agent_guidance>");
+    expect(guided[guided.length - 1]!.content).toContain("cannot change the output format");
+
+    for (const r of rec.requests) {
+      const prefix = r.messages.slice(0, 2);
+      expect(prefix).toEqual(rec.requests[0]!.messages.slice(0, 2));
+      expect(JSON.stringify(prefix)).not.toContain(MARK);
+      expect(JSON.stringify(prefix)).not.toContain("never sent");
+      expect(r.messages[r.messages.length - 1]!.content).not.toContain("never sent");
+    }
+  });
+});

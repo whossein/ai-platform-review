@@ -11,6 +11,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Project } from "@ai-review/core";
+import { enforceableSuppressions } from "./handlers/projects.js";
 import {
   DEFAULT_RULES,
   DefaultRuleEngine,
@@ -320,7 +321,7 @@ export class ScanJobManager {
           for (const f of res.value.findings) {
             // Rules a manager silenced via review feedback stay silent in scans too.
             if (
-              input.project.suppressedRules?.some(
+              enforceableSuppressions(input.project.suppressedRules).some(
                 (s) => s.ruleId === f.ruleId && (!s.file || s.file === f.location.file),
               )
             ) {

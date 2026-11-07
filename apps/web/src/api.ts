@@ -410,6 +410,10 @@ export interface Project {
   readonly userRole?: string | undefined;
   /** Deterministic rules a manager silenced; `file` absent means the whole project. */
   readonly suppressedRules?: readonly SuppressedRule[] | undefined;
+  /** Specialists (agent ids) switched off for this project. */
+  readonly disabledAgents?: readonly string[] | undefined;
+  /** Extra guidance per specialist id. */
+  readonly agentInstructions?: Readonly<Record<string, string>> | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -665,6 +669,57 @@ export async function removeSuppressedRule(
   if (!res.ok) {
     throw new Error(data.error || `Failed to remove silenced rule (${res.status})`);
   }
+  return data.project as Project;
+}
+
+export interface CatalogAgent {
+  readonly id: string;
+  readonly name: string;
+  readonly goal: string;
+  readonly checklist: string;
+  readonly focus: string;
+  /** Cannot be switched off. */
+  readonly locked: boolean;
+}
+
+export interface CatalogRule {
+  readonly id: string;
+  readonly description: string;
+  readonly severity: string | null;
+  /** Can only be silenced for one file, never project-wide. */
+  readonly security: boolean;
+}
+
+export interface ReviewCatalog {
+  readonly agents: readonly CatalogAgent[];
+  readonly rules: readonly CatalogRule[];
+  readonly limits: { readonly maxAgentInstructionLength: number };
+}
+
+/** The AI specialists and deterministic rules a review is really made of. */
+export async function fetchReviewCatalog(): Promise<ReviewCatalog> {
+  const res = await authFetch("/api/review-catalog");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to load the review catalog (${res.status})`);
+  return data as ReviewCatalog;
+}
+
+/** Saves which specialists/rules are off and the per-specialist guidance (managers only). */
+export async function saveReviewConfig(
+  projectId: string,
+  config: {
+    disabledAgents?: readonly string[];
+    agentInstructions?: Readonly<Record<string, string>>;
+    disabledRules?: readonly string[];
+  },
+): Promise<Project> {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(projectId)}/review-config`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to save review settings (${res.status})`);
   return data.project as Project;
 }
 

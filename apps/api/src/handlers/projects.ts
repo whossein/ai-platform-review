@@ -332,12 +332,29 @@ export async function deleteProjectHandler(
 /** Producer id of deterministic findings (RULE_ENGINE_AGENT in @ai-review/config). */
 const RULE_ENGINE_PRODUCER = "agent.rule-engine";
 
-/** Rules that may only be silenced per file; decided here, never by the request. */
-const SECURITY_RULE_IDS: ReadonlySet<string> = new Set(
-  DEFAULT_RULES.filter((r) =>
+/**
+ * Rules that may only be silenced per file; decided here, never by the request.
+ * `no-eval` has kind "eslint" (shared with lint rules, and the kind drives the
+ * finding category and critic merging), so it is listed explicitly.
+ */
+const EXTRA_SECURITY_RULE_IDS = ["no-eval"];
+export const SECURITY_RULE_IDS: ReadonlySet<string> = new Set([
+  ...DEFAULT_RULES.filter((r) =>
     ["security", "secret_detection", "sql_injection", "cors_misconfig"].includes(r.kind),
   ).map((r) => r.id),
-);
+  ...EXTRA_SECURITY_RULE_IDS,
+]);
+
+/**
+ * Suppressions the review/scan engines may honour: project-wide entries for
+ * security rules (e.g. stored before a rule was classified as security) are
+ * dropped; file-scoped ones stay.
+ */
+export function enforceableSuppressions(
+  suppressed: readonly RuleSuppression[] | undefined,
+): RuleSuppression[] {
+  return (suppressed ?? []).filter((s) => s.file !== undefined || !SECURITY_RULE_IDS.has(s.ruleId));
+}
 
 /** Re-enables a rule a manager silenced via feedback. Manager-only. */
 export async function removeSuppressedRuleHandler(

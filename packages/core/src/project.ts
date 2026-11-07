@@ -81,6 +81,10 @@ export interface Project {
   readonly compactSourceHash?: string | undefined;
   /** Deterministic rules silenced for this project after reviewer feedback. */
   readonly suppressedRules?: readonly RuleSuppression[] | undefined;
+  /** AI specialists (agent ids) a manager switched off for this project. */
+  readonly disabledAgents?: readonly string[] | undefined;
+  /** Extra per-specialist guidance from project managers, keyed by agent id. */
+  readonly agentInstructions?: Readonly<Record<string, string>> | undefined;
   /** Optional default Git branch (e.g., "main", "master") for indexing. */
   readonly defaultBranch?: string | undefined;
   /** Optional local filesystem path when indexing a local checkout. */

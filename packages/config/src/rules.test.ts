@@ -185,3 +185,20 @@ describe("governance.require-release-change", () => {
     expect(await run([{ path: MR_METADATA_PATH, text: "Message: feat: x" }], GUIDE)).toHaveLength(0);
   });
 });
+
+describe("DEFAULT_RULES catalog metadata", () => {
+  it("gives every rule a unique id, a description and a severity", () => {
+    const ids = DEFAULT_RULES.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const r of DEFAULT_RULES) {
+      expect(r.description?.length ?? 0, r.id).toBeGreaterThan(5);
+      expect(["critical", "high", "medium", "low", "info"], r.id).toContain(r.severity);
+    }
+  });
+
+  it("uses the id its findings carry, so silencing by id works (blocking dialogs)", async () => {
+    const rule = DEFAULT_RULES.find((r) => r.id === "no-alert")!;
+    const res = await rule.run({ repositoryId: "r", files: [{ path: "a.js", text: "alert('x')" }] } as never);
+    expect(res.ok && res.value.map((f) => f.ruleId)).toEqual(["no-alert"]);
+  });
+});

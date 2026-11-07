@@ -31,6 +31,8 @@ import {
   recordReviewHandler,
   submitFeedbackHandler,
   removeSuppressedRuleHandler,
+  reviewCatalogHandler,
+  updateReviewConfigHandler,
   deleteProjectHandler,
   attachMergeRequestMeta,
   gradeMergeRequestHandler,
@@ -418,6 +420,11 @@ async function startServer() {
   // PROJECT REGISTRY & TEAM MEMBERS ROUTES
   // ==========================================
 
+  // What a review is made of: the AI specialists and deterministic rules that really exist
+  app.get("/api/review-catalog", requireAuth, (_req, res) => {
+    res.status(200).json(reviewCatalogHandler());
+  });
+
   app.get("/api/projects", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
@@ -569,6 +576,16 @@ async function startServer() {
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || "Failed to remove suppressed rule" });
+    }
+  });
+
+  app.put("/api/projects/:id/review-config", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await updateReviewConfigHandler(projectStore, req.params.id, req.body || {}, security, user);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(err.status || 500).json({ error: err.message || "Failed to save review settings" });
     }
   });
 
@@ -881,6 +898,8 @@ async function startServer() {
           customInstructions,
           projectName,
           suppressedRules: preProject?.suppressedRules,
+          disabledAgents: preProject?.disabledAgents,
+          agentInstructions: preProject?.agentInstructions,
           ...(projectContextProvider ? { projectContextProvider } : {}),
         },
         buildRequestRegistry(buildEffectiveEnv(process.env, reviewEnv)),

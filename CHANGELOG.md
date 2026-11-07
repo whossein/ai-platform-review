@@ -15,6 +15,38 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.7.1] - 2026-11-07
+
+### Added
+- **EN:** `npm run repo:sync` keeps the GitHub repo description and topics in line with the code: it counts the real specialists and rules, `-- --check` fails if README or the docs page show a different count, and `-- --apply` updates the repo. A new "Repo sync" GitHub Action runs it on `main` when specialists or rules change; set the repository secret `REPO_ADMIN_TOKEN` to enable the update (without it the step is skipped).
+- **FA:** دستور `npm run repo:sync` توضیحات و تاپیک‌های ریپوی GitHub را با کد هماهنگ نگه می‌دارد: تعداد واقعی متخصص‌ها و Ruleها را می‌شمارد، با `-- --check` اگر README یا صفحهٔ docs عدد دیگری نشان بدهند خطا می‌دهد و با `-- --apply` ریپو را به‌روز می‌کند. یک GitHub Action جدید به نام «Repo sync» با تغییر متخصص‌ها یا Ruleها روی `main` آن را اجرا می‌کند؛ برای فعال شدن به‌روزرسانی، secret با نام `REPO_ADMIN_TOKEN` را در ریپو بسازید (بدون آن این مرحله رد می‌شود).
+
+### Fixed
+- **EN:** README and the docs page now say 14 specialists (they said 13).
+- **FA:** README و صفحهٔ docs حالا ۱۴ متخصص را نشان می‌دهند (قبلاً ۱۳ بود).
+
+## [0.7.0] - 2026-11-07
+
+### Added
+- **EN:** The Skills & Rules tab now controls real reviews. Per project, managers can switch AI specialists and rules on or off and give each specialist extra instructions; settings are stored on the server. The Security Reviewer and security rules cannot be switched off for a whole project. New endpoints: `GET /api/review-catalog` and `PUT /api/projects/:id/review-config`.
+- **FA:** تب Skills & Rules حالا واقعاً روی ریویو اثر می‌گذارد. مدیر پروژه می‌تواند برای هر پروژه متخصص‌های هوش مصنوعی و Ruleها را روشن یا خاموش کند و به هر متخصص دستور اضافه بدهد؛ این تنظیمات روی سرور ذخیره می‌شوند. Security Reviewer و Ruleهای امنیتی برای کل پروژه خاموش نمی‌شوند. Endpointهای جدید: `GET /api/review-catalog` و `PUT /api/projects/:id/review-config`.
+- **EN:** Reviews now wait and retry when a provider returns HTTP 429, respecting the time it asks for, instead of failing specialists at once. Requests per provider are limited to 4 at a time by default; change this with `AI_REVIEW_LLM_MAX_CONCURRENCY`.
+- **FA:** ریویو حالا هنگام دریافت خطای HTTP 429 از provider صبر می‌کند و دوباره تلاش می‌کند و زمان اعلام‌شده را رعایت می‌کند، به‌جای اینکه متخصص‌ها فوراً شکست بخورند. درخواست‌های هم‌زمان هر provider به‌طور پیش‌فرض به ۴ محدود است و با `AI_REVIEW_LLM_MAX_CONCURRENCY` قابل تغییر است.
+
+### Changed
+- **EN:** Custom skills in the Skills & Rules tab are removed. They were stored only in the browser and never affected reviews. Any you saved there are no longer shown.
+- **FA:** Skillهای سفارشی از تب Skills & Rules حذف شدند. این Skillها فقط در مرورگر ذخیره می‌شدند و هیچ اثری روی ریویو نداشتند. Skillهایی که آنجا ذخیره کرده بودید دیگر نمایش داده نمی‌شوند.
+
+### Fixed
+- **EN:** Findings on the same line under different categories now merge when their titles are identical or their wording is very similar. Differently worded reports of one defect can still appear separately.
+- **FA:** یافته‌های یک خط با دسته‌های متفاوت حالا اگر عنوانشان یکسان یا متنشان خیلی مشابه باشد ادغام می‌شوند. گزارش‌هایی از یک مشکل که متفاوت نوشته شده باشند ممکن است هنوز جدا نمایش داده شوند.
+- **EN:** A specialist that crashes with an unexpected error is now counted in the review's failed specialists warning.
+- **FA:** متخصصی که با خطای غیرمنتظره از کار بیفتد حالا در هشدار متخصص‌های ناموفق ریویو شمرده می‌شود.
+
+### Security
+- **EN:** The critical `no-eval` rule now counts as a security rule, so it can only be silenced for a single file.
+- **FA:** Rule بحرانی `no-eval` حالا Rule امنیتی حساب می‌شود و فقط برای یک فایل می‌توان آن را خاموش کرد.
+
 ## [0.6.2] - 2026-11-07
 
 ### Fixed

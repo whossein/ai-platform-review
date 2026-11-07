@@ -96,7 +96,17 @@ export interface RunOptions {
   readonly projectContext?: string;
   /** Deterministic rules silenced for this project. */
   readonly suppressedRules?: readonly RuleSuppression[];
+  /**
+   * Specialist ids the project switched off. Removed after planning, also from an
+   * explicit `selectedSpecialists`. The security reviewer is never removed.
+   */
+  readonly disabledAgents?: readonly string[];
+  /** Project-manager guidance per specialist id; sent only in that specialist's own task message. */
+  readonly agentInstructions?: Readonly<Record<string, string>>;
 }
+
+/** Specialists a project cannot switch off, whatever its settings say. */
+const ALWAYS_ON_AGENTS: ReadonlySet<string> = new Set(["agent.security-reviewer"]);
 
 export class ReviewOrchestrator {
   constructor(private readonly ctx: OrchestratorContext) {}
@@ -152,17 +162,32 @@ export class ReviewOrchestrator {
     });
 
     // Highest priority first, so a tight budget drops the least important reviewers.
-    const agentsToRun = opts.selectedSpecialists
+    const chosenAgents = opts.selectedSpecialists
       ? availableAgents
           .filter((s) => opts.selectedSpecialists?.includes(s.name))
           .sort((a, b) => b.priority - a.priority)
       : reviewPlan.selected;
+    // A project's switched-off specialists never run. With none left the review
+    // still completes: deterministic rules, critic and report, as for an empty selection.
+    const disabled = new Set(
+      (opts.disabledAgents ?? []).filter((id) => !ALWAYS_ON_AGENTS.has(id)),
+    );
+    const agentsToRun = chosenAgents.filter((a) => !disabled.has(a.id as string));
+    const agentInstructions = Object.fromEntries(
+      Object.entries(opts.agentInstructions ?? {}).filter(
+        ([id, text]) =>
+          typeof text === "string" &&
+          text.trim() !== "" &&
+          agentsToRun.some((a) => a.id === id),
+      ),
+    );
 
     const instructionFields = {
       rawDiff: opts.diff,
       activeAgentIds: agentsToRun.map((a) => a.id as string),
       ...(projectInstructions ? { projectInstructions } : {}),
       ...(opts.projectName ? { projectName: opts.projectName } : {}),
+      ...(Object.keys(agentInstructions).length > 0 ? { agentInstructions } : {}),
     };
 
     if (built.ok) {

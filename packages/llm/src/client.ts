@@ -22,6 +22,11 @@ import type {
   Result,
   RoutingContext,
 } from "@ai-review/core";
+import {
+  Semaphore,
+  computeWaitMs,
+  resolveMaxConcurrency,
+} from "./rate-limit.js";
 
 export interface RouterOptions {
   /**
@@ -105,12 +110,71 @@ function canFailOver(error: PlatformError): boolean {
   return status !== 400 && status !== 422;
 }
 
+/** Tuning for rate-limit handling and per-provider concurrency. */
+export interface RoutingClientOptions {
+  /** Max in-flight requests per provider. Default: env or 4. */
+  readonly maxConcurrency?: number;
+  /** Passes over the provider list for one call (1 = never wait). Default 4. */
+  readonly maxAttempts?: number;
+  /** Cap for a single rate-limit wait. Default 60s. */
+  readonly maxWaitMs?: number;
+  /** Cap for all waits of one call together. Default 150s. */
+  readonly maxTotalWaitMs?: number;
+  /** Backoff base when the provider sends no hint. Default 2s. */
+  readonly baseBackoffMs?: number;
+  /** Injected for tests; defaults to `setTimeout`. */
+  readonly sleep?: (ms: number) => Promise<void>;
+  /** Jitter source in [0, 1). Defaults to `Math.random`. */
+  readonly random?: () => number;
+  /** Defaults to `console.warn`. */
+  readonly warn?: (message: string) => void;
+}
+
+const isRateLimited = (e: PlatformError) =>
+  e.category === "provider" &&
+  e.details?.["status"] === 429 &&
+  e.details?.["quotaExhausted"] !== true;
+
 export class RoutingLLMClient implements LLMClient {
+  private readonly gates = new Map<string, Semaphore>();
+  private readonly maxConcurrency: number;
+  private readonly maxAttempts: number;
+  private readonly maxWaitMs: number;
+  private readonly maxTotalWaitMs: number;
+  private readonly baseBackoffMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly random: () => number;
+  private readonly warn: (message: string) => void;
+
   constructor(
     private readonly providers: readonly LLMProvider[],
     private readonly router: ModelRouter,
     private readonly defaultContext: Omit<RoutingContext, "preferredModel">,
-  ) {}
+    options: RoutingClientOptions = {},
+  ) {
+    this.maxConcurrency = Math.max(
+      1,
+      options.maxConcurrency ?? resolveMaxConcurrency(),
+    );
+    this.maxAttempts = Math.max(1, options.maxAttempts ?? 4);
+    this.maxWaitMs = options.maxWaitMs ?? 60_000;
+    this.maxTotalWaitMs = options.maxTotalWaitMs ?? 150_000;
+    this.baseBackoffMs = options.baseBackoffMs ?? 2_000;
+    this.sleep =
+      options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.random = options.random ?? Math.random;
+    this.warn = options.warn ?? ((m) => console.warn(m));
+  }
+
+  /** Runs one provider call inside that provider's concurrency gate. */
+  private gated<T>(providerId: string, task: () => Promise<T>): Promise<T> {
+    let gate = this.gates.get(providerId);
+    if (!gate) {
+      gate = new Semaphore(this.maxConcurrency);
+      this.gates.set(providerId, gate);
+    }
+    return gate.run(task);
+  }
 
   /**
    * Providers to try for `modelId`, best first: those serving the same model,
@@ -163,21 +227,71 @@ export class RoutingLLMClient implements LLMClient {
     }
 
     // The caller sees the first failure: it names the provider the user expects.
+    //
+    // Rate limits are handled here and only here (providers make one HTTP call
+    // per attempt). A 429 fails over to the next provider at once; only when a
+    // whole pass over the providers ends with a 429 do we wait (the soonest
+    // hint, capped, with jitter) and pass again, up to `maxAttempts` passes.
+    // The semaphore slot is released while waiting.
     let firstFailure: Result<LLMResponse> | undefined;
-    for (const { provider, model } of attempts) {
-      const result = await provider.complete({ ...request, model });
-      if (result.ok) return result;
-      firstFailure ??= result;
-      if (!canFailOver(result.error)) break;
-      // Code and status only: provider messages can embed the request URL.
-      console.warn(
-        `[llm] ${provider.id} failed (${result.error.code}${
-          result.error.details?.["status"]
-            ? ` ${result.error.details["status"]}`
-            : ""
-        }), trying the next provider`,
+    let totalWaitMs = 0;
+    for (let pass = 1; ; pass++) {
+      const limited: Array<{ id: string; hintMs: number | undefined }> = [];
+      let otherFailures = 0;
+      for (let i = 0; i < attempts.length; i++) {
+        const { provider, model } = attempts[i]!;
+        const result = await this.gated(provider.id, () =>
+          provider.complete({ ...request, model }),
+        );
+        if (result.ok) return result;
+        firstFailure ??= result;
+        if (!canFailOver(result.error)) return firstFailure;
+        if (isRateLimited(result.error)) {
+          const hint = result.error.details?.["retryAfterMs"];
+          limited.push({
+            id: provider.id,
+            hintMs: typeof hint === "number" ? hint : undefined,
+          });
+        } else {
+          otherFailures++;
+        }
+        if (!isRateLimited(result.error) && i < attempts.length - 1) {
+          // Code and status only: provider messages can embed the request URL.
+          const status = result.error.details?.["status"];
+          this.warn(
+            `[llm] ${provider.id} failed (${result.error.code}${
+              status ? ` ${status}` : ""
+            }), trying the next provider`,
+          );
+        }
+      }
+
+      // Wait only when the pass failed purely on rate limits. With a mixed
+      // failure (e.g. one 429, one 500) failover has already run its course.
+      if (limited.length === 0 || otherFailures > 0) return firstFailure!;
+      const hints = limited.flatMap((l) => (l.hintMs === undefined ? [] : [l.hintMs]));
+      const waitMs = computeWaitMs(
+        hints.length > 0 ? Math.min(...hints) : undefined,
+        pass,
+        {
+          maxWaitMs: this.maxWaitMs,
+          baseBackoffMs: this.baseBackoffMs,
+          random: this.random,
+        },
       );
+      if (pass >= this.maxAttempts || totalWaitMs + waitMs > this.maxTotalWaitMs) {
+        // Out of patience: surface the failure, and tell the executor not to
+        // stack its own retries on top (they would multiply the HTTP calls).
+        const first = firstFailure!;
+        return first.ok
+          ? first
+          : { ok: false, error: { ...first.error, retryable: false } };
+      }
+      this.warn(
+        `[llm] rate limited (HTTP 429) by ${[...new Set(limited.map((l) => l.id))].join(", ")}; waiting ${(waitMs / 1000).toFixed(1)}s before attempt ${pass + 1}/${this.maxAttempts}`,
+      );
+      totalWaitMs += waitMs;
+      await this.sleep(waitMs);
     }
-    return firstFailure!;
   }
 }

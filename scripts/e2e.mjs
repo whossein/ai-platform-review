@@ -138,11 +138,25 @@ try {
   const again = await waitIndex(pid, admin);
   check("re-index reuses unchanged files", again?.index?.stats.reusedFilesCount === 3 && again.index.stats.downloadedFilesCount === 0, JSON.stringify(again?.index?.stats));
 
+  const cat = await api("GET", "/api/review-catalog", null, admin);
+  check("review catalog lists real agents and rules", cat.status === 200 && cat.body.agents.some((a) => a.id === "agent.contributing-reviewer") && !cat.body.agents.some((a) => a.id === "agent.dead-code-analyzer") && cat.body.rules.length > 30, JSON.stringify(cat.body).slice(0, 200));
+  check("review catalog needs login", (await api("GET", "/api/review-catalog")).status === 401);
+  check("security reviewer cannot be disabled", (await api("PUT", `/api/projects/${pid}/review-config`, { disabledAgents: ["agent.security-reviewer"] }, admin)).status === 400);
+  check("security rule cannot be silenced project-wide", (await api("PUT", `/api/projects/${pid}/review-config`, { disabledRules: ["secret.hardcoded"] }, admin)).status === 400);
+  const cfg = await api("PUT", `/api/projects/${pid}/review-config`, { disabledAgents: ["agent.performance-reviewer"], agentInstructions: { "agent.code-reviewer": "E2E-GUIDANCE-MARK" }, disabledRules: ["no-console"] }, admin);
+  check("review settings saved", cfg.status === 200 && cfg.body.project.disabledAgents?.[0] === "agent.performance-reviewer", JSON.stringify(cfg.body));
+  llmPrompts.length = 0;
+  const r3 = await api("POST", "/api/review", { diff: mr, env: { ...env, AI_REVIEW_LLM_MODEL: "model-three" } }, admin);
+  const focusOf = (p) => /You are the (.+?)\. FOCUS/.exec(p)?.[1];
+  check("disabled agent does not run in a real review", r3.status === 200 && llmPrompts.length > 0 && !llmPrompts.some((p) => focusOf(p) === "Performance Reviewer"), `focus=${[...new Set(llmPrompts.map(focusOf))]}`);
+  check("agent instructions reach only that agent", llmPrompts.filter((p) => p.includes("E2E-GUIDANCE-MARK")).every((p) => focusOf(p) === "Code Reviewer") && llmPrompts.some((p) => p.includes("E2E-GUIDANCE-MARK")), `focus=${llmPrompts.filter((p) => p.includes("E2E-GUIDANCE-MARK")).map(focusOf)}`);
+
   await api("POST", "/api/users", { name: "Mem", email: "m@x.io", password: "MemberPass123!", role: "MEMBER" }, admin);
   const member = (await api("POST", "/api/auth/login", { email: "m@x.io", password: "MemberPass123!" })).body.token;
   check("non-member cannot list branches", (await api("GET", `/api/projects/${pid}/index/branches`, null, member)).status === 403);
   check("non-member cannot read project index", (await api("GET", `/api/projects/${pid}/index`, null, member)).status === 403);
   check("non-member cannot review an existing project", (await api("POST", "/api/review", { diff: mr, env }, member)).status === 403);
+  check("non-member cannot change review settings", (await api("PUT", `/api/projects/${pid}/review-config`, { disabledAgents: [] }, member)).status === 403);
   const mr8 = `${gl}/team/other/-/merge_requests/1`;
   const m1 = await api("POST", "/api/review", { diff: mr8, env }, member);
   check("member can review a brand-new URL and owns the project", m1.status !== 403 && (await api("GET", "/api/projects", null, member)).body.projects?.length === 1, `status=${m1.status} ${m1.body.error ?? ""}`);

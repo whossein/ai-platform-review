@@ -244,4 +244,78 @@ describe("critic / consolidation", () => {
       expect(critique([x1, x2, y])).toHaveLength(3);
     });
   });
+
+  describe("cross-category matching", () => {
+    const f = (
+      id: string,
+      producedBy: string,
+      category: string,
+      title: string,
+      description = "",
+      extra: Partial<Issue> = {},
+    ): Issue => ({
+      ...issue({ id, producedBy, category }),
+      title,
+      description,
+      fingerprint: `fp-${id}` as ContentHash,
+      ...extra,
+    });
+
+    it("merges an identical title filed under different categories", () => {
+      const out = critique([
+        f("a", "agent.performance-reviewer", "performance", "Stale closure in effect"),
+        f("b", "agent.react-reviewer", "react", "Stale closure in effect"),
+      ]);
+      expect(out).toHaveLength(1);
+      expect(out[0]!.corroboratedBy).toHaveLength(2);
+    });
+
+    it("merges overlapping wording across different categories", () => {
+      const out = critique([
+        f("a", "agent.code-reviewer", "correctness", "Stale closure reads old count", "effect callback captures stale count value"),
+        f("b", "agent.react-reviewer", "react", "Effect callback captures stale count", "closure reads stale count value"),
+      ]);
+      expect(out).toHaveLength(1);
+    });
+
+    it("keeps different defects on one line separate across categories", () => {
+      const out = critique([
+        f("a", "agent.security-reviewer", "security", "SQL injection via string concat", "query built from user input"),
+        f("b", "agent.performance-reviewer", "performance", "Unbounded loop over results", "iterates every row without paging"),
+      ]);
+      expect(out).toHaveLength(2);
+    });
+
+    it("keeps a security rule and a correctness agent finding separate", () => {
+      const rule = f("r", "agent.rule-engine", "security", "secrets.aws-key", "", { confidence: 1 });
+      const llm = f("l", "agent.code-reviewer", "correctness", "Off-by-one in loop bound", "index may exceed length");
+      expect(critique([rule, llm])).toHaveLength(2);
+      expect(critique([llm, rule])).toHaveLength(2);
+    });
+
+    it("picks the representative and corroboratedBy after a cross-category merge", () => {
+      const out = critique([
+        f("a", "agent.code-reviewer", "resource-management", "Reader never closed", "", { severity: "low", confidence: 0.5 }),
+        f("b", "agent.security-reviewer", "security", "Reader never closed", "", { severity: "high", confidence: 0.6 }),
+      ]);
+      expect(out).toHaveLength(1);
+      expect(out[0]!.id).toBe("b");
+      expect(out[0]!.category).toBe("security");
+      expect(out[0]!.severity).toBe("high");
+      expect([...out[0]!.corroboratedBy].sort()).toEqual([
+        "agent.code-reviewer",
+        "agent.security-reviewer",
+      ]);
+      expect(out[0]!.confidence).toBe(0.8);
+    });
+
+    it("real LineReader example: differently-worded reports stay separate (conservative)", () => {
+      const perf = f("p", "agent.performance-reviewer", "performance", "BufferedReader is never closed", "The BufferedReader opened here is never closed, leaking a file handle.");
+      const code = f("c", "agent.code-reviewer", "resource-management", "Close the BufferedReader with try-with-resources", "Wrap the BufferedReader in try-with-resources so it is closed.");
+      const sec = f("s", "agent.security-reviewer", "security", "File descriptor leak enables resource-exhaustion attacks", "Repeated calls exhaust file descriptors.");
+      // Overlap is below SAME_DEFECT_MIN_OVERLAP even for perf vs code (one shared
+      // identifier, different verbs), so none merge: two findings beat losing one.
+      expect(critique([perf, code, sec])).toHaveLength(3);
+    });
+  });
 });

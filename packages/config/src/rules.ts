@@ -94,6 +94,9 @@ function scanLines(
 export const secretDetectionRule: Rule = {
   kind: "secret_detection",
   id: "secret.hardcoded",
+  description:
+    "Hardcoded API keys, tokens, passwords and private keys in added code.",
+  severity: "high",
   async run(ctx) {
     // Known token shapes; all need a left boundary so `disk-usage12345` stays clean.
     const patterns: readonly RegExp[] = [
@@ -137,6 +140,9 @@ export const secretDetectionRule: Rule = {
 export const noConsoleRule: Rule = {
   kind: "eslint",
   id: "no-console",
+  description:
+    "Leftover console.log/debug/info/warn/error calls in JavaScript and TypeScript.",
+  severity: "low",
   async run(ctx) {
     return {
       ok: true,
@@ -165,6 +171,9 @@ export const noConsoleRule: Rule = {
 export const noDebuggerRule: Rule = {
   kind: "eslint",
   id: "no-debugger",
+  description:
+    "Leftover debugger statements.",
+  severity: "high",
   async run(ctx) {
     return {
       ok: true,
@@ -193,6 +202,9 @@ export const noDebuggerRule: Rule = {
 export const noEvalRule: Rule = {
   kind: "eslint",
   id: "no-eval",
+  description:
+    "eval() (and exec() in Python/PHP) on dynamic input.",
+  severity: "critical",
   async run(ctx) {
     return {
       ok: true,
@@ -223,6 +235,9 @@ export const noEvalRule: Rule = {
 export const noExclusiveTestsRule: Rule = {
   kind: "eslint",
   id: "no-exclusive-tests",
+  description:
+    "Exclusive or skipped tests (.only / .skip) that would silently disable other tests.",
+  severity: "medium",
   async run(ctx) {
     return {
       ok: true,
@@ -251,6 +266,9 @@ export const noExclusiveTestsRule: Rule = {
 export const noExplicitAnyRule: Rule = {
   kind: "typescript",
   id: "no-explicit-any",
+  description:
+    "Use of the any type in TypeScript, which disables type checking.",
+  severity: "medium",
   async run(ctx) {
     return {
       ok: true,
@@ -279,6 +297,9 @@ export const noExplicitAnyRule: Rule = {
 export const noTodoRule: Rule = {
   kind: "naming",
   id: "no-todo-comment",
+  description:
+    "Unresolved TODO / FIXME / XXX markers.",
+  severity: "info",
   async run(ctx) {
     return {
       ok: true,
@@ -330,6 +351,9 @@ function guidelinesRequireChangelog(instructions: string | undefined): boolean {
 export const requireReleaseChangeRule: Rule = {
   kind: "governance",
   id: "governance.require-release-change",
+  description:
+    "Source changes without a changelog or release-change update, only when the project guidelines require one.",
+  severity: "medium",
   async run(ctx) {
     if (!isFileCtx(ctx)) return { ok: true, value: [] };
     if (!guidelinesRequireChangelog(ctx.projectInstructions)) {
@@ -384,7 +408,10 @@ const BLOCKING_DIALOG =
  */
 export const lintComplianceRule: Rule = {
   kind: "eslint",
-  id: "lint.code-conventions",
+  id: "no-alert",
+  description:
+    "Blocking alert/confirm/prompt dialogs in JavaScript and TypeScript.",
+  severity: "medium",
   async run(ctx) {
     if (!isFileCtx(ctx)) return { ok: true, value: [] };
     const findings: RuleFinding[] = [];
@@ -498,6 +525,9 @@ export const GOVERNANCE_RULES: readonly Rule[] = [
 export const sqlInjectionRule: Rule = {
   kind: "sql_injection",
   id: "security.sql-injection",
+  description:
+    "SQL built by string concatenation or interpolation instead of parameterized queries.",
+  severity: "high",
   async run(ctx) {
     const sql =
       /\b(select\s[^;]*\sfrom|insert\s+into|update\s+\w+\s+set|delete\s+from)\b/i;
@@ -530,6 +560,9 @@ export const sqlInjectionRule: Rule = {
 export const wildcardCorsRule: Rule = {
   kind: "cors_misconfig",
   id: "security.wildcard-cors",
+  description:
+    "CORS configured to allow every origin.",
+  severity: "medium",
   async run(ctx) {
     const patterns: readonly RegExp[] = [
       /access-control-allow-origin['"]?\s*[:,]\s*['"]\*['"]/i,
@@ -565,6 +598,9 @@ export const wildcardCorsRule: Rule = {
 export const promptInjectionRule: Rule = {
   kind: "security",
   id: "security.prompt-injection",
+  description:
+    "Text in the change that tries to steer AI reviewers (prompt injection).",
+  severity: "critical",
   async run(ctx) {
     const classic =
       /\b(?:ignore|disregard|forget|override)\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier|system)\s+(?:instructions?|prompts?|rules?|messages?)\b/i;
@@ -622,6 +658,8 @@ function lineRule(spec: {
   return {
     kind: spec.kind,
     id: spec.id,
+    description: spec.message,
+    severity: spec.severity,
     async run(ctx) {
       return {
         ok: true,

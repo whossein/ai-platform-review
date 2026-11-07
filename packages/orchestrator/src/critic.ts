@@ -6,8 +6,11 @@
  * hardcoded secret on the same line). Publishing both would be noisy and, over
  * incremental reviews, wasteful. The Critic:
  *
- *   1. Groups issues that refer to the same defect: same file + line + canonical
- *      category AND evidence of the same defect. Cross-producer evidence needs
+ *   1. Groups issues that refer to the same defect: same file + line AND
+ *      evidence of the same defect. Category is not required to match (models
+ *      file one defect under different free-text categories); across different
+ *      canonical categories only an identical fingerprint/title or enough shared
+ *      wording counts, never the rule-engine shortcut. Cross-producer evidence needs
  *      only ONE member of the cluster from another producer that matches
  *      (identical fingerprint or title, or enough shared wording); same-producer
  *      members must ALL be repeats of the issue. "Same defect" is not
@@ -86,13 +89,14 @@ function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** Groups candidate duplicates by location + canonical category. */
+/**
+ * Groups candidate duplicates by location only. Category is free text written by
+ * each model, so one defect is often filed under different categories (a leaked
+ * reader as `performance`, `resource-management` and `security`); the category
+ * is compared inside `isSameDefect`, not used to keep findings apart.
+ */
 function groupKey(issue: Issue): string {
-  return [
-    issue.location.file,
-    issue.location.line ?? -1,
-    normalizeCategory(issue.category),
-  ].join("|");
+  return [issue.location.file, issue.location.line ?? -1].join("|");
 }
 
 /** The same producer repeating itself (identical fingerprint or title). */
@@ -124,12 +128,17 @@ function jaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
  */
 function isSameDefect(a: Issue, b: Issue): boolean {
   if (isRepeat(a, b)) return true;
+  // Rule titles are rule ids, so wording says nothing: at one location a rule
+  // matches an agent finding by shortcut, but only when BOTH are security. A
+  // security rule must never absorb a correctness finding on the same line.
   if (
     (a.producedBy === RULE_ENGINE_AGENT) !== (b.producedBy === RULE_ENGINE_AGENT) &&
-    normalizeCategory(a.category) === "security"
+    normalizeCategory(a.category) === "security" &&
+    normalizeCategory(b.category) === "security"
   ) {
     return true;
   }
+  // Same or different canonical category, the remaining evidence is wording.
   return jaccard(tokens(a), tokens(b)) >= SAME_DEFECT_MIN_OVERLAP;
 }
 

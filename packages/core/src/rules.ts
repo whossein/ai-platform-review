@@ -47,7 +47,12 @@ export interface RuleSuppression {
 /** A single deterministic check. Implementations live in `config`/plugins. */
 export interface Rule {
   readonly kind: RuleKind;
+  /** Matches the `ruleId` of the findings it reports (that is what silencing keys on). */
   readonly id: string;
+  /** What the rule checks, in a sentence; shown to users in the rules catalog. */
+  readonly description?: string;
+  /** Severity of the findings it reports. */
+  readonly severity?: RuleFinding["severity"];
   run(ctx: RuleContext): AsyncResult<readonly RuleFinding[]>;
 }
 

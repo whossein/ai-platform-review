@@ -94,6 +94,12 @@ export interface ContextSlice {
    */
   readonly projectInstructions?: string;
   readonly projectName?: string;
+  /**
+   * Extra guidance from project managers, keyed by specialist id. Like
+   * `projectInstructions` it is kept out of `rendered`: it is only ever added to
+   * that specialist's own final message, so the shared prompt prefix stays identical.
+   */
+  readonly agentInstructions?: Readonly<Record<string, string>>;
   /** The unified diff before fencing and line numbering, for deterministic skills. */
   readonly rawDiff?: string;
   /** Specialists running in this review, so guidelines can reach a stand-in when an owner is off. */
