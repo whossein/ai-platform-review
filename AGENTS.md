@@ -14,9 +14,9 @@ When interacting with this repository, strictly adhere to the following rules re
    - Branch names follow `<type>/<short-name>`, e.g. `feat/github-publisher`, `fix/budget-guard`, `docs/landing-page`.
 
 2. **Releasing (automated, never manual)**:
-   - Releases are fully automated by semantic-release (`.github/workflows/release.yml`) on every push to `main`. After `npm run lint` and `npm test` pass, it computes the next version from the commits since the last tag, updates `/package.json`, `/package-lock.json` and `/CHANGELOG.md`, commits them as `chore(release): x.y.z [skip ci]`, tags `vX.Y.Z`, and publishes a GitHub Release with notes generated from the commits.
+   - Releases are fully automated by semantic-release (`.github/workflows/release.yml`) on every push to `main`. After `npm run lint` and `npm test` pass, it computes the next version from the commits since the last tag, tags `vX.Y.Z`, and publishes a GitHub Release with notes generated from the commits. Nothing is committed back to `main` (it is PR-protected), so the `version` in `/package.json` stays stale on purpose; the tag is the source of truth and CI stamps it into the desktop build.
    - Version impact: `fix:` / `perf:` → patch, `feat:` → minor, `!` after the type (`feat!:`) or a `BREAKING CHANGE:` footer → major. All other types produce no release.
-   - **Do NOT** bump versions, edit `/CHANGELOG.md`, or create/delete `v*` tags by hand. Entries up to 0.3.2 in `/CHANGELOG.md` were written by hand (bilingual) and are kept as history. Do not delete the `v0.3.2` baseline tag; it anchors version history.
+   - **Do NOT** bump versions, edit `/CHANGELOG.md`, or create/delete `v*` tags by hand. `/CHANGELOG.md` is frozen history (hand-written entries); newer release notes live in GitHub Releases. Do not delete the `v0.3.2` baseline tag; it anchors version history.
    - A bad release is fixed forward with a new `fix:` commit, never by rewriting tags or history.
    - The landing page and README link to GitHub Releases for the current version; no manual version edits are needed in `/docs/index.html` or `/README.md`.
 

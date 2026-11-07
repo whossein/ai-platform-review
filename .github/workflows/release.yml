@@ -61,6 +61,11 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1 # electron-builder fetches its own Electron
+      # Version lives only in the tag (main is PR-protected, so no release commit); stamp it for electron-builder.
+      - run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+        shell: bash
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
       - run: npm run build:desktop -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false # ponytail: unsigned; add signing secrets when needed

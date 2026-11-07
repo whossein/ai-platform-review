@@ -43,7 +43,7 @@ Paste a diff or an MR/PR link. The platform runs free deterministic checks first
 - 🖥️ Electron desktop app.
 - 📐 An offline evaluation harness (`@ai-review/eval`) that scores reviewer precision and recall against ground-truth datasets.
 
-Version-by-version details are in [CHANGELOG.md](CHANGELOG.md).
+Release notes are in [GitHub Releases](https://github.com/whossein/ai-platform-review/releases) (older history in [CHANGELOG.md](CHANGELOG.md)).
 
 ### How it works
 
@@ -172,7 +172,7 @@ main.cjs             Electron main process
 - 🔌 با هر سرویسی کار می‌کنه: Gemini، OpenAI، Anthropic، OpenRouter، DeepSeek، Azure، آوال‌ای (Avalai)، Ollama روی سیستم خودت، یا هر Gateway سازگار با OpenAI.
 - 💰 برای هر ریویو سقف توکن، دلار و زمان می‌ذاری و خودش ارزون‌ترین مدلی رو انتخاب می‌کنه که از پس کار برمیاد.
 
-تغییرات هر نسخه توی [CHANGELOG.md](CHANGELOG.md) هست.
+تغییرات هر نسخه توی [GitHub Releases](https://github.com/whossein/ai-platform-review/releases) هست (تاریخچه‌ی قدیمی‌تر توی [CHANGELOG.md](CHANGELOG.md)).
 
 ### چطوری راهش بندازم؟
 
