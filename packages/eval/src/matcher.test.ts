@@ -68,6 +68,17 @@ describe("Matcher Unit Tests", () => {
       });
     });
 
+    it("treats code and correctness as cross-compatible in both directions", () => {
+      expect(checkCategoryCompatibility("correctness", "code")).toEqual({
+        compatible: true,
+        weight: 75_000,
+      });
+      expect(checkCategoryCompatibility("code", "correctness")).toEqual({
+        compatible: true,
+        weight: 75_000,
+      });
+    });
+
     it("rejects incompatible pairs", () => {
       expect(checkCategoryCompatibility("testing", "performance")).toEqual({
         compatible: false,

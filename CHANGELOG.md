@@ -15,6 +15,16 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.6.2] - 2026-11-07
+
+### Fixed
+- **EN:** Reviews no longer report one defect several times when specialists word it differently. A security finding confirmed by a rule now appears once, listing every reviewer that agreed. In a live comparison on the sample set, delivered findings fell from 76 to 59 across three runs, and every expected defect was still found.
+- **FA:** ریویو دیگر یک مشکل را چند بار گزارش نمی‌کند، حتی اگر متخصص‌ها آن را با عبارت‌های متفاوت توضیح داده باشند. یافتهٔ امنیتی‌ای که Rule هم آن را تأیید کرده باشد حالا فقط یک بار و همراه با نام همهٔ بررسی‌کننده‌ها نمایش داده می‌شود. در مقایسهٔ زنده روی نمونه‌ها، تعداد یافته‌های تحویل‌شده در سه اجرا از ۷۶ به ۵۹ رسید و همهٔ مشکلات مورد انتظار همچنان پیدا شدند.
+
+### Changed
+- **EN:** `npm run eval:live` gains `--pace-ms <n>` to wait between cases on rate-limited API keys. A run with any agent error now prints `INVALID RUN`, exits with code 2 and is marked `valid: false` in the report, so a rate-limited run can't be mistaken for a clean result.
+- **FA:** `npm run eval:live` گزینهٔ `--pace-ms <n>` را برای ایجاد فاصله بین نمونه‌ها در کلیدهای دارای محدودیت نرخ دارد. اجرایی که خطای Agent داشته باشد حالا `INVALID RUN` چاپ می‌کند، با کد ۲ خارج می‌شود و در گزارش با `valid: false` مشخص می‌شود تا با نتیجهٔ سالم اشتباه گرفته نشود.
+
 ## [0.6.1] - 2026-11-04
 
 ### Changed

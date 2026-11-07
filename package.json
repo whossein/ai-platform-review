@@ -1,6 +1,6 @@
 {
   "name": "ai-review-platform",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "description": "Modular, plugin-based, event-driven, provider-agnostic Multi-Agent AI Code Review Platform.",
   "type": "module",

@@ -12,10 +12,36 @@ import type { BenchmarkCase } from "./types.js";
 export interface LiveArgs {
   output?: string;
   dataset?: string;
+  /** Milliseconds to wait between cases (not after the last). Default 0. */
+  paceMs: number;
+}
+
+export interface RunValidity {
+  valid: boolean;
+  agentErrorCount: number;
+}
+
+/** A run with any agent or case error is not a valid measurement. */
+export function assessRunValidity(
+  caseResults: ReadonlyArray<{ errors?: readonly unknown[] | undefined; threw?: boolean }>,
+): RunValidity {
+  let agentErrorCount = 0;
+  for (const r of caseResults) {
+    agentErrorCount += r.errors?.length ?? 0;
+    if (r.threw) agentErrorCount += 1;
+  }
+  return { valid: agentErrorCount === 0, agentErrorCount };
+}
+
+function parsePace(raw: string | undefined): number {
+  if (raw === undefined || !/^\d+$/.test(raw.trim())) {
+    throw new Error("--pace-ms requires a non-negative number of milliseconds");
+  }
+  return Number(raw);
 }
 
 export function parseArgs(argv: readonly string[]): LiveArgs {
-  const out: LiveArgs = {};
+  const out: LiveArgs = { paceMs: 0 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--output" || a === "--dataset") {
@@ -23,7 +49,9 @@ export function parseArgs(argv: readonly string[]): LiveArgs {
       if (!v) throw new Error(`${a} requires a path`);
       if (a === "--output") out.output = v;
       else out.dataset = v;
-    } else if (a?.startsWith("--output=")) out.output = a.slice(9);
+    } else if (a === "--pace-ms") out.paceMs = parsePace(argv[++i]);
+    else if (a?.startsWith("--pace-ms=")) out.paceMs = parsePace(a.slice(10));
+    else if (a?.startsWith("--output=")) out.output = a.slice(9);
     else if (a?.startsWith("--dataset=")) out.dataset = a.slice(10);
   }
   return out;
@@ -58,7 +86,7 @@ export function makeRedactor(env: Record<string, string>): (s: string) => string
   };
 }
 
-export async function runLiveEvaluation(args: LiveArgs = {}): Promise<void> {
+export async function runLiveEvaluation(args: LiveArgs = { paceMs: 0 }): Promise<void> {
   const env = envRecord();
   const providers = providersFromEnv(env);
   if (providers.length === 0) {
@@ -78,8 +106,11 @@ export async function runLiveEvaluation(args: LiveArgs = {}): Promise<void> {
   const reports = [];
   let totalTokens = 0;
   let totalCost = 0;
+  const outcomes: Array<{ errors?: readonly unknown[]; threw?: boolean }> = [];
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-  for (const c of cases as BenchmarkCase[]) {
+  for (const [idx, c] of (cases as BenchmarkCase[]).entries()) {
+    if (idx > 0 && args.paceMs > 0) await sleep(args.paceMs);
     let result;
     try {
       result = await runReview({
@@ -92,6 +123,7 @@ export async function runLiveEvaluation(args: LiveArgs = {}): Promise<void> {
       const message = redact(err instanceof Error ? err.message : String(err));
       console.log(`[${c.id}] ERROR: ${message}`);
       rows.push({ caseId: c.id, error: message });
+      outcomes.push({ threw: true });
       continue;
     }
 
@@ -103,6 +135,7 @@ export async function runLiveEvaluation(args: LiveArgs = {}): Promise<void> {
       .map((i, n) => issueToCandidate(i, n, false));
     const report = evaluateCase(delivered, rejected, c.expectedFindings, c.antiFindings, c.id);
     reports.push(report);
+    outcomes.push({ errors: result.errors });
 
     const tokens = result.metrics.totalPromptTokens + result.metrics.totalCompletionTokens;
     const cost = result.metrics.totalCostUsd;
@@ -144,6 +177,14 @@ export async function runLiveEvaluation(args: LiveArgs = {}): Promise<void> {
   console.log("");
   console.log(formatAggregate("ALL cases", aggregate));
   console.log(`Total tokens=${totalTokens} cost=$${totalCost.toFixed(4)}\n`);
+  const validity = assessRunValidity(outcomes);
+  if (!validity.valid) {
+    console.log(
+      `INVALID RUN: ${validity.agentErrorCount} agent/case error(s); metrics are not a trustworthy ` +
+        `measurement (rate limits or provider failures). Re-run with --pace-ms.\n`,
+    );
+    process.exitCode = 2;
+  }
 
   if (args.output) {
     const outPath = resolve(args.output);
@@ -155,6 +196,8 @@ export async function runLiveEvaluation(args: LiveArgs = {}): Promise<void> {
           generatedAt: new Date().toISOString(),
           dataset: datasetPath,
           providers: providers.map((p) => p.id),
+          valid: validity.valid,
+          agentErrorCount: validity.agentErrorCount,
           aggregate,
           totalTokens,
           totalCostUsd: totalCost,

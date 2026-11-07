@@ -189,4 +189,4 @@ Visit [http://localhost:4000](http://localhost:4000) in your browser.
 
 ## 📄 License
 
-Private repository maintained for automated AI code review workflows. Version **0.6.1**.
+Private repository maintained for automated AI code review workflows. Version **0.6.2**.

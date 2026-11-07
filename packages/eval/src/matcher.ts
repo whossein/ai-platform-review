@@ -65,7 +65,8 @@ const CATEGORY_EXACT = new Set([
 ]);
 
 const CATEGORY_CROSS: Record<string, Set<string>> = {
-  code: new Set(["architecture", "maintainability"]),
+  code: new Set(["architecture", "maintainability", "correctness"]),
+  correctness: new Set(["code"]),
   architecture: new Set(["code", "performance"]),
   security: new Set(["correctness", "code"]),
   performance: new Set(["code", "architecture"]),

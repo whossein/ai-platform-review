@@ -150,4 +150,98 @@ describe("critic / consolidation", () => {
     const llm = { ...issue({ id: "l", producedBy: "agent.code-reviewer", category: "code" }), title: "Poor naming", description: "variable unclear", fingerprint: "f2" as ContentHash };
     expect(critique([rule, llm])).toHaveLength(2);
   });
+
+  describe("non-transitive same-defect matching", () => {
+    const wording = (
+      id: string,
+      producedBy: string,
+      title: string,
+      extra: Partial<Issue> = {},
+    ): Issue => ({
+      ...issue({ id, producedBy }),
+      title,
+      description: "",
+      fingerprint: `fp-${id}` as ContentHash,
+      ...extra,
+    });
+
+    const rule = () =>
+      wording("r", "agent.rule-engine", "secret.hardcoded", { confidence: 1 });
+    const code = () =>
+      wording("c", "agent.code-reviewer", "alpha bravo charlie delta", {
+        severity: "critical",
+        confidence: 0.5,
+      });
+    const ts = () =>
+      wording("t", "agent.typescript-reviewer", "alpha bravo charlie echo", {
+        severity: "high",
+      });
+    const sec = () =>
+      wording("s", "agent.security-reviewer", "zulu yankee xray whiskey", {
+        severity: "critical",
+        confidence: 0.8,
+      });
+
+    it("collapses rule + 3 agents with unrelated wording into one issue", () => {
+      const out = critique([rule(), code(), ts(), sec()]);
+      expect(out).toHaveLength(1);
+      expect([...out[0]!.corroboratedBy].sort()).toEqual([
+        "agent.code-reviewer",
+        "agent.rule-engine",
+        "agent.security-reviewer",
+        "agent.typescript-reviewer",
+      ]);
+      // Representative: critical severity, then highest confidence (security-reviewer).
+      expect(out[0]!.id).toBe("s");
+      expect(out[0]!.severity).toBe("critical");
+      expect(out[0]!.confidence).toBe(0.975); // 0.8 boosted for 4 contributors
+    });
+
+    it("gives the same result when the rule arrives last (clusters are bridged)", () => {
+      const out = critique([code(), ts(), sec(), rule()]);
+      expect(out).toHaveLength(1);
+      expect(out[0]!.corroboratedBy).toHaveLength(4);
+      expect(out[0]!.id).toBe("s");
+    });
+
+    it("chains: A~B and B~C join even though A and C share no wording", () => {
+      const a = wording("a", "agent.a", "wa1 wa2 wa3 wa4");
+      const b = wording("b", "agent.b", "wa1 wa2 wa3 wa4 wb1 wb2 wb3 wb4");
+      const c = wording("c", "agent.c", "wb1 wb2 wb3 wb4");
+      // Documented trade-off of "at least one" evidence: matches chain.
+      expect(critique([a, b, c])).toHaveLength(1);
+      // Without the bridging member, A and C stay apart.
+      expect(critique([a, c])).toHaveLength(2);
+    });
+
+    it("never absorbs a second same-agent finding: a rule joins only one of them", () => {
+      const s1 = wording("s1", "agent.security-reviewer", "SQL injection");
+      const s2 = wording("s2", "agent.security-reviewer", "Hardcoded key");
+      for (const order of [
+        [rule(), s1, s2],
+        [s1, s2, rule()],
+      ]) {
+        const out = critique(order);
+        // Both distinct findings survive; the rule corroborates exactly one.
+        expect(out).toHaveLength(2);
+        expect(out.map((o) => o.corroboratedBy.length).sort()).toEqual([1, 2]);
+        // The rule wins representative (same severity, confidence 1); the other
+        // same-agent finding survives on its own.
+        expect(out.map((o) => o.id).sort()).toEqual(["r", "s2"]);
+      }
+      // The rule goes to whichever same-agent finding comes first in the cluster
+      // order (s1 here), which is arbitrary: the rule says nothing about which.
+      const out = critique([s1, s2, rule()]);
+      expect(out.find((o) => o.id === "s2")!.corroboratedBy).toEqual([
+        "agent.security-reviewer",
+      ]);
+    });
+
+    it("never joins with no evidence (cluster of only different same-producer issues)", () => {
+      const x1 = wording("x1", "solo", "one two three");
+      const x2 = wording("x2", "solo", "four five six");
+      const y = wording("y", "agent.y", "seven eight nine");
+      expect(critique([x1, x2, y])).toHaveLength(3);
+    });
+  });
 });

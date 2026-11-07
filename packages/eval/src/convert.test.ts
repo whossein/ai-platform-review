@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { issueToCandidate } from "./convert.js";
+import { issueToCandidate, mapCategory } from "./convert.js";
+import { evaluateCase } from "./metrics.js";
 import { aggregateCounts, ratio, pct } from "./summary.js";
 
 const issue = {
@@ -53,5 +54,94 @@ describe("aggregateCounts", () => {
     expect(aggregateCounts([counts(0, 0, 0, 0, 0)]).precision).toBe("N/A");
     expect(ratio(1, 0)).toBe("N/A");
     expect(pct(0.5)).toBe("50.0%");
+  });
+});
+
+describe("mapCategory", () => {
+  it("maps producer categories into the matcher taxonomy", () => {
+    expect(mapCategory("react")).toBe("code");
+    expect(mapCategory("typescript")).toBe("code");
+    expect(mapCategory("python")).toBe("code");
+    expect(mapCategory("code_quality")).toBe("code");
+    expect(mapCategory("bug")).toBe("correctness");
+    expect(mapCategory("error-handling")).toBe("correctness");
+    expect(mapCategory("Vulnerability")).toBe("security");
+    expect(mapCategory("perf")).toBe("performance");
+  });
+  it("keeps security, performance and correctness identity", () => {
+    expect(mapCategory("security")).toBe("security");
+    expect(mapCategory("performance")).toBe("performance");
+    expect(mapCategory("correctness")).toBe("correctness");
+    expect(mapCategory("architecture")).toBe("architecture");
+  });
+  it("passes unknown categories through unchanged", () => {
+    expect(mapCategory("Totally-New")).toBe("Totally-New");
+    expect(issueToCandidate({ ...issue, category: "validation" }, 0).category).toBe("validation");
+  });
+  it("scores a bug finding as TP against an expected code finding", () => {
+    const cand = issueToCandidate(
+      {
+        ...issue,
+        category: "bug",
+        title: "Stale closure in effect",
+        description: "The stale value is captured",
+        location: { file: "src/App.tsx", line: 8 },
+      },
+      0,
+    );
+    expect(cand.category).toBe("correctness");
+    const report = evaluateCase(
+      [cand],
+      [],
+      [
+        {
+          id: "E1",
+          file: "src/App.tsx",
+          lineRange: [7, 9],
+          category: "code",
+          severity: "high",
+          requiredKeywords: ["stale"],
+          description: "stale closure",
+        },
+      ],
+      [],
+      "c2",
+    );
+    expect(report.counts.tp).toBe(1);
+    expect(report.counts.fp).toBe(0);
+    expect(report.counts.fn).toBe(0);
+  });
+
+  it("scores a react finding as TP against an expected code finding", () => {
+    const cand = issueToCandidate(
+      {
+        ...issue,
+        category: "react",
+        title: "Stale closure in effect",
+        description: "The stale value is captured",
+        location: { file: "src/App.tsx", line: 8 },
+      },
+      0,
+    );
+    const report = evaluateCase(
+      [cand],
+      [],
+      [
+        {
+          id: "E1",
+          file: "src/App.tsx",
+          lineRange: [7, 9],
+          category: "code",
+          severity: "high",
+          requiredKeywords: ["stale"],
+          description: "stale closure",
+        },
+      ],
+      [],
+      "c1",
+    );
+    expect(report.counts.tp).toBe(1);
+    expect(report.counts.fp).toBe(0);
+    expect(report.counts.fn).toBe(0);
   });
 });

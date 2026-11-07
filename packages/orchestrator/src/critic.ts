@@ -7,12 +7,16 @@
  * incremental reviews, wasteful. The Critic:
  *
  *   1. Groups issues that refer to the same defect: same file + line + canonical
- *      category AND, across different producers, evidence of the same defect
- *      (identical fingerprint or title, or enough shared wording). Two agents
- *      flagging different problems on one line stay as two findings: merging
- *      them would lose one and wrongly inflate confidence. Deterministic rule
- *      findings carry a rule id as title, so for security they match an agent
- *      finding at the same location without a wording comparison.
+ *      category AND evidence of the same defect. Cross-producer evidence needs
+ *      only ONE member of the cluster from another producer that matches
+ *      (identical fingerprint or title, or enough shared wording); same-producer
+ *      members must ALL be repeats of the issue. "Same defect" is not
+ *      transitive, so requiring a match with every member left one defect
+ *      reported twice; the trade-off is that matches can chain (A~B, B~C joins
+ *      A and C). Two agents flagging different problems on one line stay as two
+ *      findings: merging them would lose one and wrongly inflate confidence.
+ *      Deterministic rule findings carry a rule id as title, so for security they
+ *      match an agent finding at the same location without a wording comparison.
  *   2. Merges each group into a single representative issue, keeping the highest
  *      severity and boosting confidence when multiple agents independently agree
  *      (corroboration), while recording every agent that contributed.
@@ -130,23 +134,48 @@ function isSameDefect(a: Issue, b: Issue): boolean {
 }
 
 /**
- * Splits a same-location bucket into clusters of one defect each. An issue joins
- * a cluster unless that cluster holds a *different* issue from the same producer
- * (one agent's two findings on a line are distinct problems) or a finding from
- * another producer that is not evidently the same defect.
+ * Whether `issue` may join `c`. Same-producer constraint is strict: every member
+ * from the issue's own producer must be a repeat of it (one agent's two findings
+ * on a line are distinct problems). Cross-producer evidence is "at least one":
+ * some member from another producer is the same defect, or a same-producer
+ * member is a repeat. No evidence at all means no join.
+ */
+function canJoin(c: readonly Issue[], issue: Issue): boolean {
+  let evidence = false;
+  for (const m of c) {
+    if (m.producedBy === issue.producedBy) {
+      if (!isRepeat(m, issue)) return false;
+      evidence = true;
+    } else if (isSameDefect(m, issue)) {
+      evidence = true;
+    }
+  }
+  return evidence;
+}
+
+/**
+ * Splits a same-location bucket into clusters of one defect each, per `canJoin`.
+ * An issue may bridge clusters that already exist (e.g. a rule finding arriving
+ * after agents that matched each other but not a third agent): other joinable
+ * clusters are merged in too, but only if every one of their members could join
+ * the merged cluster, so same-producer distinct findings are never fused.
  */
 function cluster(bucket: readonly Issue[]): Issue[][] {
-  const clusters: Issue[][] = [];
+  let clusters: Issue[][] = [];
   for (const issue of bucket) {
-    const target = clusters.find((c) =>
-      c.every((m) =>
-        m.producedBy === issue.producedBy
-          ? isRepeat(m, issue)
-          : isSameDefect(m, issue),
-      ),
-    );
-    if (target) target.push(issue);
-    else clusters.push([issue]);
+    const joinable = clusters.filter((c) => canJoin(c, issue));
+    const target = joinable[0];
+    if (!target) {
+      clusters.push([issue]);
+      continue;
+    }
+    target.push(issue);
+    for (const other of joinable.slice(1)) {
+      if (other.every((m) => canJoin(target, m))) {
+        target.push(...other);
+        clusters = clusters.filter((c) => c !== other);
+      }
+    }
   }
   return clusters;
 }
