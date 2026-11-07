@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import {
   SPECIALISTS,
   makeSpecialistDefinition,
@@ -1084,6 +1083,8 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== "production") {
     // Vite middleware for development
+    // Lazy: vite is a devDependency and is absent from packaged/production builds.
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -1091,7 +1092,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(process.cwd(), "apps/web/dist");
+    const distPath = process.env.WEB_DIST || path.resolve(process.cwd(), "apps/web/dist");
     app.use(express.static(distPath));
     app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

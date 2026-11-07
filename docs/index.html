@@ -1,1292 +1,425 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en" dir="ltr" class="no-js scroll-smooth">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Code Review Platform | An AI Engineering Team</title>
-  <link rel="icon" href="favicon.ico" sizes="48x48">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <meta property="og:image" content="logo.png">
-  
-  <!-- Fonts -->
+  <title>AI Code Review Platform | Self-hosted multi-agent code review</title>
+  <meta name="description" content="Self-hosted, multi-agent AI code review for GitLab merge requests, GitHub pull requests and diffs. 35 free rules, 14 specialist reviewers, any LLM provider, hard budgets.">
+  <meta property="og:title" content="AI Code Review Platform">
+  <meta property="og:description" content="Self-hosted multi-agent AI code review. Free rules first, specialist AI reviewers second, hard budget always.">
+  <meta property="og:image" content="https://whossein.github.io/ai-platform-review/assets/review.png">
+  <meta property="og:type" content="website">
+  <meta name="color-scheme" content="light dark">
+  <script>document.documentElement.classList.replace('no-js', 'js');</script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Tailwind Config & Custom CSS -->
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          },
-          colors: {
-            zinc: {
-              850: '#1f1f22',
-              900: '#18181b',
-              950: '#09090b',
-            },
-            accent: {
-              DEFAULT: '#3b82f6',
-              glow: 'rgba(59, 130, 246, 0.5)',
-            }
-          },
-          animation: {
-            'flow': 'flow 2s linear infinite',
-            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-          },
-          keyframes: {
-            flow: {
-              '0%': { strokeDashoffset: '24' },
-              '100%': { strokeDashoffset: '0' },
-            }
-          }
-        }
-      }
-    }
-  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" integrity="sha384-6p9AefaqUhEVheRlj1mpAkbngHXy9mbYMrIdcIt4Jlc9lOLIablJq3bBsLOjGwZ7" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.4/dist/index.global.js" integrity="sha384-LhJn7QKq7hHz9EqN//RkaYS9p1ZU3MqAxjeV0JI95iQ5Gol1uz/cQQ+pesz0xum7" crossorigin="anonymous"></script>
 
   <style>
-    body {
-      background-color: #09090b;
-      color: #ededed;
-      overflow-x: hidden;
+    /* Same palette as the app (apps/web/src/styles.css), plus a light variant. */
+    :root {
+      --bg: #f6f8fa; --panel: #fdfdfe; --line: #d0d7de; --fg: #1f2328; --muted: #59636e;
+      --accent: #0969da; --accent-strong: #0969da; --accent-fg: #fdfdfe;
+      --sev-high: #bc4c00; --sev-med: #9a6700; --sev-low: #1a7f37;
     }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --panel: #161b22; --line: #30363d; --fg: #e6edf3; --muted: #8b949e;
+        --accent: #2f81f7; --accent-strong: #1f6feb; --accent-fg: #fdfdfe;
+        --sev-high: #db6d28; --sev-med: #d29922; --sev-low: #3fb950;
+      }
+    }
+    [lang="fa"] { font-family: "Vazirmatn", "Geist", ui-sans-serif, system-ui, sans-serif; }
+    [lang="fa"] code, [lang="fa"] pre { direction: ltr; unicode-bidi: isolate; }
 
-    /* Subtle Grid Background */
-    .bg-grid {
-      background-size: 40px 40px;
-      background-image: 
-        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-      mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-      -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+    /* Scroll reveal: only when JS runs, never under reduced motion. */
+    .js .reveal { opacity: 0; transform: translateY(16px); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
+    .js .reveal.in { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .js .reveal { opacity: 1; transform: none; transition: none; }
+      html { scroll-behavior: auto; }
     }
-
-    /* Subtle Noise */
-    .bg-noise {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-      opacity: 0.02;
-      pointer-events: none;
-      z-index: 50;
+    .dots { background-image: radial-gradient(color-mix(in srgb, var(--line) 80%, transparent) 1px, transparent 1px); background-size: 16px 16px; }
+  </style>
+  <style type="text/tailwindcss">
+    @theme inline {
+      --color-bg: var(--bg);
+      --color-panel: var(--panel);
+      --color-line: var(--line);
+      --color-fg: var(--fg);
+      --color-muted: var(--muted);
+      --color-accent: var(--accent);
+      --color-accent-fg: var(--accent-fg);
+      --color-accent-strong: var(--accent-strong);
+      --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+      --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
     }
-
-    /* Glows & Gradients */
-    .text-gradient {
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-image: linear-gradient(to right, #ffffff, #a1a1aa);
-    }
-    
-    .border-glow {
-      box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
-      border-color: rgba(59, 130, 246, 0.3);
-    }
-
-    /* Node Styles */
-    .arch-node {
-      background: #18181b;
-      border: 1px solid #27272a;
-      border-radius: 8px;
-      padding: 12px 24px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.875rem;
-      color: #a1a1aa;
-      transition: all 0.3s ease;
-      position: relative;
-      z-index: 10;
-    }
-    
-    .arch-node.active, .arch-node:hover {
-      border-color: #3b82f6;
-      color: #fff;
-      box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
-    }
-
-    .arch-node.accent {
-      border-color: #8b5cf6;
-      color: #fff;
-      box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
-    }
-
-    /* Lines */
-    .connection-line {
-      stroke: #27272a;
-      stroke-width: 1.5;
-      fill: none;
-      transition: stroke 0.5s ease;
-    }
-
-    .connection-line.active {
-      stroke: #3b82f6;
-      stroke-dasharray: 4 4;
-      animation: flow 1s linear infinite;
-    }
-
-    /* Scroll Animations */
-    .reveal {
-      opacity: 0;
-      transform: translateY(30px);
-      transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    
-    .reveal.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    /* Code Block */
-    .code-editor {
-      background: #111113;
-      border: 1px solid #27272a;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-    .code-header {
-      background: #18181b;
-      border-bottom: 1px solid #27272a;
-      padding: 8px 16px;
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-    .dot { width: 10px; height: 10px; border-radius: 50%; }
-    .dot-r { background: #ef4444; }
-    .dot-y { background: #eab308; }
-    .dot-g { background: #22c55e; }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #09090b; }
-    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
   </style>
 </head>
-<body class="antialiased selection:bg-accent selection:text-white">
+<body class="bg-bg text-fg font-sans antialiased">
 
-  <!-- Noise Overlay -->
-  <div class="bg-noise"></div>
+<!-- ===================================================== ENGLISH -->
+<div data-lang="en" lang="en" dir="ltr">
 
-  <!-- Navigation -->
-  <nav class="fixed top-0 w-full z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900">
-    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-      <div class="font-mono text-sm font-semibold tracking-tight text-white flex items-center gap-2">
-        <img src="favicon-32.png" alt="" class="w-6 h-6 rounded">
-        AI_REVIEW_PLATFORM
+  <header class="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
+    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+      <a href="#" class="flex items-center gap-2 font-semibold tracking-tight"><i class="ph ph-git-pull-request text-xl text-accent"></i>AI Code Review</a>
+      <div class="flex items-center gap-1 text-sm">
+        <a href="#architecture" class="hidden rounded-lg px-3 py-2 text-muted hover:text-fg md:block">How it works</a>
+        <a href="#features" class="hidden rounded-lg px-3 py-2 text-muted hover:text-fg md:block">Features</a>
+        <a href="#release-notes" class="hidden rounded-lg px-3 py-2 text-muted hover:text-fg md:block">Releases</a>
+        <button type="button" data-set-lang="fa" class="rounded-lg px-3 py-2 text-muted hover:text-fg" lang="fa">فارسی</button>
+        <a href="https://github.com/whossein/ai-platform-review" class="ms-1 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 hover:border-muted"><i class="ph ph-github-logo text-base"></i>GitHub</a>
       </div>
-      <div class="flex items-center gap-6">
-        <a href="#release-notes" class="text-sm font-mono text-zinc-400 hover:text-white transition-colors">Release Notes</a>
-      <a href="https://github.com/whossein/ai-platform-review-gemini-2" target="_blank" class="text-sm font-mono text-zinc-400 hover:text-white transition-colors flex items-center gap-2">
-        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
-        GitHub
-      </a>
-      </div>
-    </div>
-  </nav>
+    </nav>
+  </header>
 
-  <!-- HERO SECTION -->
-  <section class="relative min-h-screen flex flex-col items-center justify-center pt-24 pb-12 px-6 overflow-hidden">
-    <div class="absolute inset-0 bg-grid opacity-30 z-0 pointer-events-none"></div>
-    
-    <div class="relative z-10 max-w-4xl mx-auto text-center reveal">
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-900/50 backdrop-blur text-xs font-mono tracking-widest text-zinc-400 mb-8">
-        <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
-        OPEN SOURCE • MULTI-AGENT • AI CODE REVIEW
-      </div>
-      
-      <h1 class="text-5xl md:text-7xl font-bold tracking-tight mb-6 text-gradient leading-tight">
-        Code Review, Reimagined as an AI Engineering Team.
-      </h1>
-      
-      <p class="text-lg md:text-xl text-zinc-400 font-medium mb-4 max-w-3xl mx-auto leading-relaxed">
-        Not one AI reviewer. A coordinated system of specialists, rules, routing, context, and critique.
-      </p>
-      
-      <p class="text-zinc-500 mb-10 max-w-2xl mx-auto">
-        An agentic code review platform that analyzes changes, selects the right engineering specialists, validates their findings, and publishes actionable reviews directly into your development workflow.
-      </p>
-      
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="#architecture" class="px-8 py-3 rounded-md bg-white text-black font-semibold hover:bg-zinc-200 transition-colors">
-          Explore the Architecture
-        </a>
-        <a href="https://github.com/whossein/ai-platform-review-gemini-2" target="_blank" class="px-8 py-3 rounded-md bg-zinc-900 border border-zinc-800 text-white font-medium hover:bg-zinc-800 transition-colors">
-          View on GitHub
-        </a>
-      </div>
-    </div>
-
-    <!-- Living Architecture Visual -->
-    <div class="relative z-10 mt-20 w-full max-w-3xl mx-auto reveal" id="hero-pipeline">
-      <div class="flex flex-col items-center gap-4">
-        <!-- Node -->
-        <div class="arch-node active">Developer</div>
-        <div class="h-8 w-px bg-zinc-800 relative"><div class="absolute top-0 left-0 w-full bg-accent h-full origin-top animate-[scaleY_2s_infinite]"></div></div>
-        
-        <div class="arch-node active">Git Diff</div>
-        <div class="h-8 w-px bg-zinc-800 relative"><div class="absolute top-0 left-0 w-full bg-accent h-full origin-top animate-[scaleY_2s_infinite_0.2s]"></div></div>
-        
-        <div class="flex gap-4">
-          <div class="flex flex-col items-center gap-4">
-            <div class="arch-node">Context Engine</div>
-            <div class="h-8 w-px bg-zinc-800"></div>
-            <div class="arch-node">Rule Engine</div>
-          </div>
-        </div>
-        
-        <div class="h-8 w-px bg-zinc-800 relative"><div class="absolute top-0 left-0 w-full bg-accent h-full origin-top animate-[scaleY_2s_infinite_0.4s]"></div></div>
-        <div class="arch-node accent">Planner</div>
-        <div class="h-8 w-px bg-zinc-800 relative"><div class="absolute top-0 left-0 w-full bg-accent h-full origin-top animate-[scaleY_2s_infinite_0.6s]"></div></div>
-        
-        <div class="flex flex-wrap justify-center gap-4 w-full px-4">
-          <div class="arch-node text-xs">Security Agent</div>
-          <div class="arch-node text-xs">React Agent</div>
-          <div class="arch-node text-xs">Performance Agent</div>
-        </div>
-        
-        <div class="h-8 w-px bg-zinc-800 relative"><div class="absolute top-0 left-0 w-full bg-accent h-full origin-top animate-[scaleY_2s_infinite_0.8s]"></div></div>
-        <div class="arch-node">Critic</div>
-        <div class="h-8 w-px bg-zinc-800 relative"><div class="absolute top-0 left-0 w-full bg-accent h-full origin-top animate-[scaleY_2s_infinite_1s]"></div></div>
-        <div class="arch-node active border-glow">Final Review</div>
-      </div>
-      
-      <!-- Floating data packets -->
-      <div class="absolute top-[20%] -left-12 opacity-0 animate-[floatRight_4s_infinite] font-mono text-xs text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded">
-        +12 -4<br>src/auth/useAuth.ts
-      </div>
-      <div class="absolute top-[60%] -right-12 opacity-0 animate-[floatLeft_4s_infinite_1s] font-mono text-xs text-accent bg-zinc-900 border border-zinc-800 px-2 py-1 rounded">
-        Findings generated
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 01: THE PROBLEM -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900 relative">
-    <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center reveal">
-      <div>
-        <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-          One Reviewer Can't See Everything.
-        </h2>
-        <div class="space-y-4 text-zinc-400 text-lg">
-          <p>Security sees one class of problems.</p>
-          <p>Performance sees another.</p>
-          <p>React sees another.</p>
-          <p>Architecture sees another.</p>
-          <p class="mt-8 text-zinc-300">Human reviewers have limited time. Generic AI reviewers have limited context and specialization.</p>
-          <p class="text-xl font-medium text-white mt-4 border-l-2 border-accent pl-4">
-            What if code review worked like an engineering team?
-          </p>
+  <main>
+    <!-- Hero -->
+    <section class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-14 md:pt-20 lg:grid-cols-[1fr_1.15fr]">
+      <div class="reveal">
+        <h1 class="text-4xl font-semibold leading-[1.1] tracking-tight md:text-5xl">Your AI review team, on your own server.</h1>
+        <p class="mt-5 max-w-[46ch] text-lg leading-relaxed text-muted">Free rules catch the obvious. Specialist AI reviewers handle the rest. Any LLM provider, with a hard budget per review.</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="#quickstart" class="inline-flex items-center gap-2 rounded-lg bg-accent-strong px-5 py-3 font-medium text-accent-fg transition hover:opacity-90 active:scale-[0.98]">Get started<i class="ph ph-arrow-right"></i></a>
+          <a href="#architecture" class="inline-flex items-center rounded-lg border border-line px-5 py-3 font-medium transition hover:border-muted active:scale-[0.98]">How it works</a>
         </div>
       </div>
-      
-      <div class="code-editor shadow-2xl shadow-black/50">
-        <div class="code-header">
-          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-          <span class="ml-2 text-xs font-mono text-zinc-500">review.ts</span>
-        </div>
-        <div class="p-4 font-mono text-sm leading-relaxed overflow-x-auto text-zinc-300 relative">
-          <pre><code><span class="text-zinc-500">1</span> export const processPayment = async (data) => {
-<span class="text-zinc-500">2</span>   <span class="text-accent">const</span> db = await connect();
-<span class="text-zinc-500">3</span>   <span class="text-zinc-500">// Vulnerability: No input validation</span>
-<span class="text-zinc-500">4</span>   <span class="bg-red-900/30 border border-red-500/30 px-1 rounded relative group">db.query(`SELECT * FROM users WHERE id = ${data.id}`);<span class="absolute -top-8 left-0 bg-red-950 text-red-400 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-20">Security: SQL Injection Risk</span></span>
-<span class="text-zinc-500">5</span> 
-<span class="text-zinc-500">6</span>   <span class="text-zinc-500">// Performance issue: synchronous loop blocking thread</span>
-<span class="text-zinc-500">7</span>   <span class="bg-yellow-900/30 border border-yellow-500/30 px-1 rounded relative group">for(let i=0; i < data.items.length; i++) { process(data.items[i]); }<span class="absolute -top-8 left-0 bg-yellow-950 text-yellow-400 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-20">Performance: Blocking Loop</span></span>
-<span class="text-zinc-500">8</span> 
-<span class="text-zinc-500">9</span>   <span class="text-accent">return</span> { status: 'ok' };
-<span class="text-zinc-500">10</span>}</code></pre>
-        </div>
-      </div>
-    </div>
-  </section>
+      <figure class="reveal overflow-hidden rounded-xl border border-line bg-panel shadow-[0_24px_60px_-20px_color-mix(in_srgb,var(--accent)_25%,transparent)]">
+        <img src="assets/review.png" width="1265" height="1079" alt="The review screen after a rules-only run: a hardcoded API key flagged as high severity, an explicit any as medium and a console.log as low, with no AI tokens spent." class="block h-auto w-full" fetchpriority="high">
+      </figure>
+    </section>
 
-  <!-- SECTION 02: THE BIG IDEA -->
-  <section class="py-24 px-6 bg-zinc-900/30 border-t border-zinc-900 text-center relative">
-    <div class="max-w-4xl mx-auto reveal">
-      <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-        Don't Ask One AI to Do Everything.
-      </h2>
-      <p class="text-xl text-zinc-400 mb-16">
-        Give every problem to the engineer best equipped to solve it.
-      </p>
-      
-      <!-- Big Idea Visual -->
-      <div class="font-mono text-sm md:text-base text-zinc-300 bg-zinc-950 p-8 rounded-xl border border-zinc-800 shadow-2xl inline-block text-left w-full overflow-x-auto">
-        <pre class="leading-loose text-center">
-<span class="text-white font-bold">CODE CHANGE</span>
-     ↓
-<span class="text-zinc-400">UNDERSTAND</span>
-     ↓
-<span class="text-zinc-400">CLASSIFY</span>
-     ↓
-┌────┴────┬─────────┐
-↓         ↓         ↓
-<span class="text-red-400">SECURITY</span>  <span class="text-blue-400">REACT</span>     <span class="text-green-400">PERFORMANCE</span>
-<span class="text-zinc-500">SPECIALIST SPECIALIST SPECIALIST</span>
-↓         ↓         ↓
-└────┬────┴─────────┘
-     ↓
-   <span class="text-purple-400">CRITIC</span>
-     ↓
-<span class="text-white font-bold">FINAL REVIEW</span></pre>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 03: THE ARCHITECTURE -->
-  <section id="architecture" class="py-32 px-6 bg-zinc-950 border-t border-zinc-900 relative">
-    <div class="max-w-7xl mx-auto">
-      <div class="text-center mb-16 reveal">
-        <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">Under the Hood</h2>
-        <p class="text-xl text-zinc-400 max-w-2xl mx-auto">An interactive architecture diagram based on the real repository structure.</p>
-      </div>
-      
-      <div class="relative w-full max-w-5xl mx-auto border border-zinc-800 bg-zinc-900/50 rounded-2xl p-4 md:p-12 overflow-x-auto reveal">
-        <!-- SVG Connections -->
-        <svg class="absolute inset-0 w-full h-full pointer-events-none z-0" style="min-width: 800px;">
-          <!-- Developer to Diff -->
-          <path d="M400,60 L400,100" class="connection-line active" />
-          <!-- Diff to Context & Config -->
-          <path d="M400,150 L400,200" class="connection-line active" />
-          <!-- Context to Orchestrator -->
-          <path d="M400,250 L400,300" class="connection-line active" />
-          <!-- Orchestrator to Agents (Fork) -->
-          <path d="M400,360 L400,380 L200,380 L200,420" class="connection-line active" />
-          <path d="M400,360 L400,420" class="connection-line active" />
-          <path d="M400,360 L400,380 L600,380 L600,420" class="connection-line active" />
-          <!-- Agents to Critic (Merge) -->
-          <path d="M200,480 L200,520 L400,520 L400,540" class="connection-line active" />
-          <path d="M400,480 L400,540" class="connection-line active" />
-          <path d="M600,480 L600,520 L400,520 L400,540" class="connection-line active" />
-          <!-- Critic to Git -->
-          <path d="M400,600 L400,640" class="connection-line active" />
-        </svg>
-
-        <div class="relative z-10 flex flex-col items-center gap-12 font-mono text-sm" style="min-width: 700px;">
-          
-          <!-- Layer 1 -->
-          <div class="arch-node group w-64 text-center">
-            <span class="text-white">Developer</span>
-            <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-zinc-800 text-xs p-2 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">Submits Merge Request / Code</div>
-          </div>
-
-          <!-- Layer 2 -->
-          <div class="arch-node group w-64 text-center">
-            <span class="text-white">@ai-review/repository</span><br>
-            <span class="text-xs text-zinc-500">Git / Local Diff</span>
-          </div>
-
-          <!-- Layer 3 -->
-          <div class="flex gap-8">
-            <div class="arch-node group w-48 text-center border-accent">
-              <span class="text-white">@ai-review/context-engine</span><br>
-              <span class="text-xs text-zinc-500">AST + Slicing</span>
-            </div>
-            <div class="arch-node group w-48 text-center border-accent">
-              <span class="text-white">@ai-review/config</span><br>
-              <span class="text-xs text-zinc-500">Deterministic Rules</span>
-            </div>
-          </div>
-
-          <!-- Layer 4 -->
-          <div class="arch-node group w-64 text-center border-purple-500 bg-purple-900/10">
-            <span class="text-white">@ai-review/orchestrator</span><br>
-            <span class="text-xs text-zinc-500">Planner / Router</span>
-          </div>
-
-          <!-- Layer 5 (Agents) -->
-          <div class="flex justify-center gap-8 w-full">
-            <div class="arch-node group w-40 text-center border-red-500/50 bg-red-900/10">
-              <span class="text-white">Security Agent</span><br>
-              <span class="text-xs text-zinc-500">@ai-review/skills</span>
-            </div>
-            <div class="arch-node group w-40 text-center border-blue-500/50 bg-blue-900/10">
-              <span class="text-white">React Agent</span><br>
-              <span class="text-xs text-zinc-500">@ai-review/skills</span>
-            </div>
-            <div class="arch-node group w-40 text-center border-green-500/50 bg-green-900/10">
-              <span class="text-white">Performance</span><br>
-              <span class="text-xs text-zinc-500">@ai-review/skills</span>
-            </div>
-          </div>
-
-          <!-- Layer 6 -->
-          <div class="arch-node group w-64 text-center border-purple-500 bg-purple-900/10">
-            <span class="text-white">Critic / Validator</span><br>
-            <span class="text-xs text-zinc-500">@ai-review/orchestrator</span>
-          </div>
-
-          <!-- Layer 7 -->
-          <div class="flex gap-8">
-            <div class="arch-node group w-48 text-center">
-              <span class="text-white">@ai-review/git</span><br>
-              <span class="text-xs text-zinc-500">GitLab Publisher</span>
-            </div>
-            <div class="arch-node group w-48 text-center">
-              <span class="text-white">apps/web</span><br>
-              <span class="text-xs text-zinc-500">React UI</span>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 04: DETERMINISTIC RULE ENGINE -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900">
-    <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center reveal">
-      <div class="order-2 md:order-1 code-editor shadow-2xl">
-        <div class="code-header">
-          <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-          <span class="ml-2 text-xs font-mono text-zinc-500">@ai-review/config/engine</span>
-        </div>
-        <div class="p-4 font-mono text-xs md:text-sm leading-relaxed text-zinc-300">
-          <div class="text-zinc-500 mb-2">> Analyzing diff (0.001ms)...</div>
-          <div class="text-red-400">[FAIL] Rule: HARDCODED_SECRET</div>
-          <div class="mb-2">Line 12: <span class="bg-red-900/50 px-1 text-white">const apiKey = "sk-live-..."</span></div>
-          
-          <div class="text-red-400">[FAIL] Rule: EVAL_USAGE</div>
-          <div class="mb-2">Line 45: <span class="bg-red-900/50 px-1 text-white">eval(userInput)</span></div>
-          
-          <div class="text-zinc-500 mt-4 border-t border-zinc-800 pt-2">
-            > Result: 2 critical violations found.<br>
-            > <span class="text-accent">Bypassing LLM inference for these lines.</span><br>
-            > Tokens saved: ~1,200
-          </div>
-        </div>
-      </div>
-
-      <div class="order-1 md:order-2">
-        <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-          Before Calling AI, Ask the Machines.
-        </h2>
-        <p class="text-xl text-zinc-400 mb-6">
-          Not every problem requires an LLM.
-        </p>
-        <p class="text-zinc-400 text-lg mb-6">
-          Deterministic rules catch obvious patterns—like hardcoded secrets, SQL injection, <code>eval()</code>, and wildcard CORS—before any AI inference happens.
-        </p>
-        <p class="text-xl font-medium text-white border-l-2 border-accent pl-4">
-          Why spend tokens asking an AI to detect what a regex engine already knows with 100% confidence?
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 05: SMART ROUTING -->
-  <section class="py-24 px-6 bg-zinc-900/30 border-t border-zinc-900 relative">
-    <div class="max-w-5xl mx-auto reveal">
-      <div class="text-center mb-16">
-        <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-          Every Diff Gets Its Own Review Team.
-        </h2>
-        <p class="text-xl text-zinc-400">
-          Don't wake 14 agents when 3 are enough. Token efficiency via intelligent orchestration.
-        </p>
-      </div>
-
-      <div class="grid md:grid-cols-2 gap-8 items-center bg-zinc-950 border border-zinc-800 p-8 rounded-xl">
-        <div class="space-y-4 font-mono text-sm">
-          <div class="text-zinc-500 mb-2">Changed Files:</div>
-          <div class="p-2 border border-zinc-800 rounded flex justify-between items-center group">
-            <span class="text-white">src/components/Button.tsx</span>
-            <span class="text-accent group-hover:animate-pulse">→</span>
-          </div>
-          <div class="p-2 border border-zinc-800 rounded flex justify-between items-center group">
-            <span class="text-white">src/hooks/useAuth.ts</span>
-            <span class="text-red-400 group-hover:animate-pulse">→</span>
-          </div>
-          <div class="p-2 border border-zinc-800 rounded flex justify-between items-center group">
-            <span class="text-white">src/api/users.ts</span>
-            <span class="text-purple-400 group-hover:animate-pulse">→</span>
-          </div>
-          <div class="p-2 border border-zinc-800 rounded flex justify-between items-center group opacity-50">
-            <span class="text-zinc-400">README.md</span>
-            <span class="text-zinc-600">Skipped</span>
-          </div>
-        </div>
-
-        <div class="relative pl-8 border-l border-zinc-800 space-y-6 font-mono text-sm">
-          <div class="absolute -left-2 top-0 w-4 h-full flex flex-col justify-between py-4 pointer-events-none">
-            <div class="w-2 h-2 rounded-full bg-accent"></div>
-            <div class="w-2 h-2 rounded-full bg-red-400"></div>
-            <div class="w-2 h-2 rounded-full bg-purple-400"></div>
-            <div class="w-2 h-2 rounded-full bg-zinc-700"></div>
-          </div>
-          
-          <div>
-            <div class="text-accent font-bold mb-1">React & TypeScript Agents</div>
-            <div class="text-zinc-500 text-xs">Analyzing component props and render cycles.</div>
-          </div>
-          <div>
-            <div class="text-red-400 font-bold mb-1">Security Agent</div>
-            <div class="text-zinc-500 text-xs">Auditing token storage and hook exposure.</div>
-          </div>
-          <div>
-            <div class="text-purple-400 font-bold mb-1">Performance Agent</div>
-            <div class="text-zinc-500 text-xs">Checking data fetching efficiency.</div>
-          </div>
-          <div>
-            <div class="text-zinc-600 line-through">.NET / Android / iOS Agents</div>
-            <div class="text-zinc-700 text-xs">Offline. Context not required.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 06: CONTEXT ENGINE -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900">
-    <div class="max-w-6xl mx-auto text-center reveal">
-      <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-        AI Needs Context. Not Just Code.
-      </h2>
-      <p class="text-xl text-zinc-400 max-w-3xl mx-auto mb-16">
-        Dumping an entire file into a prompt wastes tokens and dilutes reasoning. The <strong>@ai-review/context-engine</strong> slices the codebase using AST to extract exactly what the agent needs.
-      </p>
-
-      <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 font-mono text-sm text-zinc-300">
-        <div class="arch-node border-dashed">Git Diff</div>
-        <div class="text-accent">+</div>
-        <div class="arch-node border-dashed">AST Trees</div>
-        <div class="text-accent">+</div>
-        <div class="arch-node border-dashed">Context Slicing</div>
-        <div class="text-accent">↓</div>
-        <div class="arch-node active border-glow bg-accent/10">Focused Agent Context</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 07: SPECIALIST AGENTS -->
-  <section class="py-24 px-6 bg-zinc-900/30 border-t border-zinc-900">
-    <div class="max-w-7xl mx-auto reveal">
-      <div class="text-center mb-16">
-        <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-          14 Specialists. One Review.
-        </h2>
-        <p class="text-xl text-zinc-400">An entire engineering department operating concurrently.</p>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <!-- Agent Cards -->
-        <script>
-          const agents = [
-            { name: "React", desc: "Hooks, rendering, architecture, state patterns.", color: "border-blue-500/30" },
-            { name: "Security", desc: "OWASP vulnerabilities, crypto, auth flaws.", color: "border-red-500/30" },
-            { name: "Performance", desc: "O(n) complexity, memory leaks, I/O blocking.", color: "border-green-500/30" },
-            { name: "TypeScript", desc: "Type safety, generics, narrowing, strictness.", color: "border-blue-400/30" },
-            { name: "Next.js", desc: "SSR/SSG, routing, caching, edge runtime.", color: "border-zinc-500/30" },
-            { name: "Angular", desc: "RxJS, DI, change detection, decorators.", color: "border-red-600/30" },
-            { name: "Vue", desc: "Composition API, reactivity, SFCs.", color: "border-emerald-500/30" },
-            { name: ".NET / C#", desc: "LINQ, async/await, memory, OOP design.", color: "border-purple-500/30" },
-            { name: "Python", desc: "Pythonic idioms, GIL, generators, typing.", color: "border-yellow-500/30" },
-            { name: "Android", desc: "Kotlin, lifecycles, coroutines, Compose.", color: "border-green-400/30" },
-            { name: "iOS", desc: "Swift, memory (ARC), SwiftUI, concurrency.", color: "border-orange-500/30" },
-            { name: "React Native", desc: "Bridge, re-renders, native modules.", color: "border-cyan-500/30" },
-            { name: "General", desc: "Clean code, SOLID, naming, docs.", color: "border-zinc-400/30" }
-          ];
-
-          document.write(agents.map(a => `
-            <div class="group relative bg-zinc-950 border ${a.color} hover:border-accent hover:shadow-[0_0_15px_rgba(59,130,246,0.15)] rounded-lg p-4 transition-all duration-300 h-32 flex flex-col justify-between">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-zinc-200 group-hover:text-white">${a.name}</span>
-                <span class="w-2 h-2 rounded-full bg-zinc-700 group-hover:bg-accent transition-colors"></span>
-              </div>
-              <p class="text-xs text-zinc-500 group-hover:text-zinc-400 leading-tight">
-                ${a.desc}
-              </p>
-            </div>
-          `).join(''));
-        </script>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 08: MULTI-PROVIDER AI -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900">
-    <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center reveal">
-      <div>
-        <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-          Your Architecture. Your Model.
-        </h2>
-        <p class="text-xl text-zinc-400 mb-6">
-          The <strong>@ai-review/llm</strong> package abstracts the provider layer completely. Write agents once, run them on anything.
-        </p>
-        <ul class="space-y-3 text-zinc-300 font-mono text-sm mb-8">
-          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Provider-agnostic API</li>
-          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Budget controls & rate limiting</li>
-          <li class="flex items-center gap-2"><svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Automatic fallbacks</li>
+    <!-- Providers -->
+    <section class="border-y border-line bg-panel/60">
+      <div class="mx-auto flex max-w-6xl flex-col items-center gap-5 px-5 py-8 md:flex-row md:justify-between">
+        <p class="text-sm text-muted">Works with your provider</p>
+        <ul class="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+          <li><img src="https://cdn.simpleicons.org/googlegemini/59636e/8b949e" alt="Google Gemini" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/anthropic/59636e/8b949e" alt="Anthropic" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/deepseek/59636e/8b949e" alt="DeepSeek" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/openrouter/59636e/8b949e" alt="OpenRouter" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/ollama/59636e/8b949e" alt="Ollama" width="28" height="28" loading="lazy"></li>
         </ul>
+        <p class="text-sm text-muted">plus OpenAI, Azure, Avalai and any OpenAI-compatible API</p>
       </div>
-      
-      <div class="relative w-full aspect-square md:aspect-auto md:h-96 flex items-center justify-center">
-        <!-- Center -->
-        <div class="absolute w-24 h-24 rounded-full bg-zinc-900 border-2 border-accent flex items-center justify-center font-bold text-white z-20 shadow-[0_0_30px_rgba(59,130,246,0.3)]">
-          ENGINE
-        </div>
-        
-        <!-- Orbiting / Connected Nodes -->
-        <div class="absolute w-full h-full animate-[spin_30s_linear_infinite] z-10">
-          <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 arch-node bg-zinc-950 rotate-0" style="animation: spin 30s linear infinite reverse;">Gemini</div>
-          <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 arch-node bg-zinc-950 rotate-0" style="animation: spin 30s linear infinite reverse;">OpenAI</div>
-          <div class="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 arch-node bg-zinc-950 rotate-0" style="animation: spin 30s linear infinite reverse;">Anthropic</div>
-          <div class="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 arch-node bg-zinc-950 rotate-0" style="animation: spin 30s linear infinite reverse;">Ollama</div>
-        </div>
-        
-        <div class="absolute w-[70%] h-[70%] animate-[spin_40s_linear_infinite_reverse] z-10">
-          <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 arch-node bg-zinc-950 text-xs" style="animation: spin 40s linear infinite;">DeepSeek</div>
-          <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 arch-node bg-zinc-950 text-xs" style="animation: spin 40s linear infinite;">Azure</div>
-          <div class="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 arch-node bg-zinc-950 text-xs" style="animation: spin 40s linear infinite;">OpenRouter</div>
-          <div class="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 arch-node bg-zinc-950 text-xs" style="animation: spin 40s linear infinite;">Avalai</div>
-        </div>
-        
-        <!-- Connecting lines background -->
-        <div class="absolute inset-0 border border-zinc-800 rounded-full scale-100"></div>
-        <div class="absolute inset-0 border border-zinc-800 rounded-full scale-75"></div>
+    </section>
+
+    <!-- How it works -->
+    <section id="architecture" class="mx-auto grid max-w-6xl items-center gap-12 px-5 py-24 lg:grid-cols-[1.1fr_1fr]">
+      <figure class="reveal order-last overflow-hidden rounded-xl border border-line bg-panel lg:order-first">
+        <img src="assets/pipeline.png" width="1280" height="820" alt="The How It Works screen in the app: context, static rules, orchestrator, parallel specialists, critic and report connected as a pipeline." class="block h-auto w-full" loading="lazy">
+      </figure>
+      <div class="reveal">
+        <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">Cheap checks first. AI only where it counts.</h2>
+        <ol class="mt-8 space-y-6">
+          <li class="flex gap-4"><i class="ph ph-magnifying-glass mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Context</p><p class="text-muted">Reads the diff, your project index and guidelines.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-lightning mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Rules</p><p class="text-muted">35 deterministic checks run first. No tokens spent.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-users-three mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Specialists</p><p class="text-muted">Only the reviewers that match your files run, in parallel.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-scales mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Critic and judge</p><p class="text-muted">Duplicates are merged and low-confidence findings dropped.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-chat-centered-text mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Report</p><p class="text-muted">Markdown, JSON, or inline comments on the merge request.</p></div></li>
+        </ol>
       </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="border-t border-line bg-panel/40">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="reveal max-w-[24ch] text-3xl font-semibold tracking-tight md:text-4xl">Everything a review needs, nothing it pays for twice.</h2>
+        <div class="mt-12 grid gap-4 md:grid-cols-6">
+
+          <article class="reveal rounded-2xl border border-line bg-accent/[0.07] p-7 md:col-span-4">
+            <i class="ph ph-shield-check text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-semibold">35 checks that cost nothing</h3>
+            <p class="mt-2 max-w-[60ch] text-muted">Deterministic rules run before any AI call, on added lines only, including attempts to give the AI reviewer instructions. Tick <em>Rules only</em> for an instant, free review.</p>
+            <ul class="mt-6 flex flex-wrap gap-2 font-mono text-[13px]">
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">secret.hardcoded</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.sql-injection</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.prompt-injection</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.wildcard-cors</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.tls-verify-disabled</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">py.unsafe-deserialization</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">java.weak-hash</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">sh.curl-pipe-shell</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">docker.latest-tag</li>
+              <li class="rounded-md px-2.5 py-1 text-muted">+25 more</li>
+            </ul>
+          </article>
+
+          <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
+            <i class="ph ph-users-three text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-semibold">14 specialists</h3>
+            <p class="mt-2 text-muted">A planner reads the changed files and wakes only the reviewers that match. When several report the same problem, you see it once.</p>
+            <p class="mt-5 text-sm leading-7 text-muted">React, Next.js, React Native, Angular, Vue, TypeScript, .NET, Python, Android, iOS, Security, Performance, Code quality, Governance</p>
+          </article>
+
+          <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
+            <i class="ph ph-coins text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-semibold">Any model, hard budget</h3>
+            <p class="mt-2 text-muted">Token, dollar and time caps per review. The router picks the cheapest model that can do the job and caches the rest. Use several providers at once: a failing one hands the call to the next, and rate limits are waited out instead of failing the review.</p>
+          </article>
+
+          <article id="user-access-control" class="dots reveal rounded-2xl border border-line bg-panel p-7 md:col-span-4">
+            <span id="project-registry"></span>
+            <i class="ph ph-buildings text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-semibold">Built for teams</h3>
+            <p class="mt-2 max-w-[60ch] text-muted">Projects with their own guidelines, roles from Owner to Viewer, Git tokens encrypted at rest and an audit log of every change. Reviewers grade each merge request and see per-developer averages. In the Skills &amp; Rules tab, managers switch specialists and rules on or off per project and add guidance for each specialist; security checks always stay on.</p>
+            <ul class="mt-6 flex flex-wrap gap-2 text-sm">
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Owner</li>
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Manager</li>
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Reviewer</li>
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Viewer</li>
+            </ul>
+          </article>
+
+          <article id="project-intelligence-index" class="reveal grid gap-6 rounded-2xl border border-line bg-panel p-7 md:col-span-6 md:grid-cols-3">
+            <div><i class="ph ph-git-merge text-2xl text-accent"></i><h3 class="mt-4 font-semibold">Back to the merge request</h3><p class="mt-2 text-muted">Publish accepted findings as inline GitLab comments. GitHub PRs can be reviewed too.</p></div>
+            <div><i class="ph ph-wrench text-2xl text-accent"></i><h3 class="mt-4 font-semibold">AI sample fixes</h3><p class="mt-2 text-muted">Ask for a corrected snippet and commit it to the MR branch after you confirm.</p></div>
+            <div><i class="ph ph-tree-structure text-2xl text-accent"></i><h3 class="mt-4 font-semibold">Knows your codebase</h3><p class="mt-2 text-muted">A per-branch index shows which untouched files a change can break.</p></div>
+          </article>
+        </div>
+        <p id="evaluation-harness" class="reveal mt-6 text-sm text-muted">Also included: an Electron desktop app and an offline evaluation harness that scores reviewer precision and recall.</p>
+      </div>
+    </section>
+
+    <!-- Quick start -->
+    <section id="quickstart" class="mx-auto max-w-3xl px-5 py-24">
+      <h2 class="reveal text-3xl font-semibold tracking-tight md:text-4xl">Running in two minutes</h2>
+      <p class="reveal mt-3 text-muted">Needs Node.js 18 or newer. Then open <code class="font-mono text-fg">localhost:4000</code> and create the admin account.</p>
+      <div class="reveal mt-8 overflow-hidden rounded-xl border border-line bg-panel">
+        <div class="flex items-center justify-between border-b border-line px-4 py-2.5 text-sm text-muted">
+          <span class="font-mono">terminal</span>
+          <button type="button" data-copy class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 hover:text-fg"><i class="ph ph-copy"></i><span>Copy</span></button>
+        </div>
+        <pre class="overflow-x-auto p-5 font-mono text-sm leading-7"><code>git clone https://github.com/whossein/ai-platform-review.git
+cd ai-platform-review
+npm install && npm run dev</code></pre>
+      </div>
+      <p class="reveal mt-4 text-sm text-muted">Configuration, environment variables and scripts are in the <a class="text-accent underline-offset-4 hover:underline" href="https://github.com/whossein/ai-platform-review#configuration">README</a>.</p>
+    </section>
+
+    <!-- Releases -->
+    <section id="release-notes" class="border-t border-line">
+      <div class="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-16 md:flex-row md:items-center md:justify-between">
+        <div class="reveal">
+          <h2 class="text-2xl font-semibold tracking-tight">Shipped continuously</h2>
+          <p class="mt-2 max-w-[52ch] text-muted">Every fix and feature merged to main is released automatically, with notes generated from the commits.</p>
+        </div>
+        <div class="reveal flex flex-wrap items-center gap-4">
+          <a href="https://github.com/whossein/ai-platform-review/releases" class="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2.5 font-medium transition hover:border-muted active:scale-[0.98]">See releases<i class="ph ph-arrow-up-right"></i></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-line">
+    <div class="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 text-sm text-muted md:flex-row md:items-center md:justify-between">
+      <p>AI Code Review Platform</p>
+      <ul class="flex gap-6">
+        <li><a class="hover:text-fg" href="https://github.com/whossein/ai-platform-review">GitHub</a></li>
+        <li><a class="hover:text-fg" href="https://github.com/whossein/ai-platform-review/blob/main/CHANGELOG.md">Changelog</a></li>
+        <li><a class="hover:text-fg" href="https://github.com/whossein/ai-platform-review/issues">Issues</a></li>
+      </ul>
     </div>
-  </section>
-
-  <!-- SECTION 09: THE CRITIC -->
-  <section class="py-24 px-6 bg-zinc-900/30 border-t border-zinc-900 text-center relative">
-    <div class="max-w-4xl mx-auto reveal">
-      <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-        Even the AI Reviewers Get Reviewed.
-      </h2>
-      <p class="text-xl text-zinc-400 mb-16 max-w-2xl mx-auto">
-        AI hallucinates. The Critic persona evaluates all specialist findings, rejecting false positives and refining actionable feedback before it ever reaches a human.
-      </p>
-
-      <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-6 md:p-10 text-left font-mono text-sm shadow-2xl max-w-2xl mx-auto">
-        <div class="mb-4">
-          <span class="text-blue-400 font-bold">React Agent:</span> "You should memoize this value using useMemo."
-        </div>
-        <div class="mb-6 opacity-50 pl-4 border-l-2 border-zinc-700">
-          <span class="text-purple-400 font-bold">Critic (Analyzing):</span> "The dependency array contains primitives that change every render. Memoizing here actually degrades performance due to overhead."
-        </div>
-        <div class="border-t border-zinc-800 pt-4">
-          <span class="text-red-400 font-bold">Action:</span> <span class="line-through text-zinc-500">Publish</span> → <span class="text-white bg-red-900/50 px-2 py-0.5 rounded">REJECTED (False Positive)</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 10: GITLAB -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900">
-    <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center reveal">
-      <div>
-        <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-          From Diff to Merge Request.
-        </h2>
-        <p class="text-xl text-zinc-400 mb-6">
-          The <strong>@ai-review/git</strong> package publishes validated, structured comments directly to your GitLab Merge Requests using the REST API v4.
-        </p>
-      </div>
-
-      <!-- Fake GitLab UI -->
-      <div class="bg-zinc-100 dark:bg-[#18181b] rounded-lg border border-zinc-300 dark:border-zinc-800 overflow-hidden shadow-xl font-sans">
-        <div class="bg-zinc-200 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-300 dark:border-zinc-800 flex items-center gap-3">
-          <div class="w-6 h-6 rounded bg-orange-500 text-white flex items-center justify-center font-bold text-xs">GL</div>
-          <span class="font-semibold text-zinc-800 dark:text-zinc-200">!142 Refactor auth flow</span>
-        </div>
-        <div class="p-4">
-          <div class="font-mono text-xs text-zinc-500 mb-2">src/auth.ts</div>
-          <div class="bg-white dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded p-2 overflow-x-auto text-sm font-mono mb-4">
-            <div class="text-zinc-400">22 |   const user = await db.findUser(id);</div>
-            <div class="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400">-23 |   return { ...user, token: generateToken() };</div>
-            <div class="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400">+23 |   return sanitizeUser(user, generateToken());</div>
-          </div>
-          
-          <!-- Comment -->
-          <div class="ml-4 pl-4 border-l-2 border-indigo-500">
-            <div class="flex items-center gap-2 mb-2">
-              <div class="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] text-white">AI</div>
-              <span class="font-semibold text-sm text-zinc-800 dark:text-zinc-200">AI Code Reviewer</span>
-              <span class="text-xs text-zinc-500">just now</span>
-            </div>
-            <p class="text-sm text-zinc-700 dark:text-zinc-300">
-              <strong class="text-red-600 dark:text-red-400">Security:</strong> Excellent fix. Returning the raw user object previously exposed password hashes to the client payload. The <code>sanitizeUser</code> abstraction correctly mitigates this.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 11: REAL-TIME EXECUTION -->
-  <section class="py-24 px-6 bg-zinc-900/30 border-t border-zinc-900 text-center">
-    <div class="max-w-4xl mx-auto reveal">
-      <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-        Watch it Think.
-      </h2>
-      <p class="text-xl text-zinc-400 mb-12">
-        The orchestrator runs every review as distinct pipeline stages, illustrated below. Live streaming of these stages to the UI via Server-Sent Events is planned and not implemented yet.<br><span dir="rtl" class="block mt-3 font-sans">مراحل اجرای ریویو در پایپ‌لاین زیر نمایش داده شده است. نمایش زنده این مراحل در رابط کاربری با SSE برنامه‌ریزی شده و هنوز پیاده‌سازی نشده است.</span>
-      </p>
-
-      <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-8 max-w-md mx-auto text-left font-mono text-sm shadow-2xl">
-        <div class="text-accent mb-4">Review started...</div>
-        <div class="space-y-2 text-zinc-300">
-          <div class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Repository analyzed</div>
-          <div class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Diff parsed</div>
-          <div class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Rules executed (0 violations)</div>
-          <div class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Context extracted</div>
-          <div class="flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Specialists selected (Security, React)</div>
-          <div class="pl-6 border-l border-zinc-800 my-4 space-y-2">
-            <div class="flex items-center gap-2 text-zinc-400">
-              <svg class="w-3 h-3 animate-spin text-accent" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              Security Agent analyzing...
-            </div>
-            <div class="flex items-center gap-2 text-zinc-400">
-              <svg class="w-3 h-3 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              React Agent analyzing...
-            </div>
-          </div>
-          <div class="text-zinc-500 opacity-50">Critic validation pending...</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 12: WEB + DESKTOP -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900">
-    <div class="max-w-6xl mx-auto reveal">
-      <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-zinc-900/50 border border-zinc-800 p-8 rounded-2xl text-center hover:border-accent transition-colors">
-          <div class="w-12 h-12 bg-zinc-800 rounded-lg flex items-center justify-center mx-auto mb-6 text-white font-mono">Web</div>
-          <h3 class="text-xl font-bold text-white mb-2">Web Application</h3>
-          <p class="text-zinc-400 text-sm">Standalone React UI served by Express. Ideal for team deployments.</p>
-        </div>
-        <div class="bg-zinc-900/50 border border-zinc-800 p-8 rounded-2xl text-center hover:border-accent transition-colors">
-          <div class="w-12 h-12 bg-zinc-800 rounded-lg flex items-center justify-center mx-auto mb-6 text-white font-mono">App</div>
-          <h3 class="text-xl font-bold text-white mb-2">Electron Desktop</h3>
-          <p class="text-zinc-400 text-sm">Packaged desktop application for macOS, Windows, and Linux.</p>
-        </div>
-        <div class="bg-zinc-900/50 border border-zinc-800 p-8 rounded-2xl text-center hover:border-accent transition-colors">
-          <div class="w-12 h-12 bg-zinc-800 rounded-lg flex items-center justify-center mx-auto mb-6 text-white font-mono">CLI</div>
-          <h3 class="text-xl font-bold text-white mb-2">Local Developer Workflow</h3>
-          <p class="text-zinc-400 text-sm">Run reviews against local uncommitted diffs before pushing.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 13: WHY THIS IS DIFFERENT -->
-  <section class="py-32 px-6 bg-zinc-900/30 border-t border-zinc-900 relative">
-    <div class="max-w-4xl mx-auto text-center reveal">
-      <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-        An LLM Wrapper Would Have Been Easier.
-      </h2>
-      <p class="text-xl text-zinc-400 mb-16">
-        The AI is only one component. The architecture around the AI is what makes the system useful.
-      </p>
-
-      <div class="flex flex-col gap-2 max-w-lg mx-auto font-mono text-sm">
-        <div class="bg-zinc-800/40 border border-zinc-700 py-3 rounded text-zinc-300">Git Integration</div>
-        <div class="bg-zinc-800/50 border border-zinc-700 py-3 rounded text-zinc-300 w-[95%] mx-auto">Structured Reporting & Memory</div>
-        <div class="bg-zinc-800/60 border border-zinc-700 py-3 rounded text-zinc-300 w-[90%] mx-auto">Critic Validation</div>
-        <div class="bg-zinc-800/70 border border-zinc-700 py-3 rounded text-zinc-300 w-[85%] mx-auto">Agent Orchestration</div>
-        <div class="bg-zinc-800/80 border border-zinc-700 py-3 rounded text-zinc-300 w-[80%] mx-auto">Multi-Provider AI (LLM)</div>
-        <div class="bg-zinc-800/90 border border-zinc-700 py-3 rounded text-zinc-300 w-[75%] mx-auto">Specialized Agents</div>
-        <div class="bg-zinc-900 border border-zinc-700 py-3 rounded text-zinc-300 w-[70%] mx-auto">Smart Routing</div>
-        <div class="bg-zinc-950 border border-zinc-700 py-3 rounded text-white font-bold w-[65%] mx-auto border-accent shadow-[0_0_15px_rgba(59,130,246,0.2)]">Context Extraction</div>
-        <div class="bg-black border border-zinc-700 py-3 rounded text-zinc-300 w-[60%] mx-auto">Deterministic Analysis</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: PROJECT REGISTRY & MANAGEMENT (BILINGUAL) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="project-registry">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <!-- English Section (dir="ltr") -->
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-900/60 bg-blue-950/40 text-xs font-mono text-accent">
-          <span>PROJECT REGISTRY, AI SYSTEM INSTRUCTIONS & RESPONSIVE URLS (v0.1.19)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">
-          First-Class Projects, Custom AI System Guidelines & Responsive Architecture
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          The system introduces first-class <strong>Project</strong> entities governed strictly by repository identity: <code>gitHost + repositoryPath</code> (e.g. <code>gitlab.company.com/frontend/storefront-pwa</code>). Each project supports <strong>tailored AI System Instructions & Guidelines</strong> that are dynamically injected into the system prompt of all specialist AI agents during code reviews. All URL displays, input boxes, and meta panels are fully responsive across all viewports with zero horizontal overflow.
-        </p>
-        <div class="grid md:grid-cols-4 gap-6 pt-4 font-mono text-xs">
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-accent font-bold text-sm">Dual Ingestion Modes</div>
-            <p class="text-zinc-400 font-sans text-xs">Register projects manually from the UI or let the system auto-create and link them when any MR/PR URL is submitted.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-green-400 font-bold text-sm">Zero-Duplicate Engine</div>
-            <p class="text-zinc-400 font-sans text-xs">Normalized path hashing ignores <code>.git</code> extensions, trailing slashes, and MR subpaths, guaranteeing clean deduplication.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-purple-400 font-bold text-sm">Custom AI Guidelines</div>
-            <p class="text-zinc-400 font-sans text-xs">Attach team-specific architectural rules, Persian UI mandates, or lint constraints that are fed to AI models as high-priority system context.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-yellow-400 font-bold text-sm">Responsive URLs</div>
-            <p class="text-zinc-400 font-sans text-xs">Robust word-break and viewport-adaptive containers ensure long repository and MR URLs never break layouts on mobile or desktop.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Persian Section (dir="rtl") -->
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-900/60 bg-blue-950/40 text-xs font-mono text-accent">
-          <span>سامانه مدیریت پروژه‌ها، دستورات سیستمی هوش مصنوعی و طراحی ریسپانسیو (نسخه ۰.۱.۱۹)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">
-          مدیریت مستقل پروژه، تزریق دستورالعمل‌های اختصاصی به هوش مصنوعی و نمایش ریسپانسیو آدرس‌ها
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          در این نسخه، علاوه بر ثبت هویت یکتای پروژه‌ها بر مبنای <code>gitHost + repositoryPath</code>، امکان **تعریف و ویرایش دستورات سیستمی (System Instructions) اختصاصی برای هر پروژه** فراهم شده است. این دستورات به عنوان کانتکست با اولویت بالا مستقیماً به پرامپت ارکستراتور و تمام ایجنت‌های هوش مصنوعی ارسال می‌شوند تا کدها دقیقاً بر اساس الگوهای اختصاصی، معماری و الزامات زبان تیم شما ارزیابی شوند. همچنین نمایش آدرس‌های طولانی URL در تمام صفحات و دستگاه‌های موبایل کاملاً ریسپانسیو و بهینه‌سازی شد.
-        </p>
-        <div class="grid md:grid-cols-4 gap-6 pt-4 text-xs font-sans">
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-accent font-bold text-sm">ثبت خودکار و دستی</div>
-            <p class="text-zinc-400 text-xs leading-normal">امکان تعریف دستی پروژه به همراه توضیحات، و تشخیص و ایجاد خودکار با ارسال لینک‌های GitLab و GitHub.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-green-400 font-bold text-sm">پیشگیری قطعی از تکرار</div>
-            <p class="text-zinc-400 text-xs leading-normal">نرمال‌سازی کلید یکتا و هدایت تمام درخواست‌های ادغام (MR) مرتبط به یک موجودیت مشخص پروژه.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-purple-400 font-bold text-sm">دستورات سیستمی AI</div>
-            <p class="text-zinc-400 text-xs leading-normal">امکان ثبت دستورالعمل‌های معماری، امنیتی، نام‌گذاری یا الزامات فارسی که مستقیماً به مدل‌های هوش مصنوعی منتقل می‌شوند.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-yellow-400 font-bold text-sm">طراحی ریسپانسیو آدرس‌ها</div>
-            <p class="text-zinc-400 text-xs leading-normal">شکست خودکار آدرس‌های طولانی (Word-Break) و عدم سرریز افقی در نمایشگرهای موبایل و تبلت.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: USER MANAGEMENT, RBAC & SECURITY (BILINGUAL v0.2.0) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="user-access-control">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <!-- English Section (dir="ltr") -->
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
-          <span>ENTERPRISE RBAC, ENCRYPTED GIT CREDENTIALS & AUDIT LOGS (v0.2.0)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">
-          Comprehensive User Management, Project Access Control & Zero-Trust Security
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          The platform features a complete multi-user access control foundation designed for engineering teams. It provides <strong>PBKDF2 (SHA-512) password hashing</strong>, 256-bit cryptographically secure sessions with revocation, rate-limited login protection, and an automated <strong>First-Run Admin Setup Wizard</strong>. Security is enforced through system-level RBAC (<code>ADMIN</code>, <code>MEMBER</code>) and project-level roles (<code>OWNER</code>, <code>MANAGER</code>, <code>REVIEWER</code>, <code>VIEWER</code>), complemented by <strong>AES-256-GCM encrypted Git credentials</strong> and immutable audit trails.
-        </p>
-        <div class="grid md:grid-cols-4 gap-6 pt-4 font-mono text-xs">
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-emerald-400 font-bold text-sm">First-Run & Cryptography</div>
-            <p class="text-zinc-400 font-sans text-xs">Dedicated initial setup creates the first administrator and permanently deactivates; passwords hashed with PBKDF2 and random 16-byte salt.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-blue-400 font-bold text-sm">Multi-Tier RBAC</div>
-            <p class="text-zinc-400 font-sans text-xs">Backend-enforced system and project roles with permissions checking, project membership management, and last-admin deletion safety.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-purple-400 font-bold text-sm">Encrypted Git Tokens</div>
-            <p class="text-zinc-400 font-sans text-xs">Per-user GitHub and GitLab PATs encrypted via AES-256-GCM authenticated cipher; masked in UI and never returned in API payloads.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-amber-400 font-bold text-sm">Audit Trail & Rate Limiting</div>
-            <p class="text-zinc-400 font-sans text-xs">Fixed-window rate limiter with temporary blocks prevents credential stuffing; queryable audit logs record security and membership events with automated redaction.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Persian Section (dir="rtl") -->
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
-          <span>سیستم جامع مدیریت کاربران، سطوح دسترسی RBAC، رمزنگاری و ثبت رویدادها (نسخه ۰.۲.۰)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">
-          احراز هویت سازمانی، مدیریت دسترسی پروژه‌ها و امنیت Zero-Trust با رمزنگاری پیشرفته
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          پلتفرم مجهز به زیرساخت کامل مدیریت کاربران چندسطحی و دسترسی پروژه‌محور شد. این سیستم شامل <strong>هش ایمن گذرواژه با PBKDF2 (SHA-512)</strong>، سشن‌های تصادفی رمزنگاری‌شده ۲۵۶ بیتی با قابلیت ابطال، محافظت در برابر حملات Brute-force با Rate Limiting و صفحه <strong>راه‌اندازی اولیه اولین ادمین سیستم (First-Run Setup)</strong> است. تفکیک نقش‌های سیستمی (<code>ADMIN</code> و <code>MEMBER</code>) و نقش‌های پروژه (<code>OWNER</code>، <code>MANAGER</code>، <code>REVIEWER</code>، <code>VIEWER</code>)، ذخیره‌سازی <strong>رمزنگاری‌شده AES-256-GCM برای دسترسی‌های GitHub و GitLab</strong> و ثبت تغییرناپذیر لاگ‌های امنیتی (Audit Logs) با حذف خودکار اطلاعات حساس پیاده‌سازی شده است.
-        </p>
-        <div class="grid md:grid-cols-4 gap-6 pt-4 text-xs font-sans">
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-emerald-400 font-bold text-sm">راه‌اندازی اولیه و رمزنگاری</div>
-            <p class="text-zinc-400 text-xs leading-normal">صفحه اختصاصی ایجاد اولین مدیر سیستم که پس از تعریف غیرفعال می‌شود؛ هش PBKDF2 با سالت تصادفی و مقایسه زمان‌ثابت.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-blue-400 font-bold text-sm">کنترل دسترسی دولایه (RBAC)</div>
-            <p class="text-zinc-400 text-xs leading-normal">اعتبارسنجی دقیق سمت سرور برای نقش‌های سیستمی و پروژه‌ای، مدیریت اعضای پروژه و محافظت از حذف آخرین ادمین سیستم.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-purple-400 font-bold text-sm">توکن‌های رمزنگاری‌شده گیت</div>
-            <p class="text-zinc-400 text-xs leading-normal">ذخیره‌سازی امن PATهای گیت‌هاب و گیت‌لب هر کاربر با رمزنگاری AES-256-GCM، نمایش ماسک‌شده و تضمین عدم نشت در API.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-amber-400 font-bold text-sm">لاگ‌های امنیتی و Rate Limit</div>
-            <p class="text-zinc-400 text-xs leading-normal">محدودکننده نرخ ورود برای جلوگیری از حملات Brute-force، و ثبت تغییرناپذیر رویدادهای احراز هویت و دسترسی با حذف داده‌های محرمانه.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: BENCHMARK DATASET & EVALUATION HARNESS (BILINGUAL v0.2.1) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="evaluation-harness">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <!-- English Section (dir="ltr") -->
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-900/60 bg-blue-950/40 text-xs font-mono text-blue-400">
-          <span>DETERMINISTIC BENCHMARK HARNESS & KUHN-MUNKRES MATCHING (v0.2.2)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">
-          Benchmark Dataset & Deterministic Evaluation Harness
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          The <code>@ai-review/eval</code> subsystem introduces an empirical evaluation harness designed to objectively measure code review quality against verified ground truth. Hardened in <strong>v0.2.2</strong> with zero-cost Quadrant III unmatched expected slots, $O((m+n)^3)$ equality-subgraph Reverse-BFS lexicographic tie-breaking, strict (<code>&gt;</code>) dual-match quarantine, and complete <code>UAR</code> and <code>filteredRecallLoss</code> accounting.
-        </p>
-        <div class="grid md:grid-cols-4 gap-6 pt-4 font-mono text-xs">
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-blue-400 font-bold text-sm">Kuhn-Munkres Matcher</div>
-            <p class="text-zinc-400 font-sans text-xs">Maximum-weight partial matching with safe forbidden edge penalties and canonical two-stage lexicographic tie-breaking.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-amber-400 font-bold text-sm">Dual-Match Quarantine</div>
-            <p class="text-zinc-400 font-sans text-xs">Candidates triggering both expected findings and anti-findings are quarantined into Q to prevent silent metric inflation.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-emerald-400 font-bold text-sm">Dataset Provenance</div>
-            <p class="text-zinc-400 font-sans text-xs">Full lineage tracking for benchmark cases: origin tagging (synthetic, MRs, human feed) and peer-review verification states.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2">
-            <div class="text-purple-400 font-bold text-sm">Unbiased Quality Metrics</div>
-            <p class="text-zinc-400 font-sans text-xs">Conservative and confirmed bounds, Hopcroft-Karp UQ matching, AFTR trap capture rate, and False Discovery Penalty Cost.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Persian Section (dir="rtl") -->
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-900/60 bg-blue-950/40 text-xs font-mono text-blue-400">
-          <span>سامانه ارزیابی قطعی و مجموعه داده‌های بنچ‌مارک (نسخه ۰.۲.۲)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">
-          مجموعه داده‌های استاندارد، تطبیق دوبخشی مجارستانی و سنجه‌های ارزیابی بدون سوگیری
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          زیرسیستم ارزیابی <code>@ai-review/eval</code> در <strong>نسخه ۰.۲.۲</strong> با اصلاح ماتریس هزینه افزوده (هزینه صفر در ربع سوم)، الگوریتم شکست تساوی $O((m+n)^3)$ مبتنی بر BFS معکوس روی زیرگراف برابری، سیاست قرنطینه اکید (<code>&gt;</code>) و افزودن شاخص‌های <code>UAR</code> و <code>filteredRecallLoss</code> بهینه‌سازی و مقاوم‌سازی شد.
-        </p>
-        <div class="grid md:grid-cols-4 gap-6 pt-4 text-xs font-sans">
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-blue-400 font-bold text-sm">تطبیق بیشینه‌وزن مجارستانی</div>
-            <p class="text-zinc-400 text-xs leading-normal">محاسبه تطبیق دوبخشی قطعی با هزینه‌های جریمه ایمن برای یال‌های نامعتبر و حل تساوی‌ها به شکل قطعی و متقارن.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-amber-400 font-bold text-sm">قرنطینه یافته‌های متناقض</div>
-            <p class="text-zinc-400 text-xs leading-normal">تفکیک یافته‌های همپوشان با Anti-Finding در مجموعه Q جهت بازبینی انسانی و جلوگیری از تایید کاذب خطاها.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-emerald-400 font-bold text-sm">شناسنامه و اصالت داده‌ها</div>
-            <p class="text-zinc-400 text-xs leading-normal">رهگیری شجره‌نامه موارد آزمون (تست ساختگی، MR تاریخی، فید بازبینی انسانی) و مدیریت نسخه‌های برچسب‌گذاری.</p>
-          </div>
-          <div class="bg-zinc-900/60 border border-zinc-800 p-5 rounded-xl space-y-2 text-right">
-            <div class="text-purple-400 font-bold text-sm">شاخص‌های محافظه‌کارانه و تجاری</div>
-            <p class="text-zinc-400 text-xs leading-normal">محاسبه کران‌های قطعی و محافظه‌کارانه Precision و Recall، ضریب حساسیت به تله (AFTR) و جریمه تجاری خطا (FDPC).</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: STRUCTURAL PROJECT INDEX (BILINGUAL v0.2.3) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="project-intelligence-index">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <!-- English Section (dir="ltr") -->
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>PROJECT INTELLIGENCE 2A • STRUCTURAL REPOSITORY INDEX (v0.2.3)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">
-          Multi-Source Structural Repository Indexing & Dependency Graph Engine
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          The <code>@ai-review/project-index</code> package enables deep structural comprehension of registered repositories across <strong>GitLab REST v4, GitHub Trees/Blobs APIs, and local checkouts</strong>. It enforces <code>.gitignore</code> and size filters, extracts TypeScript/JS AST symbols and imports via <code>@ai-review/context-engine</code>, resolves monorepo workspaces and <code>tsconfig</code> path aliases into a bidirectional dependency graph, and persists snapshots atomically with incremental <code>gitBlobSha</code> and <code>contentHash</code> reuse.
-        </p>
-      </div>
-
-      <!-- Persian Section (dir="rtl") -->
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>هوشمندی پروژه (فاز 2A) • ایندکس ساختاری مخازن و گراف وابستگی (نسخه ۰.۲.۳)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">
-          ایندکس ساختاری چندمنبعی، گراف وابستگی ماژول‌ها و ذخیره‌سازی افزایشی اسنپ‌شات‌ها
-        </h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          پکیج جدید <code>@ai-review/project-index</code> امکان واکشی و تحلیل ساختاری مخازن را از <strong>GitLab، GitHub و پوشه‌های محلی (Local)</strong> فراهم می‌سازد. این موتور با اعمال قوانین <code>.gitignore</code>، استخراج AST برای فایل‌های TypeScript/JS، تشخیص پکیج‌های Monorepo و <code>tsconfig paths</code>، بازاستفاده افزایشی بدون دانلود مجدد فایل‌های تغییرنیافته (<code>gitBlobSha</code>) و مدیریت Job با قابلیت لغو و رعایت <code>Retry-After</code>، زیربنای هوشمندی پروژه را فراهم می‌کند.
-        </p>
-      </div>
-      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
-        <h3 class="text-2xl font-bold text-white">Index History (v0.2.18)</h3>
-        <p class="text-zinc-400 leading-relaxed">Every finished indexing job (succeeded, failed or cancelled) is now kept per project &mdash; the last 50 &mdash; with branch, commit, file and symbol counts, reused files and duration. Open <strong>Index history</strong> in the project's Index tab (<code>GET /api/projects/:id/index/history</code>).</p>
-      </div>
-      <div dir="rtl" class="text-right space-y-3 font-sans">
-        <h3 class="text-2xl font-bold text-white">تاریخچه ایندکس (نسخه ۰.۲.۱۶)</h3>
-        <p class="text-zinc-400 leading-relaxed">اکنون هر Job ایندکس پایان‌یافته (موفق، ناموفق یا لغوشده) برای هر پروژه ذخیره می‌شود &mdash; ۵۰ مورد آخر &mdash; همراه با برنچ، commit، تعداد فایل و سیمبل، فایل‌های بازاستفاده‌شده و مدت زمان. در تب Index پروژه بخش <strong>Index history</strong> را باز کنید (<code>GET /api/projects/:id/index/history</code>).</p>
-      </div>
-      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
-        <h3 class="text-2xl font-bold text-white">Fresher Index + Diff Overlay (v0.2.15)</h3>
-        <p class="text-zinc-400 leading-relaxed">The index is now refreshed when the target branch's head commit moves (not just every 24h; at most every 5 minutes). Review context also overlays the change itself on the index: new, renamed and deleted files, newly added imports, relative imports that resolve to nothing, and untouched files that still import a deleted or moved file.</p>
-      </div>
-      <div dir="rtl" class="text-right space-y-3 font-sans">
-        <h3 class="text-2xl font-bold text-white">ایندکس تازه‌تر + اعمال دیف روی ایندکس (نسخه ۰.۲.۱۵)</h3>
-        <p class="text-zinc-400 leading-relaxed">ایندکس اکنون با تغییر commit سر برنچ مقصد به‌روز می‌شود (نه فقط هر ۲۴ ساعت؛ حداکثر هر ۵ دقیقه). کانتکست ریویو خودِ تغییر را هم روی ایندکس اعمال می‌کند: فایل‌های جدید، تغییرنام‌یافته و حذف‌شده، importهای تازه، importهای نسبی بدون مقصد، و فایل‌های دست‌نخورده‌ای که هنوز فایل حذف‌شده یا جابه‌جاشده را import می‌کنند.</p>
-      </div>
-      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
-        <h3 class="text-2xl font-bold text-white">Per-Branch Index for Reviews (v0.2.14)</h3>
-        <p class="text-zinc-400 leading-relaxed">Each branch now keeps its own index. Reviews use the index of the MR/PR <strong>target branch</strong> (falling back to the default branch, then the latest index), so indexing a feature branch no longer changes other reviews. Automatic indexing now also uses the Git token from Settings.</p>
-      </div>
-      <div dir="rtl" class="text-right space-y-3 font-sans">
-        <h3 class="text-2xl font-bold text-white">ایندکس مجزا برای هر برنچ در ریویو (نسخه ۰.۲.۱۴)</h3>
-        <p class="text-zinc-400 leading-relaxed">اکنون هر برنچ ایندکس مخصوص خود را نگه می‌دارد. ریویو از ایندکس <strong>برنچ مقصد</strong> MR/PR استفاده می‌کند (در صورت نبود، برنچ پیش‌فرض و سپس آخرین ایندکس) و ایندکس‌کردن یک فیچر‌برنچ دیگر روی ریویوهای دیگر اثر نمی‌گذارد. ایندکس خودکار هم اکنون از توکن Git تنظیمات استفاده می‌کند.</p>
-      </div>
-      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
-        <h3 class="text-2xl font-bold text-white">Deep Links + Index Token Fix (v0.2.13)</h3>
-        <p class="text-zinc-400 leading-relaxed">The address bar now follows the app: <code>#/projects/&lt;id&gt;/index</code> opens a project's Index tab directly, and back/forward work. The Index tab also uses the matching Git connection from Settings, which fixes <em>404 Project Not Found</em> when no token was stored in Profile.</p>
-      </div>
-      <div dir="rtl" class="text-right space-y-3 font-sans">
-        <h3 class="text-2xl font-bold text-white">لینک مستقیم + رفع خطای توکن در Index (نسخه ۰.۲.۱۳)</h3>
-        <p class="text-zinc-400 leading-relaxed">آدرس مرورگر اکنون با برنامه هماهنگ است: <code>#/projects/&lt;id&gt;/index</code> مستقیم تب Index پروژه را باز می‌کند و دکمه‌های back/forward کار می‌کنند. تب Index از اتصال Git مطابق در Settings استفاده می‌کند و خطای <em>404 Project Not Found</em> را وقتی توکنی در Profile ذخیره نبود رفع می‌کند.</p>
-      </div>
-      <div dir="ltr" class="space-y-3 border-t border-zinc-900 pt-12">
-        <h3 class="text-2xl font-bold text-white">Multiple Git Connections + Test Connection (v0.2.12)</h3>
-        <p class="text-zinc-400 leading-relaxed">Settings → Git Provider Settings now lets you add any number of GitLab/GitHub connections (each with its own base URL and token). The connection matching the MR/PR host is picked automatically, and a <strong>Test Connection</strong> button verifies each token against the Git host.</p>
-      </div>
-      <div dir="rtl" class="text-right space-y-3 font-sans">
-        <h3 class="text-2xl font-bold text-white">چند اتصال Git + دکمه تست اتصال (نسخه ۰.۲.۱۲)</h3>
-        <p class="text-zinc-400 leading-relaxed">در تنظیمات → Git Provider Settings می‌توانید چندین اتصال GitLab/GitHub (هرکدام با آدرس پایه و توکن مخصوص خود) اضافه کنید. اتصال مطابق با host لینک MR/PR به‌صورت خودکار انتخاب می‌شود و دکمه <strong>Test Connection</strong> اعتبار هر توکن را روی سرور Git بررسی می‌کند.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: API HARDENING (BILINGUAL v0.2.4) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="api-hardening">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
-          <span>SECURITY • API HARDENING (v0.2.4)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">Authenticated APIs &amp; Safe Local Apply</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          Every project, review, estimate, publish, model-listing and apply-local endpoint now requires a signed-in user. <code>apply-local</code> only edits files inside the given repository root, rejecting path traversal and symlinks that escape it. Runtime data in <code>.data/</code> is no longer tracked by git.
-        </p>
-      </div>
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
-          <span>امنیت • سخت‌سازی API (نسخه ۰.۲.۴)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">APIهای احراز هویت‌شده و اعمال امن تغییرات محلی</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          همه endpointهای پروژه، ریویو، برآورد، انتشار، لیست مدل‌ها و apply-local اکنون نیازمند ورود کاربر هستند. <code>apply-local</code> فقط فایل‌های داخل ریشه مخزن را تغییر می‌دهد و path traversal و symlinkهای خارج از ریشه را رد می‌کند. داده‌های زمان اجرا در <code>.data/</code> دیگر در git ردیابی نمی‌شوند.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: RULES, BUDGET & DESKTOP FIXES (BILINGUAL v0.2.5) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="rules-budget-fixes">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
-          <span>RULES • BUDGET • DESKTOP (v0.2.5)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">New Deterministic Rules &amp; Enforced Budget</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          The zero-token rule engine now also detects string-built SQL and wildcard CORS, and runs the <code>eval</code> and <code>debugger</code> rules by default. The budget limit from Settings is sent to the backend as <code>AI_REVIEW_DOLLAR_BUDGET</code>, and the server honors the <code>PORT</code> variable so the Electron desktop app can connect.
-        </p>
-      </div>
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900/60 bg-emerald-950/40 text-xs font-mono text-emerald-400">
-          <span>قوانین • بودجه • دسکتاپ (نسخه ۰.۲.۵)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">قوانین قطعی جدید و اعمال سقف بودجه</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          موتور قوانین بدون هزینه اکنون SQL ساخته‌شده با الحاق رشته و CORS با wildcard را هم شناسایی می‌کند و قوانین <code>eval</code> و <code>debugger</code> به‌صورت پیش‌فرض اجرا می‌شوند. سقف بودجه تنظیمات با نام <code>AI_REVIEW_DOLLAR_BUDGET</code> به بک‌اند ارسال می‌شود و سرور متغیر <code>PORT</code> را می‌خواند تا نسخه دسکتاپ (Electron) بتواند متصل شود.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: PROJECT INDEX IN APP (BILINGUAL v0.2.6) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="project-index-in-app">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>PROJECT INTELLIGENCE • INDEX IN THE APP (v0.2.6)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">Index Your Projects From the UI</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          The new <strong>Index</strong> tab on every project starts a cancellable indexing job for GitHub or GitLab repositories and shows live progress, file and symbol counts, language breakdown, workspace packages and the most imported files. It uses your own encrypted Git token; starting a job requires the <code>project:manage</code> permission and reading it requires <code>project:view</code>.
-        </p>
-      </div>
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>هوشمندی پروژه • ایندکس در اپلیکیشن (نسخه ۰.۲.۶)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">ایندکس پروژه‌ها از داخل رابط کاربری</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          تب جدید <strong>Index</strong> در هر پروژه، یک Job ایندکس قابل لغو برای مخازن GitHub یا GitLab اجرا می‌کند و پیشرفت زنده، تعداد فایل‌ها و سمبل‌ها، توزیع زبان‌ها، پکیج‌های workspace و پر‌ایمپورت‌ترین فایل‌ها را نشان می‌دهد. ایندکس با توکن رمزنگاری‌شده Git خود کاربر انجام می‌شود؛ شروع آن نیازمند دسترسی <code>project:manage</code> و مشاهده‌اش نیازمند <code>project:view</code> است.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: INDEX-AWARE REVIEWS (BILINGUAL v0.2.8) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="index-aware-reviews">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>PROJECT INTELLIGENCE • INDEX-AWARE REVIEWS (v0.2.8)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">Reviewers That See Beyond the Diff</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          For every changed file, reviewers now receive its exports, its imports and the files that depend on it, with dependants outside the change called out as potential breakage. Indexing starts automatically in the background for new or stale projects. Model prices come from your providers, so budgets and cost metrics are real.
-        </p>
-      </div>
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>هوشمندی پروژه • ریویو آگاه از ایندکس (نسخه ۰.۲.۸)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">ریویوکننده‌هایی که فراتر از دیف را می‌بینند</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          برای هر فایل تغییرکرده، ایجنت‌ها exportها، importها و فایل‌های وابسته را دریافت می‌کنند و وابسته‌های خارج از تغییر به‌عنوان ریسک شکستن مشخص می‌شوند. ایندکس برای پروژه‌های جدید یا قدیمی به‌صورت خودکار در پس‌زمینه اجرا می‌شود. قیمت مدل‌ها از پروایدرهای شما خوانده می‌شود تا بودجه و هزینه‌ها واقعی باشند.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: SKILLS & RULES CONTROL + 429 RETRY (BILINGUAL v0.7.0) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="skills-rules-control">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>REVIEW CONTROL • SKILLS &amp; RULES (v0.7.0)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">Per-Project Control of Specialists and Rules</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl">
-          In the <strong>Skills &amp; Rules</strong> tab, managers now switch AI specialists and rules on or off for each project and add extra instructions for each specialist; the settings are stored on the server and affect real reviews. The Security Reviewer and security rules cannot be switched off for a whole project. Reviews also wait and retry when a provider returns HTTP 429, and requests per provider are limited to 4 at a time by default (change with <code>AI_REVIEW_LLM_MAX_CONCURRENCY</code>).
-        </p>
-      </div>
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>کنترل ریویو • Skills &amp; Rules (نسخه ۰.۷.۰)</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">کنترل هر پروژه روی متخصص‌ها و Ruleها</h2>
-        <p class="text-zinc-400 text-lg leading-relaxed max-w-4xl font-sans">
-          در تب <strong>Skills &amp; Rules</strong>، مدیر پروژه حالا برای هر پروژه متخصص‌های هوش مصنوعی و Ruleها را روشن یا خاموش می‌کند و برای هر متخصص دستور اضافه می‌دهد؛ این تنظیمات روی سرور ذخیره می‌شوند و روی ریویوهای واقعی اثر می‌گذارند. Security Reviewer و Ruleهای امنیتی برای کل پروژه خاموش نمی‌شوند. ریویو هنگام خطای HTTP 429 از provider صبر و دوباره تلاش می‌کند و درخواست‌های هم‌زمان هر provider به‌طور پیش‌فرض به ۴ محدود است (با <code>AI_REVIEW_LLM_MAX_CONCURRENCY</code> قابل تغییر).
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: RELEASE NOTES (BILINGUAL) — keep in sync with CHANGELOG.md (see AGENTS.md rule 4) -->
-  <section class="py-24 px-6 bg-zinc-950 border-t border-zinc-900" id="release-notes">
-    <div class="max-w-6xl mx-auto space-y-16 reveal">
-      <div dir="ltr" class="text-left space-y-6">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>RELEASE NOTES</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">What's New</h2>
-        <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2">
-          <li><span class="font-mono text-cyan-400">v0.9.0</span> — Optional AI merge of duplicate findings: with <code>AI_REVIEW_LLM_DEDUP=1</code>, findings on the same file and line that describe the same defect are merged by one cheap-tier call (off by default, never across lines, unchanged if the call fails). In a live comparison delivered findings fell from 33 to 22 with the same defects found. The evaluation set grows to 16 cases, 5 from real open-source bug-fix commits.</li>
-          <li><span class="font-mono text-cyan-400">v0.8.0</span> — New deterministic rule <code>security.js-command-exec</code> flags <code>child_process</code> <code>exec</code>/<code>execSync</code> calls with a dynamic command in JS/TS, and it cannot be silenced project-wide. The cost estimate accepts an optional <code>projectId</code> and leaves out specialists the project switched off. Rule messages are localized (English and Persian) and follow <code>AI_REVIEW_COMMENT_LANGUAGE</code>, Persian by default. The Contributing reviewer is skipped when the project has no guidelines. Models missing from the price table are charged at a conservative fallback rate and marked as estimated. Same-line findings with near-identical titles are merged, the sidebar shows the real app version, and the How It Works page matches current behavior. Fixed: silencing a rule refreshes the silenced-rules list on the review page. Security: feedback from rejected findings reaches reviewers as untrusted data, no longer inside the project's trusted guidelines.</li>
-          <li><span class="font-mono text-cyan-400">v0.7.1</span> — <code>npm run repo:sync</code> keeps the GitHub repo description and topics in line with the code, and a new "Repo sync" Action runs it when specialists or rules change. The docs now say 14 specialists.</li>
-          <li><span class="font-mono text-cyan-400">v0.7.0</span> — The Skills & Rules tab now controls real reviews: per project, managers can switch AI specialists and rules on or off and give each specialist extra instructions, stored on the server. The Security Reviewer and security rules cannot be switched off for a whole project. Reviews wait and retry when a provider returns HTTP 429, and requests per provider are limited to 4 at a time by default (<code>AI_REVIEW_LLM_MAX_CONCURRENCY</code>). Custom skills that were only stored in the browser were removed. Fixed: same-line findings under different categories merge when their titles or wording are very similar, and a specialist that crashes is counted in the failed-specialists warning. Security: the critical <code>no-eval</code> rule can only be silenced for a single file.</li>
-          <li><span class="font-mono text-cyan-400">v0.6.2</span> — Reviews no longer report one defect several times when specialists word it differently. A security finding confirmed by a rule now appears once, listing every reviewer that agreed. In a live comparison on the sample set, delivered findings fell from 76 to 59 across three runs, and every expected defect was still found. <code>npm run eval:live</code> gains <code>--pace-ms &lt;n&gt;</code> to wait between cases on rate-limited API keys. A run with any agent error now prints <code>INVALID RUN</code>, exits with code 2 and is marked <code>valid: false</code> in the report, so a rate-limited run can't be mistaken for a clean result.</li>
-          <li><span class="font-mono text-cyan-400">v0.6.1</span> — New app icon: used as the browser favicon, in the sidebar, on the sign-in and first-run screens and on this page.</li>
-        </ul>
-        <p class="text-zinc-500 text-sm">Full history: <a class="text-cyan-400 hover:underline" href="https://github.com/whossein/ai-platform-review-gemini-2/blob/main/CHANGELOG.md" target="_blank">CHANGELOG.md</a></p>
-      </div>
-      <div dir="rtl" class="text-right space-y-6 border-t border-zinc-900 pt-12">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-xs font-mono text-cyan-400">
-          <span>یادداشت‌های انتشار</span>
-        </div>
-        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white font-sans">تازه‌ها</h2>
-        <ul class="text-zinc-400 text-lg leading-relaxed max-w-4xl space-y-2 font-sans">
-          <li><span class="font-mono text-cyan-400">نسخه ۰.۹.۰</span> — ادغام اختیاری یافته‌های تکراری با AI: با <code>AI_REVIEW_LLM_DEDUP=1</code> یافته‌هایی که در یک فایل و خط هستند و یک مشکل را توصیف می‌کنند با یک فراخوانی ارزان ادغام می‌شوند (پیش‌فرض خاموش، هیچ‌وقت بین خط‌ها، و بدون تغییر اگر فراخوانی شکست بخورد). در مقایسهٔ زنده یافته‌های تحویل‌شده از ۳۳ به ۲۲ رسید و همان مشکل‌ها پیدا شدند. مجموعهٔ ارزیابی به ۱۶ نمونه رسید که ۵ تای آن از commitهای واقعی رفع باگ در پروژه‌های متن‌باز است.</li>
-          <li><span class="font-mono text-cyan-400">نسخه ۰.۸.۰</span> — Rule قطعی جدید <code>security.js-command-exec</code> فراخوانی‌های <code>exec</code> و <code>execSync</code> از <code>child_process</code> را با دستور پویا در JS/TS علامت می‌زند و برای کل پروژه قابل خاموش شدن نیست. تخمین هزینه یک <code>projectId</code> اختیاری می‌پذیرد و متخصص‌های خاموش‌شده را حذف می‌کند. پیام Ruleها به انگلیسی و فارسی ترجمه شده و از <code>AI_REVIEW_COMMENT_LANGUAGE</code> پیروی می‌کند (پیش‌فرض فارسی). متخصص Contributing وقتی پروژه Guideline ندارد اجرا نمی‌شود. مدلی که در جدول قیمت نباشد با نرخ محتاطانه محاسبه و «تخمینی» علامت زده می‌شود. یافته‌های هم‌خط با عنوان بسیار مشابه ادغام می‌شوند، نوار کناری نسخهٔ واقعی را نشان می‌دهد و صفحهٔ How It Works با رفتار فعلی هماهنگ است. اصلاح: خاموش کردن یک Rule فهرست Ruleهای خاموش را در صفحهٔ ریویو به‌روز می‌کند. امنیت: فیدبک یافته‌های ردشده به‌عنوان دادهٔ غیرقابل‌اعتماد به ریویوکننده‌ها می‌رسد، نه داخل دستورالعمل‌های مورداعتماد پروژه.</li>
-          <li><span class="font-mono text-cyan-400">نسخه ۰.۷.۱</span> — دستور <code>npm run repo:sync</code> توضیحات و تاپیک‌های ریپوی GitHub را با کد هماهنگ نگه می‌دارد و یک Action جدید با تغییر متخصص‌ها یا Ruleها آن را اجرا می‌کند. مستندات حالا ۱۴ متخصص را نشان می‌دهد.</li>
-          <li><span class="font-mono text-cyan-400">نسخه ۰.۷.۰</span> — تب Skills & Rules حالا واقعاً روی ریویو اثر می‌گذارد: مدیر پروژه می‌تواند برای هر پروژه متخصص‌های هوش مصنوعی و Ruleها را روشن یا خاموش کند و به هر متخصص دستور اضافه بدهد؛ این تنظیمات روی سرور ذخیره می‌شوند. Security Reviewer و Ruleهای امنیتی برای کل پروژه خاموش نمی‌شوند. ریویو هنگام خطای HTTP 429 از provider صبر و دوباره تلاش می‌کند و درخواست‌های هم‌زمان هر provider به‌طور پیش‌فرض به ۴ محدود است (<code>AI_REVIEW_LLM_MAX_CONCURRENCY</code>). Skillهای سفارشی که فقط در مرورگر ذخیره می‌شدند حذف شدند. اصلاح: یافته‌های یک خط با دسته‌های متفاوت اگر عنوان یا متنشان خیلی مشابه باشد ادغام می‌شوند و متخصصی که با خطای غیرمنتظره از کار بیفتد در هشدار متخصص‌های ناموفق شمرده می‌شود. امنیت: Rule بحرانی <code>no-eval</code> فقط برای یک فایل قابل خاموش شدن است.</li>
-          <li><span class="font-mono text-cyan-400">نسخه ۰.۶.۲</span> — ریویو دیگر یک مشکل را چند بار گزارش نمی‌کند، حتی اگر متخصص‌ها آن را با عبارت‌های متفاوت توضیح داده باشند. یافتهٔ امنیتی‌ای که Rule هم آن را تأیید کرده باشد حالا فقط یک بار و همراه با نام همهٔ بررسی‌کننده‌ها نمایش داده می‌شود. در مقایسهٔ زنده روی نمونه‌ها، تعداد یافته‌های تحویل‌شده در سه اجرا از ۷۶ به ۵۹ رسید و همهٔ مشکلات مورد انتظار همچنان پیدا شدند. <code>npm run eval:live</code> گزینهٔ <code>--pace-ms &lt;n&gt;</code> را برای ایجاد فاصله بین نمونه‌ها در کلیدهای دارای محدودیت نرخ دارد. اجرایی که خطای Agent داشته باشد حالا <code>INVALID RUN</code> چاپ می‌کند، با کد ۲ خارج می‌شود و در گزارش با <code>valid: false</code> مشخص می‌شود تا با نتیجهٔ سالم اشتباه گرفته نشود.</li>
-          <li><span class="font-mono text-cyan-400">نسخه ۰.۶.۱</span> — آیکون جدید برنامه: به‌عنوان favicon مرورگر، در نوار کناری، صفحه‌های ورود و راه‌اندازی اولیه و همین صفحه استفاده شده است.</li>
-        </ul>
-        <p class="text-zinc-500 text-sm font-sans">تاریخچه کامل: <a class="text-cyan-400 hover:underline" href="https://github.com/whossein/ai-platform-review-gemini-2/blob/main/CHANGELOG.md" target="_blank">CHANGELOG.md</a></p>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 14 / FINAL CTA -->
-  <section class="py-32 px-6 bg-zinc-950 border-t border-zinc-900 text-center relative overflow-hidden">
-    <div class="absolute inset-0 bg-grid opacity-30 z-0 pointer-events-none"></div>
-    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-accent opacity-10 blur-[100px] rounded-full pointer-events-none"></div>
-    
-    <div class="max-w-3xl mx-auto relative z-10 reveal">
-      <h2 class="text-4xl md:text-6xl font-bold tracking-tight mb-6 text-white">
-        Built to Be Explored.
-      </h2>
-      <p class="text-xl text-zinc-400 mb-12">
-        Open source. Multi-agent. Provider agnostic. Built for serious code review.<br>
-        Give your code a whole engineering team.
-      </p>
-      
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="https://github.com/whossein/ai-platform-review-gemini-2" target="_blank" class="px-8 py-4 rounded-md bg-white text-black font-semibold hover:bg-zinc-200 transition-colors shadow-xl shadow-white/10 flex items-center gap-2">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
-          Explore the Source
-        </a>
-        <a href="#architecture" class="px-8 py-4 rounded-md bg-transparent border border-zinc-700 text-white font-medium hover:bg-zinc-900 transition-colors">
-          Review Architecture
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="py-8 border-t border-zinc-900 bg-black text-center text-zinc-600 font-mono text-sm">
-    <p>AI Code Review Platform v<span id="app-version">0.9.0</span> • Maintained by <a href="https://github.com/whossein" class="text-zinc-400 hover:text-white" target="_blank">whossein</a></p>
   </footer>
+</div>
 
-  <!-- Scroll Animation Script -->
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const observerOptions = {
-        root: null,
-        rootMargin: '0px',
-        threshold: 0.15
-      };
+<!-- ===================================================== PERSIAN -->
+<div data-lang="fa" lang="fa" dir="rtl" hidden>
 
-      const observer = new IntersectionObserver((entries, observer) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            observer.unobserve(entry.target);
-          }
-        });
-      }, observerOptions);
+  <header class="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
+    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+      <a href="#" class="flex items-center gap-2 font-bold"><i class="ph ph-git-pull-request text-xl text-accent"></i>ریویوی هوشمند کد</a>
+      <div class="flex items-center gap-1 text-sm">
+        <a href="#architecture-fa" class="hidden rounded-lg px-3 py-2 text-muted hover:text-fg md:block">چطوری کار می‌کنه</a>
+        <a href="#features-fa" class="hidden rounded-lg px-3 py-2 text-muted hover:text-fg md:block">امکانات</a>
+        <a href="#release-notes-fa" class="hidden rounded-lg px-3 py-2 text-muted hover:text-fg md:block">نسخه‌ها</a>
+        <button type="button" data-set-lang="en" class="rounded-lg px-3 py-2 text-muted hover:text-fg" lang="en">English</button>
+        <a href="https://github.com/whossein/ai-platform-review" class="ms-1 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 hover:border-muted"><i class="ph ph-github-logo text-base"></i>گیت‌هاب</a>
+      </div>
+    </nav>
+  </header>
 
-      document.querySelectorAll('.reveal').forEach(el => {
-        observer.observe(el);
-      });
-    });
-  </script>
+  <main>
+    <section class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-14 md:pt-20 lg:grid-cols-[1fr_1.15fr]">
+      <div class="reveal">
+        <h1 class="text-4xl font-bold leading-[1.35] md:text-5xl md:leading-[1.3]">تیم ریویوی کدت، روی سرور خودت.</h1>
+        <p class="mt-5 max-w-[42ch] text-lg leading-loose text-muted">مشکلات ساده رو قانون‌های رایگان پیدا می‌کنن و بقیه‌ش با ریویوکننده‌های هوش مصنوعی. با هر سرویسی که دوست داری و با سقف هزینه.</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="#quickstart-fa" class="inline-flex items-center gap-2 rounded-lg bg-accent-strong px-5 py-3 font-medium text-accent-fg transition hover:opacity-90 active:scale-[0.98]">شروع کن<i class="ph ph-arrow-left"></i></a>
+          <a href="#architecture-fa" class="inline-flex items-center rounded-lg border border-line px-5 py-3 font-medium transition hover:border-muted active:scale-[0.98]">چطوری کار می‌کنه؟</a>
+        </div>
+      </div>
+      <figure class="reveal overflow-hidden rounded-xl border border-line bg-panel shadow-[0_24px_60px_-20px_color-mix(in_srgb,var(--accent)_25%,transparent)]">
+        <img src="assets/review.png" width="1265" height="1079" alt="صفحه‌ی ریویو بعد از اجرای فقط قانون‌ها: کلید API لو رفته با شدت بالا، any با شدت متوسط و console.log با شدت کم، بدون مصرف توکن." class="block h-auto w-full">
+      </figure>
+    </section>
 
+    <section class="border-y border-line bg-panel/60">
+      <div class="mx-auto flex max-w-6xl flex-col items-center gap-5 px-5 py-8 md:flex-row md:justify-between">
+        <p class="text-sm text-muted">با سرویس خودت کار می‌کنه</p>
+        <ul class="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+          <li><img src="https://cdn.simpleicons.org/googlegemini/59636e/8b949e" alt="Google Gemini" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/anthropic/59636e/8b949e" alt="Anthropic" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/deepseek/59636e/8b949e" alt="DeepSeek" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/openrouter/59636e/8b949e" alt="OpenRouter" width="28" height="28" loading="lazy"></li>
+          <li><img src="https://cdn.simpleicons.org/ollama/59636e/8b949e" alt="Ollama" width="28" height="28" loading="lazy"></li>
+        </ul>
+        <p class="text-sm text-muted">به‌علاوه‌ی OpenAI، ‏Azure، آوال‌ای و هر API سازگار با OpenAI</p>
+      </div>
+    </section>
+
+    <section id="architecture-fa" class="mx-auto grid max-w-6xl items-center gap-12 px-5 py-24 lg:grid-cols-[1.1fr_1fr]">
+      <figure class="reveal order-last overflow-hidden rounded-xl border border-line bg-panel lg:order-first">
+        <img src="assets/pipeline.png" width="1280" height="820" alt="صفحه‌ی «How It Works» توی برنامه: مراحل context، قانون‌ها، هماهنگ‌کننده، ریویوکننده‌های موازی، منتقد و گزارش." class="block h-auto w-full" loading="lazy">
+      </figure>
+      <div class="reveal">
+        <h2 class="text-3xl font-bold leading-snug md:text-4xl">اول چک‌های ارزون، هوش مصنوعی فقط جایی که لازمه.</h2>
+        <ol class="mt-8 space-y-6">
+          <li class="flex gap-4"><i class="ph ph-magnifying-glass mt-1 text-xl text-accent"></i><div><p class="font-medium">شناخت کد</p><p class="text-muted">Diff، ساختار پروژه و راهنمای تیمت رو می‌خونه.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-lightning mt-1 text-xl text-accent"></i><div><p class="font-medium">قانون‌ها</p><p class="text-muted">۳۵ تا چک ثابت اول اجرا می‌شن. هیچ توکنی خرج نمی‌شه.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-users-three mt-1 text-xl text-accent"></i><div><p class="font-medium">ریویوکننده‌ها</p><p class="text-muted">فقط اونایی که به فایل‌هات ربط دارن، هم‌زمان کار می‌کنن.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-scales mt-1 text-xl text-accent"></i><div><p class="font-medium">منتقد و داور</p><p class="text-muted">تکراری‌ها یکی می‌شن و موردهای نامطمئن کنار می‌رن.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-chat-centered-text mt-1 text-xl text-accent"></i><div><p class="font-medium">گزارش</p><p class="text-muted">به‌شکل Markdown، ‏JSON یا کامنت مستقیم روی MR.</p></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="features-fa" class="border-t border-line bg-panel/40">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="reveal max-w-[26ch] text-3xl font-bold leading-snug md:text-4xl">هرچی یه ریویو لازم داره، بدون اینکه دوبار پولش رو بدی.</h2>
+        <div class="mt-12 grid gap-4 md:grid-cols-6">
+
+          <article class="reveal rounded-2xl border border-line bg-accent/[0.07] p-7 md:col-span-4">
+            <i class="ph ph-shield-check text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-bold">۳۵ تا چک کاملاً رایگان</h3>
+            <p class="mt-2 max-w-[60ch] leading-loose text-muted">قبل از هر درخواست به هوش مصنوعی و فقط روی خط‌های جدید اجرا می‌شن؛ حتی اگه کسی بخواد با کامنت به ریویوکننده‌ی هوش مصنوعی دستور بده، می‌گیرنش. تیک <em>Rules only</em> رو بزن تا یه ریویوی فوری و مجانی بگیری.</p>
+            <ul class="mt-6 flex flex-wrap gap-2 font-mono text-[13px]" dir="ltr">
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">secret.hardcoded</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.sql-injection</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.prompt-injection</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.wildcard-cors</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">security.tls-verify-disabled</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">py.unsafe-deserialization</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">java.weak-hash</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">sh.curl-pipe-shell</li>
+              <li class="rounded-md border border-line bg-panel px-2.5 py-1">docker.latest-tag</li>
+              <li class="rounded-md px-2.5 py-1 text-muted">+25 more</li>
+            </ul>
+          </article>
+
+          <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
+            <i class="ph ph-users-three text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-bold">۱۴ تا ریویوکننده‌ی متخصص</h3>
+            <p class="mt-2 leading-loose text-muted">فایل‌های تغییرکرده رو نگاه می‌کنه و فقط متخصص‌های مربوط رو صدا می‌زنه. اگه چندتاشون یه مشکل رو بگن، یه بار می‌بینیش.</p>
+            <p class="mt-5 text-sm leading-7 text-muted" dir="ltr">React, Next.js, React Native, Angular, Vue, TypeScript, .NET, Python, Android, iOS, Security, Performance, Code quality, Governance</p>
+          </article>
+
+          <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
+            <i class="ph ph-coins text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-bold">هر مدلی، با سقف هزینه</h3>
+            <p class="mt-2 leading-loose text-muted">برای هر ریویو سقف توکن، دلار و زمان می‌ذاری. خودش ارزون‌ترین مدلی رو که از پس کار برمیاد انتخاب می‌کنه. می‌تونی چندتا سرویس داشته باشی؛ اگه یکی خطا بده، کار می‌ره سراغ بعدی.</p>
+          </article>
+
+          <article class="dots reveal rounded-2xl border border-line bg-panel p-7 md:col-span-4">
+            <i class="ph ph-buildings text-2xl text-accent"></i>
+            <h3 class="mt-4 text-xl font-bold">ساخته‌شده برای تیم</h3>
+            <p class="mt-2 max-w-[60ch] leading-loose text-muted">هر پروژه راهنمای خودش رو داره، برای هر نفر سطح دسترسی تعیین می‌کنی، توکن‌های گیت رمزنگاری‌شده ذخیره می‌شن و همه‌ی تغییرها ثبت می‌شه. به هر MR نمره می‌دی و میانگین هر توسعه‌دهنده رو می‌بینی. توی تب Skills &amp; Rules مدیر پروژه ریویوکننده‌ها و قانون‌ها رو روشن و خاموش می‌کنه و به هر کدوم دستور اضافه می‌ده؛ چک‌های امنیتی همیشه روشن می‌مونن.</p>
+            <ul class="mt-6 flex flex-wrap gap-2 text-sm" dir="ltr">
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Owner</li>
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Manager</li>
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Reviewer</li>
+              <li class="rounded-full border border-line bg-panel px-3 py-1">Viewer</li>
+            </ul>
+          </article>
+
+          <article class="reveal grid gap-6 rounded-2xl border border-line bg-panel p-7 md:col-span-6 md:grid-cols-3">
+            <div><i class="ph ph-git-merge text-2xl text-accent"></i><h3 class="mt-4 font-bold">برمی‌گرده سراغ MR</h3><p class="mt-2 leading-loose text-muted">یافته‌های تأییدشده رو به‌شکل کامنت روی MR گیت‌لب می‌ذاره. PRهای گیت‌هاب رو هم ریویو می‌کنه.</p></div>
+            <div><i class="ph ph-wrench text-2xl text-accent"></i><h3 class="mt-4 font-bold">پیشنهاد اصلاح با AI</h3><p class="mt-2 leading-loose text-muted">یه نسخه‌ی درست‌شده‌ی کد می‌گیری و اگه تأیید کنی، روی برنچ MR کامیت می‌شه.</p></div>
+            <div><i class="ph ph-tree-structure text-2xl text-accent"></i><h3 class="mt-4 font-bold">پروژه‌ت رو می‌شناسه</h3><p class="mt-2 leading-loose text-muted">برای هر برنچ یه ایندکس داره و می‌فهمه تغییرت کدوم فایل‌های دیگه رو ممکنه خراب کنه.</p></div>
+          </article>
+        </div>
+        <p class="reveal mt-6 text-sm text-muted">یه نسخه‌ی دسکتاپ (Electron) و یه ابزار سنجش دقت ریویوکننده‌ها هم همراهشه.</p>
+      </div>
+    </section>
+
+    <section id="quickstart-fa" class="mx-auto max-w-3xl px-5 py-24">
+      <h2 class="reveal text-3xl font-bold md:text-4xl">دو دقیقه‌ای راهش بنداز</h2>
+      <p class="reveal mt-3 leading-loose text-muted">فقط Node.js نسخه‌ی ۱۸ به بالا لازم داری. بعدش برو سراغ <code class="font-mono text-fg">localhost:4000</code> و حساب مدیر رو بساز.</p>
+      <div class="reveal mt-8 overflow-hidden rounded-xl border border-line bg-panel" dir="ltr">
+        <div class="flex items-center justify-between border-b border-line px-4 py-2.5 text-sm text-muted">
+          <span class="font-mono">terminal</span>
+          <button type="button" data-copy class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 hover:text-fg"><i class="ph ph-copy"></i><span lang="fa">کپی</span></button>
+        </div>
+        <pre class="overflow-x-auto p-5 font-mono text-sm leading-7"><code>git clone https://github.com/whossein/ai-platform-review.git
+cd ai-platform-review
+npm install && npm run dev</code></pre>
+      </div>
+      <p class="reveal mt-4 text-sm leading-loose text-muted">تنظیمات و متغیرهای محیطی رو توی <a class="text-accent underline-offset-4 hover:underline" href="https://github.com/whossein/ai-platform-review#-فارسی">README</a> ببین. کامنت‌های ریویو به‌طور پیش‌فرض فارسی‌ان.</p>
+    </section>
+
+    <section id="release-notes-fa" class="border-t border-line">
+      <div class="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-16 md:flex-row md:items-center md:justify-between">
+        <div class="reveal">
+          <h2 class="text-2xl font-bold">همیشه در حال به‌روز شدن</h2>
+          <p class="mt-2 max-w-[52ch] leading-loose text-muted">هر اصلاح یا امکان جدیدی که به main اضافه بشه، خودکار منتشر می‌شه و یادداشتش از روی کامیت‌ها ساخته می‌شه.</p>
+        </div>
+        <div class="reveal flex flex-wrap items-center gap-4">
+          <a href="https://github.com/whossein/ai-platform-review/releases" class="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2.5 font-medium transition hover:border-muted active:scale-[0.98]">دیدن نسخه‌ها<i class="ph ph-arrow-up-left"></i></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-line">
+    <div class="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 text-sm text-muted md:flex-row md:items-center md:justify-between">
+      <p>ریویوی هوشمند کد</p>
+      <ul class="flex gap-6">
+        <li><a class="hover:text-fg" href="https://github.com/whossein/ai-platform-review">گیت‌هاب</a></li>
+        <li><a class="hover:text-fg" href="https://github.com/whossein/ai-platform-review/blob/main/CHANGELOG.md">تغییرات</a></li>
+        <li><a class="hover:text-fg" href="https://github.com/whossein/ai-platform-review/issues">گزارش مشکل</a></li>
+      </ul>
+    </div>
+  </footer>
+</div>
+
+<script>
+  // Language: ?lang= > saved choice > browser language. One language visible at a time.
+  const setLang = (lang) => {
+    document.querySelectorAll('[data-lang]').forEach((el) => { el.hidden = el.dataset.lang !== lang; });
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
+    try { localStorage.setItem('lang', lang); } catch {}
+  };
+  let saved = null;
+  try { saved = localStorage.getItem('lang'); } catch {}
+  const initial = new URLSearchParams(location.search).get('lang') || saved || ((navigator.language || '').startsWith('fa') ? 'fa' : 'en');
+  setLang(initial === 'fa' ? 'fa' : 'en');
+  // Old English anchors (#architecture, #release-notes…) still land on the Persian page.
+  if (initial === 'fa' && location.hash) document.getElementById(location.hash.slice(1) + '-fa')?.scrollIntoView();
+  document.querySelectorAll('[data-set-lang]').forEach((b) => b.addEventListener('click', () => { setLang(b.dataset.setLang); scrollTo(0, 0); }));
+
+  // Copy buttons
+  document.querySelectorAll('[data-copy]').forEach((btn) => btn.addEventListener('click', async () => {
+    const label = btn.querySelector('span');
+    const original = label.textContent;
+    try {
+      await navigator.clipboard.writeText(btn.closest('div.overflow-hidden').querySelector('code').textContent);
+      label.textContent = btn.closest('[lang="fa"]') ? 'کپی شد' : 'Copied';
+    } catch {
+      label.textContent = btn.closest('[lang="fa"]') ? 'کپی نشد' : 'Copy failed';
+    }
+    setTimeout(() => { label.textContent = original; }, 1600);
+  }));
+
+  // Scroll reveal
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }), { threshold: 0.15 });
+  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+</script>
 </body>
 </html>

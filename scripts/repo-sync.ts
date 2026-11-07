@@ -30,9 +30,14 @@ function check(): string[] {
     const got = re.exec(read(file))?.[1];
     if (got !== want) problems.push(`${file}: shows "${got ?? "nothing"}", code has ${want}`);
   };
-  expect("README.md", /(\d+) Specialized Review Personas/, String(specialists));
-  expect("README.md", /([۰-۹]+) ارزیاب متخصص/, toFa(specialists));
-  expect("docs/index.html", /(\d+) Specialists\. One Review/, String(specialists));
+  expect("README.md", /(\d+) specialist reviewers/, String(specialists));
+  expect("README.md", /([۰-۹]+) تا ریویوکننده‌ی متخصص/, toFa(specialists));
+  expect("README.md", /(\d+) built-in rules/, String(rules));
+  expect("README.md", /([۰-۹]+) تا قانون رایگان/, toFa(rules));
+  expect("docs/index.html", /(\d+) specialists<\/h3>/, String(specialists));
+  expect("docs/index.html", /([۰-۹]+) تا ریویوکننده‌ی متخصص<\/h3>/, toFa(specialists));
+  expect("docs/index.html", /(\d+) checks that cost nothing/, String(rules));
+  expect("docs/index.html", /([۰-۹]+) تا چک کاملاً رایگان/, toFa(rules));
   return problems;
 }
 
