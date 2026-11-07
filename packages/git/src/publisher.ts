@@ -21,6 +21,7 @@ import type {
 import { parseChangeRequestUrl, baseUrlFromChangeRequestUrl } from "./url.js";
 import { FetchHttpClient } from "./http.js";
 import { GitLabProvider } from "./gitlab.js";
+import { GitHubProvider } from "./github.js";
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
   critical: "🔴",
@@ -251,6 +252,28 @@ export async function publishReview({
     const gitProvider = new GitLabProvider(http, { baseUrl, token });
     const publisher = new ReviewPublisher(gitProvider);
 
+    return await publisher.publish(ref, issues, options);
+  }
+
+  if (ref.provider === "github") {
+    const token = env.GITHUB_TOKEN || env.GIT_TOKEN;
+    if (!token) {
+      return {
+        ok: false,
+        error: {
+          category: "validation",
+          code: "missing_token",
+          message:
+            "GITHUB_TOKEN is not configured in settings or environment",
+        },
+      };
+    }
+    const baseUrl =
+      baseUrlFromChangeRequestUrl(diffUrl) || "https://github.com";
+    const http = new FetchHttpClient(fetchImpl);
+    const publisher = new ReviewPublisher(
+      new GitHubProvider(http, { baseUrl, token }),
+    );
     return await publisher.publish(ref, issues, options);
   }
 

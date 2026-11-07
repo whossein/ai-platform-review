@@ -5,7 +5,6 @@
   "description": "Modular, plugin-based, event-driven, provider-agnostic Multi-Agent AI Code Review Platform.",
   "type": "module",
   "main": "main.cjs",
-  "packageManager": "npm@10.9.8",
   "workspaces": [
     "apps/*",
     "packages/*",

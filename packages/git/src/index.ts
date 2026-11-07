@@ -16,6 +16,7 @@
 export type { HttpClient, HttpRequest, HttpResponse } from "./http.js";
 export { FetchHttpClient } from "./http.js";
 export { GitLabProvider, type GitLabOptions } from "./gitlab.js";
+export { GitHubProvider, type GitHubOptions } from "./github.js";
 export { MapGitProviderRegistry } from "./registry.js";
 export {
   ReviewPublisher,

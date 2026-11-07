@@ -26,7 +26,7 @@ Paste a diff or an MR/PR link. The platform runs free deterministic checks first
 
 **Inputs and outputs**
 - 📥 Review a raw diff, a GitLab MR or GitHub PR URL, a ZIP, a local path, or a repository.
-- 💬 Publish accepted findings to GitLab as inline discussions plus a summary. GitHub PRs can be reviewed, but publishing back is GitLab-only for now.
+- 💬 Publish accepted findings to GitLab MRs or GitHub PRs as inline comments plus a summary (set `GITHUB_TOKEN` / `GITLAB_TOKEN` in Settings).
 - 🩹 **AI sample fix:** ask for a corrected snippet on a finding and, for GitLab MRs, commit it to the source branch after confirmation.
 - 🔎 **Project scan:** run the built-in rules over every file of a branch and get a filterable report.
 
@@ -167,7 +167,7 @@ main.cjs             Electron main process
 
 **ورودی و خروجی**
 - 📥 می‌تونی Diff، لینک MR گیت‌لب، لینک PR گیت‌هاب، فایل ZIP، یه پوشه روی سیستمت یا یه مخزن بهش بدی.
-- 💬 یافته‌هایی که تأیید کردی رو مستقیم روی MR گیت‌لب کامنت می‌کنه. برای گیت‌هاب فعلاً فقط ریویو می‌کنه و کامنت نمی‌ذاره.
+- 💬 یافته‌هایی که تأیید کردی رو مستقیم روی MR گیت‌لب یا PR گیت‌هاب کامنت می‌کنه. فقط کافیه توکن گیت‌هاب یا گیت‌لب رو توی تنظیمات بذاری.
 - 🩹 برای هر یافته می‌تونی ازش بخوای یه نسخه‌ی اصلاح‌شده‌ی کد پیشنهاد بده و اگه خواستی، با تأیید خودت مستقیم روی برنچ MR کامیتش کنه.
 - 🔎 می‌تونی کل یه برنچ رو با همون قانون‌های رایگان اسکن کنی.
 
