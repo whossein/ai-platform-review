@@ -19,8 +19,12 @@ export interface PlanInput {
   readonly diff: string;
   /** All available agents (already registered). */
   readonly agents: readonly AgentDefinition[];
-  /** Findings the deterministic Rule Engine already covered, by category. */
-  readonly coveredCategories?: readonly string[];
+  /**
+   * Whether the project has saved guidelines. The Contributing & Governance
+   * reviewer only applies the project's own rules, so it is skipped when this
+   * is `false`. Omitted means unknown: it still runs.
+   */
+  readonly hasProjectInstructions?: boolean;
 }
 
 export interface ReviewPlan {
@@ -115,6 +119,7 @@ function isRelevant(
     readonly files: readonly string[];
     readonly added: string;
     readonly exts: Set<string>;
+    readonly hasProjectInstructions?: boolean;
   },
 ): boolean {
   // If there are no files (e.g., empty diff or parsing failed), we might want to default to running general reviewers just in case.
@@ -208,8 +213,10 @@ function isRelevant(
       return hasCodeFiles;
 
     case "agent.contributing-reviewer":
-      // Runs whenever changes are introduced to audit release notes, docs, branch names, commit messages & contributing rules
-      return true;
+      // It enforces only the project's own guidelines (its prompt forbids inventing
+      // rules), and its skill needs a branch or commit message the review never
+      // supplies. With no guidelines there is nothing to check, so skip the call.
+      return ctx.hasProjectInstructions !== false;
 
     default:
       // If we don't know the focus (e.g. custom user skills), default to running it
@@ -223,27 +230,27 @@ export function plan(input: PlanInput): ReviewPlan {
   const files = changedFiles(input.diff);
   const exts = new Set(files.map(extOf).filter(Boolean));
   const added = addedText(input.diff);
-  const covered = new Set(input.coveredCategories ?? []);
 
   const selected: AgentDefinition[] = [];
   const skipped: { agent: AgentDefinition; reason: string }[] = [];
 
   for (const agent of input.agents) {
-    if (!isRelevant(agent.id, { files, added, exts })) {
+    if (
+      !isRelevant(agent.id, {
+        files,
+        added,
+        exts,
+        ...(input.hasProjectInstructions !== undefined
+          ? { hasProjectInstructions: input.hasProjectInstructions }
+          : {}),
+      })
+    ) {
       skipped.push({
         agent,
-        reason: `no ${agent.id}-relevant files in the change`,
-      });
-      continue;
-    }
-    // Note: deterministic rules coverage still requires a way to map to agents.
-    // For now we assume if an agent's ID contains the covered category it skips.
-    // (We'll update this slightly if the test fails).
-    const isCovered = [...covered].some(c => agent.id.includes(c));
-    if (isCovered) {
-      skipped.push({
-        agent,
-        reason: `already covered by deterministic rules`,
+        reason:
+          agent.id === "agent.contributing-reviewer"
+            ? "the project has no guidelines to apply"
+            : `no ${agent.id}-relevant files in the change`,
       });
       continue;
     }

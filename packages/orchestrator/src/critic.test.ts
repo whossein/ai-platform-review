@@ -309,6 +309,18 @@ describe("critic / consolidation", () => {
       expect(out[0]!.confidence).toBe(0.8);
     });
 
+    it("merges two near-identical titles from a live run", () => {
+      const a = f("a", "agent.code-reviewer", "resource-management", "BufferedReader is no longer closed", "The reader opened in readAll is not released on any path.");
+      const b = f("b", "agent.performance-reviewer", "performance", "BufferedReader is never closed", "A file handle stays open and leaks across repeated calls.");
+      expect(critique([a, b])).toHaveLength(1);
+    });
+
+    it("does not merge titles that share only one word", () => {
+      const a = f("a", "agent.security-reviewer", "security", "SQL injection in the query builder", "User input is concatenated into the statement.");
+      const b = f("b", "agent.code-reviewer", "correctness", "Query builder ignores empty filters", "An empty filter list returns every row.");
+      expect(critique([a, b])).toHaveLength(2);
+    });
+
     it("real LineReader example: differently-worded reports stay separate (conservative)", () => {
       const perf = f("p", "agent.performance-reviewer", "performance", "BufferedReader is never closed", "The BufferedReader opened here is never closed, leaking a file handle.");
       const code = f("c", "agent.code-reviewer", "resource-management", "Close the BufferedReader with try-with-resources", "Wrap the BufferedReader in try-with-resources so it is closed.");

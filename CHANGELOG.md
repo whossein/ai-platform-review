@@ -15,6 +15,36 @@ Entry template (copy to the top, below this comment):
 - **FA:** ...
 -->
 
+## [0.8.0] - 2026-11-07
+
+### Added
+- **EN:** New deterministic rule `security.js-command-exec` flags `child_process.exec` and `execSync` calls with a dynamic command in JavaScript and TypeScript (a bare `exec(` counts only when the file imports `child_process`). It is a security rule, so it cannot be silenced for a whole project.
+- **FA:** Rule قطعی جدید `security.js-command-exec` فراخوانی‌های `child_process.exec` و `execSync` را با دستور پویا در JavaScript و TypeScript علامت می‌زند (`exec(` بدون پیشوند تنها وقتی شمرده می‌شود که فایل `child_process` را وارد کرده باشد). این یک Rule امنیتی است، پس برای کل پروژه قابل خاموش شدن نیست.
+- **EN:** The cost estimate (`POST /api/estimate`) accepts an optional `projectId`. When it is sent, the estimate leaves out specialists the project has switched off (the Security Reviewer is always counted) and the Contributing reviewer when the project has no guidelines.
+- **FA:** تخمین هزینه (`POST /api/estimate`) یک `projectId` اختیاری می‌پذیرد. با ارسال آن، تخمین متخصص‌هایی را که پروژه خاموش کرده حذف می‌کند (Security Reviewer همیشه شمرده می‌شود) و Contributing reviewer را وقتی پروژه Guidelineی ندارد.
+
+### Changed
+- **EN:** Rule messages are now localized in English and Persian and follow `AI_REVIEW_COMMENT_LANGUAGE`. When it is unset they are in Persian, like the AI comments; set it to `en` for English.
+- **FA:** پیام‌های Ruleها حالا به انگلیسی و فارسی ترجمه شده‌اند و از `AI_REVIEW_COMMENT_LANGUAGE` پیروی می‌کنند. اگر این متغیر تنظیم نشده باشد، پیام‌ها مثل کامنت‌های AI فارسی هستند؛ برای انگلیسی آن را `en` بگذارید.
+- **EN:** The Contributing & Governance reviewer is skipped when the project has no saved guidelines, because it then has nothing to apply except the project's own rules. This saves one model call.
+- **FA:** متخصص Contributing & Governance وقتی پروژه Guidelineی ذخیره‌شده ندارد اجرا نمی‌شود، چون فقط قواعد خود پروژه را اعمال می‌کند. این کار یک فراخوانی مدل را ذخیره می‌کند.
+- **EN:** A model that is missing from the price table is now charged to the dollar budget at a conservative fallback rate ($5 input / $15 output per 1M tokens), and the report marks the cost as estimated instead of showing $0.
+- **FA:** اگر مدلی در جدول قیمت نباشد، هزینه‌اش با نرخ محتاطانهٔ جایگزین (۵ دلار ورودی و ۱۵ دلار خروجی به ازای هر ۱M توکن) از بودجه دلاری کسر می‌شود و گزارش هزینه را «تخمینی» علامت می‌زند، به‌جای نمایش ۰ دلار.
+- **EN:** Findings at the same file and line whose titles share most of their wording are now merged into one.
+- **FA:** یافته‌هایی که در همان فایل و خط هستند و بیشتر عنوانشان مشترک است حالا در یک مورد ادغام می‌شوند.
+- **EN:** The sidebar shows the real app version, read from `package.json` at build time, instead of a fixed v0.2.0.
+- **FA:** نوار کناری به‌جای نسخهٔ ثابت v0.2.0 نسخهٔ واقعی برنامه را نشان می‌دهد؛ این نسخه هنگام build از `package.json` خوانده می‌شود.
+- **EN:** The How It Works page now matches the behavior: reviewers apply the project's saved guidelines (and the index when it is available), and branch and commit checks are opt-in.
+- **FA:** صفحهٔ How It Works با رفتار واقعی هماهنگ شده است: متخصص‌ها Guidelineهای ذخیره‌شدهٔ پروژه را اعمال می‌کنند (و index را وقتی در دسترس باشد)، و بررسی branch و commit اختیاری است.
+
+### Security
+- **EN:** Text from recently rejected findings (titles and reasons) is no longer added to the project's trusted guidelines in the review prompt. It now reaches reviewers as a separate untrusted data block, so wording that came from model output on a merge request cannot act as an instruction.
+- **FA:** متن یافته‌های اخیراً ردشده (عنوان و دلیل) دیگر به دستورالعمل‌های مورداعتماد پروژه در پرامپت ریویو اضافه نمی‌شود. این متن حالا در یک بلوک دادهٔ جدا و غیرقابل‌اعتماد به ریویوکننده‌ها می‌رسد، تا متنی که از خروجی مدل روی یک MR آمده نتواند مثل دستور عمل کند.
+
+### Fixed
+- **EN:** After a rule is silenced from a review result, the project data held by the review page refreshes its silenced-rules list too.
+- **FA:** پس از خاموش کردن یک Rule از نتیجهٔ ریویو، داده‌های پروژهٔ نگه‌داشته‌شده در صفحهٔ ریویو فهرست Ruleهای خاموش‌شده را هم به‌روز می‌کند.
+
 ## [0.7.1] - 2026-11-07
 
 ### Added

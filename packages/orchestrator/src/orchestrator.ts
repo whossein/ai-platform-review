@@ -32,6 +32,7 @@ import type { StageExecutor } from "@ai-review/workflow-engine";
 import type { SourceFile } from "@ai-review/context-engine";
 import { untrustedBlock } from "@ai-review/core";
 
+import { ruleLanguageFromEnv } from "@ai-review/config";
 import { plan, type ReviewPlan } from "./planner.js";
 import { annotateDiffLineNumbers } from "./diff-anchor.js";
 import { ReservableBudgetGuard } from "./budget.js";
@@ -103,6 +104,11 @@ export interface RunOptions {
   readonly disabledAgents?: readonly string[];
   /** Project-manager guidance per specialist id; sent only in that specialist's own task message. */
   readonly agentInstructions?: Readonly<Record<string, string>>;
+  /**
+   * Digest of the project's recently rejected findings. Untrusted: shown to
+   * reviewers only as a data block in their final message, never as guidelines.
+   */
+  readonly rejectedFeedback?: string;
 }
 
 /** Specialists a project cannot switch off, whatever its settings say. */
@@ -159,6 +165,9 @@ export class ReviewOrchestrator {
     const reviewPlan: ReviewPlan = plan({
       diff: opts.diff,
       agents: availableAgents,
+      hasProjectInstructions:
+        Boolean(projectInstructions) ||
+        Boolean(opts.agentInstructions?.["agent.contributing-reviewer"]?.trim()),
     });
 
     // Highest priority first, so a tight budget drops the least important reviewers.
@@ -182,12 +191,14 @@ export class ReviewOrchestrator {
       ),
     );
 
+    const rejectedFeedback = opts.rejectedFeedback?.trim() || undefined;
     const instructionFields = {
       rawDiff: opts.diff,
       activeAgentIds: agentsToRun.map((a) => a.id as string),
       ...(projectInstructions ? { projectInstructions } : {}),
       ...(opts.projectName ? { projectName: opts.projectName } : {}),
       ...(Object.keys(agentInstructions).length > 0 ? { agentInstructions } : {}),
+      ...(rejectedFeedback ? { rejectedFeedback } : {}),
     };
 
     if (built.ok) {
@@ -259,6 +270,7 @@ export class ReviewOrchestrator {
     const reviewCtx: ReviewExecutionContext = {
       diff: opts.diff,
       governanceRules: opts.env?.AI_REVIEW_GOVERNANCE_RULES === "1",
+      language: ruleLanguageFromEnv({ ...process.env, ...opts.env }),
       suppressedRules: opts.suppressedRules ?? [],
       files: opts.files,
       slice,

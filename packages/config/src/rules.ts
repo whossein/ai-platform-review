@@ -2,8 +2,9 @@
  * Deterministic rules (ADR-0006) — the platform's #1 cost principle in action.
  *
  * These checks run BEFORE any LLM call. They are free (no tokens), precise, and
- * trustworthy. Their findings seed the agents and let the Planner suppress
- * redundant AI work ("secret detection already covers X"). Each rule inspects
+ * trustworthy. Their findings are reported next to the specialists' findings;
+ * they never replace a specialist (a rule hit must not switch off, say, the
+ * security reviewer). Each rule inspects
  * file texts and returns structured `RuleFinding`s.
  *
  * The set here is intentionally deterministic and regex/heuristic based (no
@@ -12,6 +13,7 @@
  */
 
 import type { Rule, RuleContext, RuleFinding } from "@ai-review/core";
+import { ruleMessage } from "./rule-messages.js";
 
 /** Extended context carrying the file texts to scan (offline, no FS access). */
 export interface FileRuleContext extends RuleContext {
@@ -126,8 +128,7 @@ export const secretDetectionRule: Rule = {
         (file, line) => ({
           ruleKind: "secret_detection",
           ruleId: "secret.hardcoded",
-          message:
-            "Possible hardcoded secret; move it to an environment variable or secret store.",
+          message: ruleMessage("secret.hardcoded", ctx.language),
           location: { file, line },
           severity: "high",
         }),
@@ -156,8 +157,7 @@ export const noConsoleRule: Rule = {
         (file, line) => ({
           ruleKind: "eslint",
           ruleId: "no-console",
-          message:
-            "Leftover console statement; remove it or use a proper logger.",
+          message: ruleMessage("no-console", ctx.language),
           location: { file, line },
           severity: "low",
         }),
@@ -188,7 +188,7 @@ export const noDebuggerRule: Rule = {
         (file, line) => ({
           ruleKind: "eslint",
           ruleId: "no-debugger",
-          message: "Unexpected `debugger` statement found.",
+          message: ruleMessage("no-debugger", ctx.language),
           location: { file, line },
           severity: "high",
         }),
@@ -220,8 +220,7 @@ export const noEvalRule: Rule = {
         (file, line) => ({
           ruleKind: "eslint",
           ruleId: "no-eval",
-          message:
-            "Avoid `eval()`/`exec()` on dynamic input. It is a major security risk and hurts performance.",
+          message: ruleMessage("no-eval", ctx.language),
           location: { file, line },
           severity: "critical",
         }),
@@ -251,8 +250,7 @@ export const noExclusiveTestsRule: Rule = {
         (file, line) => ({
           ruleKind: "eslint",
           ruleId: "no-exclusive-tests",
-          message:
-            "Exclusive or skipped test found (e.g. `.only` or `.skip`). Ensure this is intentional before merging.",
+          message: ruleMessage("no-exclusive-tests", ctx.language),
           location: { file, line },
           severity: "medium",
         }),
@@ -282,8 +280,7 @@ export const noExplicitAnyRule: Rule = {
         (file, line) => ({
           ruleKind: "typescript",
           ruleId: "no-explicit-any",
-          message:
-            "Use of `any` disables type checking; use a precise type or `unknown`.",
+          message: ruleMessage("no-explicit-any", ctx.language),
           location: { file, line },
           severity: "medium",
         }),
@@ -310,8 +307,7 @@ export const noTodoRule: Rule = {
         (file, line) => ({
           ruleKind: "naming",
           ruleId: "no-todo-comment",
-          message:
-            "Unresolved TODO/FIXME marker; track it in an issue before merging.",
+          message: ruleMessage("no-todo-comment", ctx.language),
           location: { file, line },
           severity: "info",
         }),
@@ -388,8 +384,7 @@ export const requireReleaseChangeRule: Rule = {
         {
           ruleKind: "governance",
           ruleId: "governance.require-release-change",
-          message:
-            "طبق راهنمای ذخیره‌شده‌ی این پروژه، هر تغییر در سورس‌کد باید در گزارش تغییرات (CHANGELOG یا release-change) ثبت شود، اما هیچ فایلی از این نوع در این تغییرات ویرایش نشده است.",
+          message: ruleMessage("governance.require-release-change", ctx.language),
           location: { file: MR_METADATA_PATH, line: 1 },
           severity: "medium",
         },
@@ -426,8 +421,7 @@ export const lintComplianceRule: Rule = {
           findings.push({
             ruleKind: "eslint",
             ruleId: "no-alert",
-            message:
-              "استفاده از توابع مسدودکننده (alert/confirm/prompt) طبق استانداردهای کدنویسی مجاز نیست.",
+            message: ruleMessage("no-alert", ctx.language),
             location: { file: file.path, line: i + 1 },
             severity: "medium",
           });
@@ -475,7 +469,9 @@ export const commitConventionRule: Rule = {
         findings.push({
           ruleKind: "governance",
           ruleId: "governance.commit-convention",
-          message: `MR/PR title "${title.slice(0, 60)}" does not follow Conventional Commits (e.g. "feat: ..." or "fix(scope): ...").`,
+          message: ruleMessage("governance.commit-convention", ctx.language, {
+            title: title.slice(0, 60),
+          }),
           location: { file: MR_METADATA_PATH, line: 2 },
           severity: "low",
         });
@@ -501,7 +497,7 @@ export const branchNamingRule: Rule = {
         findings.push({
           ruleKind: "governance",
           ruleId: "governance.branch-naming",
-          message: `Branch "${branch}" does not match the naming convention (e.g. feat/name or fix/issue-123).`,
+          message: ruleMessage("governance.branch-naming", ctx.language, { branch }),
           location: { file: MR_METADATA_PATH, line: 1 },
           severity: "low",
         });
@@ -546,8 +542,7 @@ export const sqlInjectionRule: Rule = {
         (file, line) => ({
           ruleKind: "sql_injection",
           ruleId: "security.sql-injection",
-          message:
-            "SQL query is built with string concatenation or interpolation; use parameterized queries / prepared statements.",
+          message: ruleMessage("security.sql-injection", ctx.language),
           location: { file, line },
           severity: "high",
         }),
@@ -578,8 +573,7 @@ export const wildcardCorsRule: Rule = {
         (file, line) => ({
           ruleKind: "cors_misconfig",
           ruleId: "security.wildcard-cors",
-          message:
-            "CORS allows every origin; restrict it to an explicit allow-list of trusted origins.",
+          message: ruleMessage("security.wildcard-cors", ctx.language),
           location: { file, line },
           severity: "medium",
         }),
@@ -634,8 +628,7 @@ export const promptInjectionRule: Rule = {
         (file, line) => ({
           ruleKind: "security",
           ruleId: "security.prompt-injection",
-          message:
-            "This line looks like an instruction aimed at AI reviewers (prompt injection). Remove it; review rules belong in the project's saved guidelines, not in the change.",
+          message: ruleMessage("security.prompt-injection", ctx.language),
           location: { file, line },
           severity: "critical",
         }),
@@ -650,7 +643,6 @@ function lineRule(spec: {
   readonly kind: string;
   readonly severity: RuleFinding["severity"];
   readonly pattern: RegExp;
-  readonly message: string;
   readonly langs?: readonly RuleLang[];
   /** Also match inside full-line comments (default: comment lines are skipped). */
   readonly scanComments?: boolean;
@@ -658,7 +650,7 @@ function lineRule(spec: {
   return {
     kind: spec.kind,
     id: spec.id,
-    description: spec.message,
+    description: ruleMessage(spec.id),
     severity: spec.severity,
     async run(ctx) {
       return {
@@ -673,7 +665,7 @@ function lineRule(spec: {
           (file, line) => ({
             ruleKind: spec.kind,
             ruleId: spec.id,
-            message: spec.message,
+            message: ruleMessage(spec.id, ctx.language),
             location: { file, line },
             severity: spec.severity,
           }),
@@ -684,6 +676,57 @@ function lineRule(spec: {
   };
 }
 
+/**
+ * `child_process.exec`/`execSync` with a dynamic command in JS/TS. Bare `exec(`
+ * is a callback API in many libraries, so it only counts when the file also
+ * imports `child_process`; a qualified `child_process.exec(` always counts. A
+ * fixed string literal is not flagged: the risk is user input reaching a shell.
+ */
+export const jsCommandExecRule: Rule = {
+  kind: "security",
+  id: "security.js-command-exec",
+  description:
+    "child_process.exec/execSync with a dynamic command string runs it through a shell.",
+  severity: "high",
+  async run(ctx) {
+    const importsChildProcess = (text: string) =>
+      /(?:require\s*\(\s*|from\s+|import\s*\(\s*)['"](?:node:)?child_process['"]/.test(text);
+    const qualified = /\b(?:child_process|childProcess|cp)\.(?:exec|execSync)\s*\(/;
+    const bare = /(?<![.\w$])(?:exec|execSync)\s*\(/;
+    // A dynamic first argument: a template literal with `${}`, a string joined with `+`,
+    // or a variable. A plain quoted literal is static.
+    const dynamicArg = (rest: string) => {
+      const arg = rest.trimStart();
+      if (arg.startsWith("`")) return /^`[^`]*\$\{/.test(arg);
+      if (/^(['"])/.test(arg)) return /^(['"])(?:\\.|(?!\1).)*\1\s*\+/.test(arg);
+      return /^[A-Za-z_$]/.test(arg);
+    };
+    const findings: RuleFinding[] = [];
+    if (!isFileCtx(ctx)) return { ok: true, value: findings };
+    for (const file of ctx.files) {
+      if (!LANG_PATTERNS.js.test(file.path)) continue;
+      const imported = importsChildProcess(file.text);
+      const lines = file.text.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]!;
+        if (isCommentLine(line, file.path)) continue;
+        const re = qualified.test(line) ? qualified : imported && bare.test(line) ? bare : undefined;
+        if (!re) continue;
+        const m = re.exec(line)!;
+        if (!dynamicArg(line.slice(m.index + m[0].length))) continue;
+        findings.push({
+          ruleKind: "security",
+          ruleId: "security.js-command-exec",
+          message: ruleMessage("security.js-command-exec", ctx.language),
+          location: { file: file.path, line: i + 1 },
+          severity: "high",
+        });
+      }
+    }
+    return { ok: true, value: findings };
+  },
+};
+
 /** Multi-language rules (Python, Java, C#, PHP, Go, Kotlin, Swift, shell, Docker). */
 export const LANGUAGE_RULES: readonly Rule[] = [
   lineRule({
@@ -692,8 +735,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     severity: "high",
     pattern:
       /verify\s*=\s*False|rejectUnauthorized\s*:\s*false|InsecureSkipVerify\s*:\s*true|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['"]?0|ServerCertificateValidationCallback\s*[+]?=|CURLOPT_SSL_VERIFYPEER\s*,\s*(false|0)/,
-    message:
-      "TLS certificate verification is disabled; this allows man-in-the-middle attacks.",
   }),
   lineRule({
     id: "py.unsafe-deserialization",
@@ -701,8 +742,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     severity: "high",
     pattern:
       /\b(?:pickle|cPickle|marshal|dill)\.loads?\s*\(|\byaml\.load\s*\((?![^)]*Loader\s*=\s*(?:yaml\.)?(?:Safe|CSafe)Loader)/,
-    message:
-      "Unsafe deserialization can execute arbitrary code; use json or yaml.safe_load for untrusted data.",
     langs: ["py"],
   }),
   lineRule({
@@ -710,8 +749,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "security",
     severity: "high",
     pattern: /\bshell\s*=\s*True\b|\bos\.system\s*\(/,
-    message:
-      "Running commands through a shell allows command injection; pass an argument list without shell=True.",
     langs: ["py"],
   }),
   lineRule({
@@ -719,8 +756,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "medium",
     pattern: /^\s*except\s*:/,
-    message:
-      "Bare `except:` also swallows KeyboardInterrupt/SystemExit; catch a specific exception.",
     langs: ["py"],
   }),
   lineRule({
@@ -728,8 +763,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "medium",
     pattern: /\bdef\s+\w+\s*\([^)]*=\s*(?:\[\s*\]|\{\s*\}|dict\(\)|list\(\))/,
-    message:
-      "Mutable default argument is shared between calls; default to None and create it inside the function.",
     langs: ["py"],
   }),
   lineRule({
@@ -737,7 +770,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "low",
     pattern: /^\s*print\s*\(/,
-    message: "Leftover print statement; use the logging module.",
     langs: ["py"],
   }),
   lineRule({
@@ -745,7 +777,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "low",
     pattern: /\bSystem\.(?:out|err)\.print(?:ln|f)?\s*\(|\.printStackTrace\s*\(\s*\)/,
-    message: "Leftover System.out/printStackTrace; use a logger.",
     langs: ["java", "kt"],
   }),
   lineRule({
@@ -753,7 +784,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "security",
     severity: "high",
     pattern: /MessageDigest\.getInstance\s*\(\s*"(?:MD5|MD2|SHA-?1)"/i,
-    message: "MD5/SHA-1 are broken for security use; use SHA-256 or stronger (bcrypt/argon2 for passwords).",
     langs: ["java", "kt"],
   }),
   lineRule({
@@ -761,7 +791,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "security",
     severity: "high",
     pattern: /\bRuntime\.getRuntime\(\)\.exec\s*\(/,
-    message: "Runtime.exec with dynamic input risks command injection; validate input or use ProcessBuilder with fixed arguments.",
     langs: ["java", "kt"],
   }),
   lineRule({
@@ -769,7 +798,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "medium",
     pattern: /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/,
-    message: "Empty catch block silently swallows errors; handle or log the exception.",
     langs: ["java", "cs", "kt", "php", "js"],
   }),
   lineRule({
@@ -777,7 +805,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "low",
     pattern: /\bConsole\.(?:Write|WriteLine)\s*\(/,
-    message: "Leftover Console output; use ILogger.",
     langs: ["cs"],
   }),
   lineRule({
@@ -785,7 +812,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "security",
     severity: "high",
     pattern: /\b(?:MD5|SHA1)(?:CryptoServiceProvider|Managed)?\.Create\s*\(|new\s+(?:MD5|SHA1)(?:CryptoServiceProvider|Managed)\s*\(/,
-    message: "MD5/SHA-1 are broken for security use; use SHA-256 or stronger.",
     langs: ["cs"],
   }),
   lineRule({
@@ -793,7 +819,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "low",
     pattern: /\b(?:var_dump|print_r|var_export|phpinfo)\s*\(/,
-    message: "Leftover debug output; remove it before merging.",
     langs: ["php"],
   }),
   lineRule({
@@ -801,7 +826,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "security",
     severity: "high",
     pattern: /\b(?:unserialize|shell_exec|passthru|system|popen|proc_open|mysql_[a-z_]+)\s*\(/,
-    message: "Dangerous or removed PHP function (unserialize/shell exec/mysql_*); use safe alternatives (json, escapeshellarg, PDO).",
     langs: ["php"],
   }),
   lineRule({
@@ -809,7 +833,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "low",
     pattern: /\bfmt\.Print(?:ln|f)?\s*\(/,
-    message: "Leftover fmt.Print; use a structured logger.",
     langs: ["go"],
   }),
   lineRule({
@@ -817,7 +840,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "medium",
     pattern: /[\w)\]]!!(?!=)/,
-    message: "`!!` throws NullPointerException; handle null with ?: or safe calls.",
     langs: ["kt"],
   }),
   lineRule({
@@ -825,7 +847,6 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "lint",
     severity: "medium",
     pattern: /\btry!|\bas!\s/,
-    message: "Forced `try!`/`as!` crashes at runtime on failure; use do/catch or conditional casts.",
     langs: ["swift"],
   }),
   lineRule({
@@ -833,21 +854,18 @@ export const LANGUAGE_RULES: readonly Rule[] = [
     kind: "security",
     severity: "high",
     pattern: /\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:ba|z)?sh\b/,
-    message: "Piping a download into a shell runs unverified code; download, verify a checksum, then execute.",
   }),
   lineRule({
     id: "sh.chmod-777",
     kind: "security",
     severity: "high",
     pattern: /\bchmod\s+(?:-R\s+)?0?777\b/,
-    message: "World-writable permissions (777) are unsafe; grant the minimum required mode.",
   }),
   lineRule({
     id: "docker.latest-tag",
     kind: "lint",
     severity: "medium",
     pattern: /^\s*FROM\s+\S+:latest\b/i,
-    message: "Base image uses the `latest` tag; pin a specific version or digest for reproducible builds.",
     langs: ["docker"],
   }),
 ];
@@ -866,5 +884,6 @@ export const DEFAULT_RULES: readonly Rule[] = [
   noTodoRule,
   lintComplianceRule,
   requireReleaseChangeRule,
+  jsCommandExecRule,
   ...LANGUAGE_RULES,
 ];

@@ -32,6 +32,8 @@ export interface RuleContext {
   readonly repositoryId: string;
   /** Restrict checks to changed files when reviewing a diff. */
   readonly changedPaths?: readonly string[];
+  /** Language for finding messages (`en` or `fa`); English when omitted. */
+  readonly language?: string | undefined;
 }
 
 /**

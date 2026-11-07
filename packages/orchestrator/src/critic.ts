@@ -115,6 +115,27 @@ function tokens(issue: Issue): Set<string> {
   return new Set((words ?? []).filter((w) => w.length >= 3));
 }
 
+/** Word tokens (3+ letters) of the title alone, which names the defect. */
+function titleTokens(issue: Issue): Set<string> {
+  const words = issue.title.toLowerCase().match(/[\p{L}\p{N}]+/gu);
+  return new Set((words ?? []).filter((w) => w.length >= 3));
+}
+
+/**
+ * Two short titles that largely share their wording ("BufferedReader is no
+ * longer closed" / "BufferedReader is never closed"). Titles are compared on
+ * their own because long descriptions dilute the overlap. At least two shared
+ * words and half the union are required, so a single shared identifier is not
+ * enough to merge different problems.
+ */
+function similarTitles(a: Issue, b: Issue): boolean {
+  const ta = titleTokens(a);
+  const tb = titleTokens(b);
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  return shared >= 2 && jaccard(ta, tb) >= SAME_DEFECT_MIN_OVERLAP;
+}
+
 function jaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   let shared = 0;
@@ -139,7 +160,10 @@ function isSameDefect(a: Issue, b: Issue): boolean {
     return true;
   }
   // Same or different canonical category, the remaining evidence is wording.
-  return jaccard(tokens(a), tokens(b)) >= SAME_DEFECT_MIN_OVERLAP;
+  return (
+    jaccard(tokens(a), tokens(b)) >= SAME_DEFECT_MIN_OVERLAP ||
+    similarTitles(a, b)
+  );
 }
 
 /**

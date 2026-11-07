@@ -84,3 +84,21 @@ describe("estimateHandler routing-aware pricing", () => {
     expect(res.agentRouting).toBeUndefined();
   });
 });
+
+describe("estimateHandler project settings", () => {
+  it("does not count specialists the project switched off, but always counts security", async () => {
+    const base = await estimateHandler({ diff: DIFF, env: { AI_REVIEW_LLM_PROVIDER: "openai" } }, registry());
+    const off = await estimateHandler(
+      {
+        diff: DIFF,
+        env: { AI_REVIEW_LLM_PROVIDER: "openai" },
+        disabledAgents: ["agent.performance-reviewer", "agent.security-reviewer"],
+      },
+      registry(),
+    );
+    expect(off.agents).not.toContain("Performance Reviewer");
+    expect(off.agents.length).toBe(base.agents.length - 1);
+    expect(off.estimatedTokens).toBeLessThan(base.estimatedTokens);
+    expect(off.skipped.length).toBe(base.skipped.length + 1);
+  });
+});

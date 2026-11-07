@@ -91,6 +91,24 @@ describe("comment-aware rules", () => {
     expect(await ids("a.js", "#x = eval(y);")).toContain("no-eval");
   });
 
+  it("security.js-command-exec needs child_process and a dynamic command", async () => {
+    const imp = "const { exec } = require('child_process');\n";
+    const id = "security.js-command-exec";
+    expect(await ids("a.js", imp + "exec(`ls ${dir}`, cb);")).toContain(id);
+    expect(await ids("a.ts", "import { execSync } from 'node:child_process';\nexecSync('git ' + arg);")).toContain(id);
+    expect(await ids("a.js", imp + "exec(cmd, cb);")).toContain(id);
+    expect(await ids("a.js", "child_process.exec(`rm ${p}`);")).toContain(id);
+    // no child_process import: bare exec( is some other API
+    expect(await ids("a.js", "exec(command, cb);")).not.toContain(id);
+    expect(await ids("a.js", "const m = re.exec(line);")).not.toContain(id);
+    // fixed command, execFile, comment
+    expect(await ids("a.js", imp + "exec('git status', cb);")).not.toContain(id);
+    expect(await ids("a.js", imp + "execFile('git', [arg]);")).not.toContain(id);
+    expect(await ids("a.js", imp + "// exec(`ls ${dir}`)")).not.toContain(id);
+    // not reported as eval
+    expect(await ids("a.js", imp + "exec(cmd, cb);")).not.toContain("no-eval");
+  });
+
   it("no-alert flags blocking dialogs only", async () => {
     for (const t of ["alert('hi');", "window.confirm('sure?')", "if (confirm(`ok ${x}?`)) go();", "const v = prompt('name');"]) {
       expect(await ids("a.ts", t), t).toContain("no-alert");

@@ -15,6 +15,7 @@ import { enforceableSuppressions } from "./handlers/projects.js";
 import {
   DEFAULT_RULES,
   DefaultRuleEngine,
+  ruleLanguageFromEnv,
   MapRuleRegistry,
   ruleFindingToIssue,
   type FileRuleContext,
@@ -315,7 +316,11 @@ export class ScanJobManager {
         abortCheck();
 
         const lineOf = new Map(files.map((f) => [f.path, f.text.split("\n")]));
-        const ctx: FileRuleContext = { repositoryId: "repo.scan", files };
+        const ctx: FileRuleContext = {
+          repositoryId: "repo.scan",
+          files,
+          language: ruleLanguageFromEnv(process.env),
+        };
         const res = await engine.run(ctx);
         if (res.ok) {
           for (const f of res.value.findings) {

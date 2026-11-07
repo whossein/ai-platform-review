@@ -37,6 +37,14 @@ import { isTransientError } from "./budget.js";
 import { critique } from "./critic.js";
 import { anchorIssues } from "./diff-anchor.js";
 
+/**
+ * Conservative fallback rate (USD per 1M tokens) for models absent from the
+ * price table, so the dollar budget still counts their spend. Deliberately
+ * above the $2/1M reservation estimate used in `runAgent`.
+ */
+export const FALLBACK_INPUT_COST_PER_1M = 5;
+export const FALLBACK_OUTPUT_COST_PER_1M = 15;
+
 export interface ModelPricing {
   readonly inputCostPer1M: number;
   readonly outputCostPer1M: number;
@@ -46,6 +54,8 @@ export interface ReviewExecutionContext {
   readonly diff: string;
   /** Enables MR metadata (branch/title) governance rules. */
   readonly governanceRules?: boolean | undefined;
+  /** Language of deterministic rule messages (`fa`/`en`); English when omitted. */
+  readonly language?: string | undefined;
   readonly files?: readonly { path: string; text: string }[] | undefined;
   readonly slice: ContextSlice;
   /** Rules a project manager silenced; matching deterministic findings are dropped. */
@@ -171,6 +181,7 @@ export class ReviewStageExecutor implements StageExecutor {
         repositoryId: "repo.local",
         files: filesToScan,
         projectInstructions: this.ctx.slice.projectInstructions,
+        language: this.ctx.language,
       };
       const ruleRes = await ruleEngine.run(ruleCtx);
       if (ruleRes.ok) {
@@ -298,10 +309,12 @@ export class ReviewStageExecutor implements StageExecutor {
       const totalTokens = promptTokens + completionTokens;
 
       const price = value.model ? this.ctx.pricing.get(value.model) : undefined;
-      const costUsd = price
-        ? (promptTokens / 1_000_000) * price.inputCostPer1M +
-          (completionTokens / 1_000_000) * price.outputCostPer1M
-        : 0;
+      const costEstimated = !price;
+      const costUsd =
+        (promptTokens / 1_000_000) *
+          (price?.inputCostPer1M ?? FALLBACK_INPUT_COST_PER_1M) +
+        (completionTokens / 1_000_000) *
+          (price?.outputCostPer1M ?? FALLBACK_OUTPUT_COST_PER_1M);
 
       // Post-execution reconciliation
       this.ctx.reservableGuard.reconcile(reservationId, {
@@ -319,6 +332,7 @@ export class ReviewStageExecutor implements StageExecutor {
         promptTokens,
         completionTokens,
         costUsd,
+        ...(costEstimated ? { costEstimated: true } : {}),
         cacheHits: 0,
         cacheMisses: 0,
       });
@@ -409,6 +423,9 @@ export class ReviewStageExecutor implements StageExecutor {
         (sum, a) => sum + a.costUsd,
         0,
       ),
+      ...(this.ctx.agentMetrics.some((a) => a.costEstimated)
+        ? { hasUnpricedModels: true }
+        : {}),
       cacheHits: 0,
       cacheMisses: 0,
       agents: this.ctx.agentMetrics,

@@ -45,19 +45,6 @@ describe("planner / smart routing", () => {
     const sorted = [...priorities].sort((a, b) => b - a);
     expect(priorities).toEqual(sorted);
   });
-
-  it("skips a specialist whose category is already covered by rules", () => {
-    const agents = SPECIALISTS.map(s => makeSpecialistDefinition(s));
-    const p = plan({
-      diff: tsxDiff,
-      agents,
-      coveredCategories: ["security"],
-    });
-    expect(p.selected.map((s) => s.id)).not.toContain("agent.security-reviewer");
-    expect(
-      p.skipped.some((s) => s.reason.includes("deterministic rules")),
-    ).toBe(true);
-  });
 });
 
 describe("planner: Next.js reviewer", () => {
@@ -177,5 +164,25 @@ describe("planner: framework specialists need real evidence", () => {
 
   it.each(cases)("%s: %s -> %s", (id, _label, files, expected) => {
     expect(picks(files, id)).toBe(expected);
+  });
+});
+
+describe("planner: Contributing reviewer needs project guidelines", () => {
+  const agents = SPECIALISTS.map((s) => makeSpecialistDefinition(s));
+  const ids = (hasProjectInstructions?: boolean) =>
+    plan({
+      diff: tsxDiff,
+      agents,
+      ...(hasProjectInstructions !== undefined ? { hasProjectInstructions } : {}),
+    }).selected.map((a) => a.id as string);
+
+  it("skips it when the project has no guidelines", () => {
+    expect(ids(false)).not.toContain("agent.contributing-reviewer");
+    expect(ids(false)).toContain("agent.security-reviewer");
+  });
+
+  it("runs it with guidelines, or when that is unknown", () => {
+    expect(ids(true)).toContain("agent.contributing-reviewer");
+    expect(ids()).toContain("agent.contributing-reviewer");
   });
 });

@@ -38,6 +38,8 @@ export interface ReviewRequest {
   readonly disabledAgents?: readonly string[] | undefined;
   /** Project-manager guidance per specialist id. */
   readonly agentInstructions?: Readonly<Record<string, string>> | undefined;
+  /** Untrusted digest of rejected findings; reaches reviewers as a data block only. */
+  readonly rejectedFeedback?: string | undefined;
   /**
    * Called with the changed file paths once the diff is resolved; may return
    * extra structural context (e.g. from the project index) for the reviewers.
@@ -86,6 +88,7 @@ export async function reviewHandler(
     suppressedRules,
     disabledAgents,
     agentInstructions,
+    rejectedFeedback,
   } = request;
   const effectiveMemoryStore = memoryStore || request.memoryStore;
   // Project-wide silencing of a security rule is never honoured, even if stored.
@@ -128,6 +131,7 @@ export async function reviewHandler(
       ...(enforceable.length ? { suppressedRules: enforceable } : {}),
       ...(disabledAgents?.length ? { disabledAgents } : {}),
       ...(agentInstructions && Object.keys(agentInstructions).length > 0 ? { agentInstructions } : {}),
+      ...(rejectedFeedback?.trim() ? { rejectedFeedback } : {}),
       ...(projectContext ? { projectContext } : {}),
     },
     extraProviders

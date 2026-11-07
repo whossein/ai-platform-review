@@ -772,10 +772,33 @@ async function startServer() {
 
   app.post("/api/estimate", requireAuth, async (req, res) => {
     try {
+      // With a project the estimate follows its settings (switched-off specialists, guidelines).
+      let project: any;
+      if (typeof req.body?.projectId === "string") {
+        const user = (req as any).user;
+        const fetched = await projectStore.getProject(req.body.projectId);
+        if (fetched) {
+          if (user && !(await security.canAccessProject(user, fetched.project.id, "project:review"))) {
+            return res.status(403).json({
+              error: "Access denied: You do not have permission to run reviews on this project.",
+              code: "FORBIDDEN",
+            });
+          }
+          project = fetched.project;
+        }
+      }
       const result = await estimateHandler(
         {
           diff: req.body?.diff,
           env: req.body?.env || req.body?.envOverrides,
+          ...(project
+            ? {
+                disabledAgents: project.disabledAgents ?? [],
+                hasProjectInstructions:
+                  Boolean(project.customInstructions?.trim()) ||
+                  Boolean(project.agentInstructions?.["agent.contributing-reviewer"]?.trim()),
+              }
+            : {}),
         },
         agentRegistry
       );
@@ -867,11 +890,11 @@ async function startServer() {
       const feedbackDigest = preProject
         ? await projectStore.getFeedbackDigest(preProject.id).catch(() => "")
         : "";
+      // The stored project wins: it may have a token-saving compact version.
+      // Only the project's own instructions; the feedback digest is untrusted
+      // and travels separately as `rejectedFeedback`.
       const customInstructions =
-        // The stored project wins: it may have a token-saving compact version.
-        [instructionsForPrompt(preProject) || req.body?.customInstructions, feedbackDigest]
-          .filter(Boolean)
-          .join("\n\n") || undefined;
+        instructionsForPrompt(preProject) || req.body?.customInstructions || undefined;
       const projectName = req.body?.projectName || preProject?.name;
 
       if (user) {
@@ -900,6 +923,7 @@ async function startServer() {
           suppressedRules: preProject?.suppressedRules,
           disabledAgents: preProject?.disabledAgents,
           agentInstructions: preProject?.agentInstructions,
+          ...(feedbackDigest ? { rejectedFeedback: feedbackDigest } : {}),
           ...(projectContextProvider ? { projectContextProvider } : {}),
         },
         buildRequestRegistry(buildEffectiveEnv(process.env, reviewEnv)),

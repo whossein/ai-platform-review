@@ -127,11 +127,12 @@ export async function authFetch(
 export async function requestEstimate(
   diff: string,
   env?: Record<string, string>,
+  projectId?: string,
 ): Promise<EstimateResponse> {
   const res = await authFetch("/api/estimate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ diff, ...(env ? { env } : {}) }),
+    body: JSON.stringify({ diff, ...(env ? { env } : {}), ...(projectId ? { projectId } : {}) }),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };

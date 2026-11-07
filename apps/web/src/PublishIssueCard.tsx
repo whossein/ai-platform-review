@@ -6,6 +6,7 @@ import {
   type AiCodeSuggestion,
   type CodeSnippet,
   type ReviewIssue,
+  type SuppressedRule,
 } from "./api.js";
 
 export interface IssuePrep {
@@ -189,8 +190,10 @@ export interface PublishIssueCardProps {
   fileUrl?: string | undefined;
   /** Project this review belongs to; feedback needs it. */
   projectId?: string | undefined;
-  /** Called with the project's new instructions after a rule was added. */
-  onRulesUpdated?: ((customInstructions: string) => void) | undefined;
+  /** Called with the project's new instructions and silenced rules after a rule was added or silenced. */
+  onRulesUpdated?:
+    | ((update: { customInstructions?: string; suppressedRules?: readonly SuppressedRule[] }) => void)
+    | undefined;
   getEnv: () => Record<string, string>;
 }
 
@@ -248,8 +251,13 @@ export function PublishIssueCard({
             }
           : { reason: "useful" }),
       });
-      if (r.ruleAdded && r.project?.customInstructions !== undefined) {
-        onRulesUpdated?.(r.project.customInstructions);
+      if (r.ruleAdded && r.project) {
+        onRulesUpdated?.({
+          ...(r.project.customInstructions !== undefined
+            ? { customInstructions: r.project.customInstructions }
+            : {}),
+          ...(r.project.suppressedRules ? { suppressedRules: r.project.suppressedRules } : {}),
+        });
       }
       setFbDone(
         verdict === "up"

@@ -15,6 +15,7 @@ import {
   plan,
   DEFAULT_RULES,
   DefaultRuleEngine,
+  ruleLanguageFromEnv,
   MapRuleRegistry,
   ruleFindingToIssue,
   type FileRuleContext,
@@ -26,6 +27,10 @@ import { buildEffectiveEnv } from "./client-env.js";
 export interface EstimateRequest {
   readonly diff: string;
   readonly env?: Record<string, string>;
+  /** Specialist ids the project switched off; they are not counted (security reviewer always is). */
+  readonly disabledAgents?: readonly string[];
+  /** Whether the project has saved guidelines; the Contributing reviewer needs them. */
+  readonly hasProjectInstructions?: boolean;
 }
 
 export interface EstimateResponse {
@@ -52,7 +57,7 @@ export async function estimateHandler(
   request: EstimateRequest,
   agentRegistry: AgentRegistry
 ): Promise<EstimateResponse> {
-  const { diff, env = {} } = request;
+  const { diff, env = {}, disabledAgents = [], hasProjectInstructions } = request;
 
   if (!diff || typeof diff !== "string" || diff.trim().length === 0) {
     throw new Error('field "diff" is required');
@@ -71,6 +76,7 @@ export async function estimateHandler(
     const ruleCtx: FileRuleContext = {
       repositoryId: "repo.local",
       files: files,
+      language: ruleLanguageFromEnv(mergedEnv),
     };
     const ruleRes = await ruleEngine.run(ruleCtx);
 
@@ -83,11 +89,23 @@ export async function estimateHandler(
 
   // Get available agents from the registry
   const agentsList = agentRegistry.list();
-  const reviewPlan = plan({
+  const rawPlan = plan({
     diff: rawDiff,
     agents: agentsList,
-    coveredCategories: [], // Static analysis doesn't replace the need for LLM reviewers
+    ...(hasProjectInstructions !== undefined ? { hasProjectInstructions } : {}),
   });
+  // Same rule as the review: switched-off specialists never run, except the security reviewer.
+  const off = new Set(disabledAgents.filter((id) => id !== "agent.security-reviewer"));
+  const reviewPlan = {
+    ...rawPlan,
+    selected: rawPlan.selected.filter((a) => !off.has(a.id as string)),
+    skipped: [
+      ...rawPlan.skipped,
+      ...rawPlan.selected
+        .filter((a) => off.has(a.id as string))
+        .map((agent) => ({ agent, reason: "switched off for this project" })),
+    ],
+  };
 
   const selectedAgents = reviewPlan.selected.map((s: any) => s.name);
   const skippedAgents = reviewPlan.skipped.map((s: any) => s.agent.name);

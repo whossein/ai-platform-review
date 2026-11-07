@@ -504,6 +504,12 @@ export class ProjectStore {
    * Short text of the most recent rejected findings that were NOT promoted to
    * rules, for the review prompt. Keeps recent feedback in play without
    * touching the project's permanent instructions.
+   *
+   * Sent to reviewers as `rejectedFeedback`, rendered by the specialist prompt
+   * builder as an `untrustedBlock("rejected_feedback", ...)` in the final
+   * `<review_task>` message only. The titles and reasons come from model output
+   * on merge requests, so it is untrusted: never put it in customInstructions
+   * or `<project_guidelines>`.
    */
   async getFeedbackDigest(projectId: string, limit = 5): Promise<string> {
     await this.ensureLoaded();

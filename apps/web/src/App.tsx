@@ -143,7 +143,7 @@ export function App(): JSX.Element {
             <img src="/icon-192.png" alt="" width={32} height={32} style={{ borderRadius: 8 }} />
             AI Review
           </h2>
-          <span className="version">v0.2.0</span>
+          <span className="version">v{__APP_VERSION__}</span>
         </div>
 
         {config.BUDGET_LIMIT && (

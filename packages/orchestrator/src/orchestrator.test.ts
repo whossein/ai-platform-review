@@ -623,4 +623,36 @@ describe("project review config (disabled agents and agent instructions)", () =>
       expect(r.messages[r.messages.length - 1]!.content).not.toContain("never sent");
     }
   });
+
+  it("sends rejected feedback only as an untrusted block in the final message, not as guidelines", async () => {
+    const MARK = "FEEDBACK-MARKER-9001";
+    const plain = recordingLlm();
+    await runReview({ diff: DIFF, llm: plain.llm });
+    const rec = recordingLlm();
+    await runReview({ diff: DIFF, llm: rec.llm, rejectedFeedback: `- ${MARK} not a real issue` });
+    expect(rec.requests.length).toBeGreaterThan(1);
+    for (const r of rec.requests) {
+      const last = r.messages[r.messages.length - 1]!.content;
+      expect(last).toMatch(new RegExp(`<rejected_feedback>\\n[\\s\\S]*${MARK}[\\s\\S]*</rejected_feedback>`));
+      expect(last).not.toContain("<project_guidelines");
+      expect(JSON.stringify(r.messages.slice(0, 2))).not.toContain(MARK);
+      expect(r.messages.slice(0, 2)).toEqual(plain.requests[0]!.messages.slice(0, 2));
+    }
+  });
+
+  it("runs the contributing reviewer when only its own agent instructions are set", async () => {
+    const without = recordingLlm();
+    await runReview({ diff: DIFF, llm: without.llm });
+    expect(without.requests.map(without.focusOf)).not.toContain(agentName("agent.contributing-reviewer"));
+    const blank = recordingLlm();
+    await runReview({ diff: DIFF, llm: blank.llm, agentInstructions: { "agent.contributing-reviewer": "  " } });
+    expect(blank.requests.map(blank.focusOf)).not.toContain(agentName("agent.contributing-reviewer"));
+    const rec = recordingLlm();
+    await runReview({
+      diff: DIFF,
+      llm: rec.llm,
+      agentInstructions: { "agent.contributing-reviewer": "Follow CONTRIBUTING.md." },
+    });
+    expect(rec.requests.map(rec.focusOf)).toContain(agentName("agent.contributing-reviewer"));
+  });
 });

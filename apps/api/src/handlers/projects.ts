@@ -9,7 +9,7 @@ import type { ProjectStore } from "../project-store.js";
 import type { SecurityContext } from "../security/security-context.js";
 import type { SafeUser, ProjectId, IsoTimestamp, RuleSuppression } from "@ai-review/core";
 import { fetchChangeRequestMeta, fetchChangeRequestCommitMessages, resolveDiffInput } from "@ai-review/git";
-import { DEFAULT_RULES } from "@ai-review/orchestrator";
+import { DEFAULT_RULES, RULE_ENGINE_AGENT } from "@ai-review/orchestrator";
 import { providersFromEnv } from "@ai-review/llm";
 import { estimateAiUsage, type AiJudge } from "../ai-usage.js";
 import { buildEffectiveEnv } from "./client-env.js";
@@ -329,9 +329,6 @@ export async function deleteProjectHandler(
   return { success: true };
 }
 
-/** Producer id of deterministic findings (RULE_ENGINE_AGENT in @ai-review/config). */
-const RULE_ENGINE_PRODUCER = "agent.rule-engine";
-
 /**
  * Rules that may only be silenced per file; decided here, never by the request.
  * `no-eval` has kind "eslint" (shared with lint rules, and the kind drives the
@@ -436,7 +433,7 @@ export async function submitFeedbackHandler(
   }
 
   const wantsRule = body.addToRules === true && Boolean(body.rule?.trim());
-  const fromRuleEngine = body.issue.producedBy === RULE_ENGINE_PRODUCER;
+  const fromRuleEngine = body.issue.producedBy === RULE_ENGINE_AGENT;
   const issueFile = body.issue.location?.file || "";
 
   // A rejected deterministic finding is silenced for real: appending text to the
