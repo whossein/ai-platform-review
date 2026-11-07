@@ -109,9 +109,9 @@ describe("contributingComplianceSkill", () => {
       const result = res.value.result as any;
       expect(result.compliant).toBe(true);
       expect(result.missingRequirements).toEqual([]);
-      expect(result.findings.some((f: any) => f.rule === "docs/changelog-entry")).toBe(false);
-      expect(result.findings.some((f: any) => f.rule === "git/conventional-commit")).toBe(true);
-      expect(result.findings.some((f: any) => f.rule === "git/branch-naming")).toBe(true);
+      expect(result.findings.some((f: { rule: string }) => f.rule === "docs/changelog-entry")).toBe(false);
+      expect(result.findings.some((f: { rule: string }) => f.rule === "git/conventional-commit")).toBe(true);
+      expect(result.findings.some((f: { rule: string }) => f.rule === "git/branch-naming")).toBe(true);
     }
   });
 
@@ -143,7 +143,7 @@ describe("contributingComplianceSkill without commit or branch", () => {
     });
     expect(res.ok).toBe(true);
     if (res.ok) {
-      const result = res.value.result as any;
+      const result = res.value.result as { compliant: boolean; score: number; findings: unknown[] };
       expect(result.compliant).toBe(true);
       expect(result.score).toBe(100);
       expect(result.findings).toEqual([]);
@@ -265,9 +265,9 @@ describe("diffAnalysisSkill project_structure bullets", () => {
     const b = await run(rendered);
     expect(a.ok && b.ok).toBe(true);
     if (a.ok && b.ok) {
-      expect((a.value.result as any).linesDeleted).toBe(0);
+      expect((a.value.result as { linesDeleted: number }).linesDeleted).toBe(0);
       // Documents why callers must pass the raw diff, not the rendered prompt.
-      expect((b.value.result as any).linesDeleted).toBe(1);
+      expect((b.value.result as { linesDeleted: number }).linesDeleted).toBe(1);
     }
   });
 });

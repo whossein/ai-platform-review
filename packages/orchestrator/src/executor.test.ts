@@ -102,11 +102,11 @@ describe("MarkdownReporter cost line", () => {
   const metrics = { reviewId: "r", totalExecutionMs: 1, totalPromptTokens: 1, totalCompletionTokens: 1, totalCostUsd: 0.0123, cacheHits: 0, cacheMisses: 0, agents: [] } as never;
   it("marks estimated cost", async () => {
     const r = await new MarkdownReporter().render({ issues: [], summary: "s", metrics: { ...(metrics as object), hasUnpricedModels: true } as never });
-    expect((r as any).value.content).toContain("~$0.0123 (estimated, model not in price table)");
+    expect((r as { value: { content: string } }).value.content).toContain("~$0.0123 (estimated, model not in price table)");
   });
   it("shows plain cost when priced", async () => {
     const r = await new MarkdownReporter().render({ issues: [], summary: "s", metrics });
-    expect((r as any).value.content).toContain("$0.0123 ·");
-    expect((r as any).value.content).not.toContain("estimated");
+    expect((r as { value: { content: string } }).value.content).toContain("$0.0123 ·");
+    expect((r as { value: { content: string } }).value.content).not.toContain("estimated");
   });
 });

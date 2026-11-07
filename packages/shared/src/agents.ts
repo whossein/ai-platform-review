@@ -28,6 +28,18 @@ import type {
   ToolId,
 } from "@ai-review/core";
 
+/** Fields read from the compliance skill result (packages/skills contributing.ts). */
+type ComplianceSkillResult = {
+  readonly compliant: boolean;
+  readonly missingRequirements: readonly string[];
+  readonly findings?: readonly { readonly rule: string; readonly level: string; readonly message: string }[];
+};
+
+/** Fields read from the import skill result (packages/skills imports.ts). */
+type ImportSkillResult = {
+  readonly issues?: readonly { readonly file: string; readonly specifier: string; readonly message: string }[];
+};
+
 /** Shape the mock/real model returns as JSON content. */
 interface RawFinding {
   readonly title: string;
@@ -479,10 +491,10 @@ export function makeSpecialistHandler(
           args: { files: changedFiles, diff },
         });
         if (compRes.ok) {
-          const res = compRes.value.result as any;
+          const res = compRes.value.result as ComplianceSkillResult;
           if (!res.compliant && res.findings?.length) {
             skillInsights.push(
-              `[Contributing Compliance]: ${res.missingRequirements.join(", ")}. Violations: ${res.findings.map((f: any) => `${f.rule} (${f.level}): ${f.message}`).join("; ")}`
+              `[Contributing Compliance]: ${res.missingRequirements.join(", ")}. Violations: ${res.findings.map((f) => `${f.rule} (${f.level}): ${f.message}`).join("; ")}`
             );
           }
         }
@@ -494,10 +506,10 @@ export function makeSpecialistHandler(
           args: { slice: ctx.seedSlice },
         });
         if (impRes.ok) {
-          const res = impRes.value.result as any;
+          const res = impRes.value.result as ImportSkillResult;
           if (res.issues?.length) {
             skillInsights.push(
-              `[Import Inspection]: ${res.issues.map((i: any) => `${i.file} imports "${i.specifier}": ${i.message}`).join("; ")}`
+              `[Import Inspection]: ${res.issues.map((i) => `${i.file} imports "${i.specifier}": ${i.message}`).join("; ")}`
             );
           }
         }
