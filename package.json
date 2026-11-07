@@ -75,16 +75,13 @@
       "package.json"
     ],
     "mac": {
-      "category": "public.app-category.developer-tools",
-      "icon": "icon.png"
+      "category": "public.app-category.developer-tools"
     },
     "win": {
-      "target": "nsis",
-      "icon": "icon.png"
+      "target": "nsis"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "icon.png"
+      "target": "AppImage"
     }
   },
   "release": {

@@ -12,7 +12,6 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    icon: path.join(__dirname, "icon.png"),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -22,11 +21,14 @@ function createWindow() {
   if (app.isPackaged) {
     // In production, spawn the bundled server using Electron's Node environment
     serverProcess = fork(path.join(__dirname, "dist", "server.cjs"), [], {
+      // ./.data lives in the per-user app data dir; the install dir may be read-only.
+      cwd: app.getPath("userData"),
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: "1",
         NODE_ENV: "production",
         PORT: DEFAULT_PORT,
+        WEB_DIST: path.join(__dirname, "apps", "web", "dist"),
       },
     });
 
