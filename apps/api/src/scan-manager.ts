@@ -11,9 +11,11 @@ import { randomBytes, createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Project } from "@ai-review/core";
+import { enforceableSuppressions } from "./handlers/projects.js";
 import {
   DEFAULT_RULES,
   DefaultRuleEngine,
+  ruleLanguageFromEnv,
   MapRuleRegistry,
   ruleFindingToIssue,
   type FileRuleContext,
@@ -314,10 +316,22 @@ export class ScanJobManager {
         abortCheck();
 
         const lineOf = new Map(files.map((f) => [f.path, f.text.split("\n")]));
-        const ctx: FileRuleContext = { repositoryId: "repo.scan", files };
+        const ctx: FileRuleContext = {
+          repositoryId: "repo.scan",
+          files,
+          language: ruleLanguageFromEnv(process.env),
+        };
         const res = await engine.run(ctx);
         if (res.ok) {
           for (const f of res.value.findings) {
+            // Rules a manager silenced via review feedback stay silent in scans too.
+            if (
+              enforceableSuppressions(input.project.suppressedRules).some(
+                (s) => s.ruleId === f.ruleId && (!s.file || s.file === f.location.file),
+              )
+            ) {
+              continue;
+            }
             if (findings.length >= MAX_SCAN_FINDINGS) {
               truncated = true;
               break;

@@ -2,8 +2,8 @@
  * Deterministic Rule Engine (ADR-0006).
  *
  * Runs all registered rules before any AI, aggregates their findings, and
- * reports which concerns were fully covered deterministically so the Planner
- * can skip redundant specialist agents (the core token-efficiency lever).
+ * reports which rule kinds produced findings. Nothing uses that to skip
+ * specialist agents: a rule hit never replaces an AI review.
  */
 
 import type {
@@ -31,8 +31,8 @@ export class MapRuleRegistry implements RuleRegistry {
 
 /**
  * Runs registered rules and folds their output into a `RuleEngineResult`.
- * `coveredConcerns` lists the rule kinds that produced at least one finding —
- * a conservative signal the Planner uses to trim AI work.
+ * `coveredConcerns` lists the rule kinds that produced at least one finding
+ * (informational only).
  */
 export class DefaultRuleEngine implements RuleEngine {
   constructor(private readonly registry: RuleRegistry) {}

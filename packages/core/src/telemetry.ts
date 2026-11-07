@@ -16,6 +16,8 @@ export interface AgentMetrics {
   readonly promptTokens: number;
   readonly completionTokens: number;
   readonly costUsd: number;
+  /** True when the model has no price-table entry and `costUsd` uses a fallback rate. */
+  readonly costEstimated?: boolean;
   readonly cacheHits: number;
   readonly cacheMisses: number;
 }
@@ -27,6 +29,8 @@ export interface ReviewMetrics {
   readonly totalPromptTokens: number;
   readonly totalCompletionTokens: number;
   readonly totalCostUsd: number;
+  /** True when any agent used a model missing from the price table (cost is an estimate). */
+  readonly hasUnpricedModels?: boolean;
   readonly cacheHits: number;
   readonly cacheMisses: number;
   readonly agents: readonly AgentMetrics[];

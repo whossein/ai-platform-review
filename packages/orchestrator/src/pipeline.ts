@@ -126,11 +126,12 @@ export async function runReview(
   }
 
   const contextEngine = new DefaultContextEngine();
-  const envProviders = [
-    ...(extraProviders ?? []),
-    ...providersFromEnv(opts.env ?? {}),
-  ];
-  const router = new CheapestFirstRouter(envProviders);
+  const configuredProviders = providersFromEnv(opts.env ?? {});
+  const envProviders = [...(extraProviders ?? []), ...configuredProviders];
+  // providersFromEnv puts the provider chosen in settings first.
+  const router = new CheapestFirstRouter(envProviders, {
+    defaultProvider: configuredProviders[0]?.id,
+  });
   const routingCtx = {
     requiredCapabilities: [],
     budget: opts.budget ?? {
@@ -158,6 +159,8 @@ export async function runReview(
   const pricing = new Map<string, { inputCostPer1M: number; outputCostPer1M: number }>();
   for (const provider of envProviders) {
     for (const m of provider.models()) {
+      // Same model on two providers: the earlier one is tried first.
+      if (pricing.has(m.id)) continue;
       pricing.set(m.id, {
         inputCostPer1M: m.inputCostPer1M,
         outputCostPer1M: m.outputCostPer1M,

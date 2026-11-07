@@ -15,6 +15,7 @@ import {
   plan,
   DEFAULT_RULES,
   DefaultRuleEngine,
+  ruleLanguageFromEnv,
   MapRuleRegistry,
   ruleFindingToIssue,
   type FileRuleContext,
@@ -26,6 +27,10 @@ import { buildEffectiveEnv } from "./client-env.js";
 export interface EstimateRequest {
   readonly diff: string;
   readonly env?: Record<string, string>;
+  /** Specialist ids the project switched off; they are not counted (security reviewer always is). */
+  readonly disabledAgents?: readonly string[];
+  /** Whether the project has saved guidelines; the Contributing reviewer needs them. */
+  readonly hasProjectInstructions?: boolean;
 }
 
 export interface EstimateResponse {
@@ -38,6 +43,13 @@ export interface EstimateResponse {
   inputCostPer1M: number;
   outputCostPer1M: number;
   estimatedCostUsd: number;
+  /** Model each selected agent is routed to (multi-provider setups only). */
+  agentRouting?: Array<{
+    agent: string;
+    model: string;
+    provider: string;
+    tier: string;
+  }>;
   deterministicIssues?: readonly any[];
 }
 
@@ -45,7 +57,7 @@ export async function estimateHandler(
   request: EstimateRequest,
   agentRegistry: AgentRegistry
 ): Promise<EstimateResponse> {
-  const { diff, env = {} } = request;
+  const { diff, env = {}, disabledAgents = [], hasProjectInstructions } = request;
 
   if (!diff || typeof diff !== "string" || diff.trim().length === 0) {
     throw new Error('field "diff" is required');
@@ -64,6 +76,7 @@ export async function estimateHandler(
     const ruleCtx: FileRuleContext = {
       repositoryId: "repo.local",
       files: files,
+      language: ruleLanguageFromEnv(mergedEnv),
     };
     const ruleRes = await ruleEngine.run(ruleCtx);
 
@@ -76,11 +89,23 @@ export async function estimateHandler(
 
   // Get available agents from the registry
   const agentsList = agentRegistry.list();
-  const reviewPlan = plan({
+  const rawPlan = plan({
     diff: rawDiff,
     agents: agentsList,
-    coveredCategories: [], // Static analysis doesn't replace the need for LLM reviewers
+    ...(hasProjectInstructions !== undefined ? { hasProjectInstructions } : {}),
   });
+  // Same rule as the review: switched-off specialists never run, except the security reviewer.
+  const off = new Set(disabledAgents.filter((id) => id !== "agent.security-reviewer"));
+  const reviewPlan = {
+    ...rawPlan,
+    selected: rawPlan.selected.filter((a) => !off.has(a.id as string)),
+    skipped: [
+      ...rawPlan.skipped,
+      ...rawPlan.selected
+        .filter((a) => off.has(a.id as string))
+        .map((agent) => ({ agent, reason: "switched off for this project" })),
+    ],
+  };
 
   const selectedAgents = reviewPlan.selected.map((s: any) => s.name);
   const skippedAgents = reviewPlan.skipped.map((s: any) => s.agent.name);
@@ -144,7 +169,64 @@ export async function estimateHandler(
   }
 
   let estimatedCostUsd = 0;
-  if (providerValue !== "mock" && providerValue !== "ollama") {
+  let agentRouting: EstimateResponse["agentRouting"];
+
+  // With several providers each agent is priced at the model the router would
+  // really pick for its tier, not at the active provider's rate.
+  const { CheapestFirstRouter, providersFromEnv } = await import(
+    "@ai-review/llm"
+  );
+  const providers = providersFromEnv(mergedEnv);
+  if (providers.length >= 2 && agentCount > 0) {
+    const router = new CheapestFirstRouter(providers, {
+      defaultProvider: providers[0]?.id,
+    });
+    const budget = {
+      tokenBudget: Number.MAX_SAFE_INTEGER,
+      dollarBudget: Number.MAX_SAFE_INTEGER,
+      executionBudgetMs: Number.MAX_SAFE_INTEGER,
+    };
+    const routing: NonNullable<EstimateResponse["agentRouting"]> = [];
+    let inputRateSum = 0;
+    let outputRateSum = 0;
+    let routed = true;
+    for (const agent of reviewPlan.selected) {
+      const res = await router.select({
+        requiredCapabilities: [],
+        budget,
+        ...(agent.preferredTier ? { preferredTier: agent.preferredTier } : {}),
+        ...(agent.preferredModel
+          ? { preferredModel: agent.preferredModel }
+          : {}),
+      });
+      if (!res.ok) {
+        routed = false;
+        break;
+      }
+      const m = res.value;
+      routing.push({
+        agent: agent.name,
+        model: m.id,
+        provider: m.provider,
+        tier: m.tier,
+      });
+      inputRateSum += m.inputCostPer1M;
+      outputRateSum += m.outputCostPer1M;
+      estimatedCostUsd +=
+        (inputTokensPerAgent / 1000000) * m.inputCostPer1M +
+        (outputTokensPerAgent / 1000000) * m.outputCostPer1M;
+    }
+    if (routed) {
+      // Equal token counts per agent, so the token-weighted average is the mean.
+      inputCostPer1M = inputRateSum / agentCount;
+      outputCostPer1M = outputRateSum / agentCount;
+      agentRouting = routing;
+    } else {
+      estimatedCostUsd = 0;
+    }
+  }
+
+  if (!agentRouting && providerValue !== "mock" && providerValue !== "ollama") {
     const inputCost = (totalInputTokens / 1000000) * inputCostPer1M;
     const outputCost = (totalOutputTokens / 1000000) * outputCostPer1M;
     estimatedCostUsd = inputCost + outputCost;
@@ -160,6 +242,7 @@ export async function estimateHandler(
     inputCostPer1M,
     outputCostPer1M,
     estimatedCostUsd: Number(estimatedCostUsd.toFixed(5)),
+    ...(agentRouting ? { agentRouting } : {}),
     ...(deterministicIssues.length > 0 ? { deterministicIssues } : {}),
   };
 }

@@ -55,3 +55,55 @@ describe("instructionsForAgent", () => {
     expect(instructionsForAgent(undefined, "agent.code-reviewer")).toBe("");
   });
 });
+
+describe("topic routing boundaries", () => {
+  const topics = (h: string) => splitInstructionSections(`## ${h}\nx`)[0]!.topics;
+
+  it("does not match topics inside unrelated words", () => {
+    for (const h of ["Formatting", "Platform notes", "Information", "Authors", "Player rules", "Infrastructure", "Network"]) {
+      expect(topics(h)).not.toContain("database");
+      expect(topics(h)).not.toContain("security");
+      expect(topics(h)).not.toContain("architecture");
+    }
+    expect(topics("Information")).not.toContain("style");
+    expect(topics("Network")).not.toContain("dotnet");
+  });
+
+  it("still matches the real topics", () => {
+    expect(topics("ORM usage")).toContain("database");
+    expect(topics("Auth rules")).toContain("security");
+    expect(topics("Authorization")).toContain("security");
+    expect(topics("Formatting")).toContain("style");
+    expect(topics("Layers")).toContain("architecture");
+    expect(topics("Hooks")).toContain("react");
+  });
+
+  it("routes git hooks to governance, not react", () => {
+    expect(topics("Git hooks")).toContain("governance");
+    expect(topics("Git hooks")).not.toContain("react");
+  });
+});
+
+describe("instructionsForAgent with activeAgentIds", () => {
+  const text = "## Security\nsec rule\n\n## Python\npy rule\n\n## General\ng rule";
+
+  it("is unchanged without the parameter", () => {
+    expect(instructionsForAgent(text, "agent.code-reviewer")).not.toContain("sec rule");
+  });
+
+  it("gives the code reviewer sections no running specialist accepts", () => {
+    const out = instructionsForAgent(text, "agent.code-reviewer", ["agent.code-reviewer", "agent.python-reviewer"]);
+    expect(out).toContain("sec rule");
+    expect(out).toContain("py rule");
+    expect(out).toContain("g rule");
+  });
+
+  it("does not duplicate sections a running specialist already covers", () => {
+    const out = instructionsForAgent(text, "agent.code-reviewer", ["agent.code-reviewer", "agent.security-reviewer"]);
+    expect(out).not.toContain("sec rule");
+  });
+
+  it("does not affect other specialists", () => {
+    expect(instructionsForAgent(text, "agent.python-reviewer", ["agent.python-reviewer"])).not.toContain("sec rule");
+  });
+});

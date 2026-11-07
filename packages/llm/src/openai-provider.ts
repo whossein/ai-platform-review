@@ -29,6 +29,7 @@ import type {
   ProviderId,
 } from "@ai-review/core";
 import { resolveProviderPreset } from "./provider-catalog.js";
+import { rateLimitWaitMs } from "./rate-limit.js";
 
 /** One entry per model the caller wants to expose from this provider. */
 export interface OpenAICompatibleModel {
@@ -329,10 +330,27 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
       return {
         ok: false,
-        error: llmError(
-          "llm.http_error",
-          `LLM API (${targetEndpoint}) returned HTTP ${res.status}${authHint}: ${text.slice(0, 300)}`,
-        ),
+        error: {
+          ...llmError(
+            "llm.http_error",
+            `LLM API (${targetEndpoint}) returned HTTP ${res.status}${authHint}: ${text.slice(0, 300)}`,
+          ),
+          details: {
+            status: res.status,
+            // Rate-limit hints let the router wait once, in one place. Header
+            // values only: never the request headers (they carry the key).
+            ...(res.status === 429
+              ? {
+                  ...(rateLimitWaitMs(res.headers) !== undefined
+                    ? { retryAfterMs: rateLimitWaitMs(res.headers) }
+                    : {}),
+                  ...(/insufficient_quota/i.test(text)
+                    ? { quotaExhausted: true }
+                    : {}),
+                }
+              : {}),
+          },
+        },
       };
     }
 
@@ -561,18 +579,30 @@ export function providersFromEnv(
       const providersData = JSON.parse(env["AI_PROVIDERS_JSON"]);
       const providers: OpenAICompatibleProvider[] = [];
 
-      // Sort providers so any matching active provider comes first
-      const sortedProvidersData = [...providersData];
-      if (providerValue) {
-        sortedProvidersData.sort((a, b) => {
-          if (a.id === providerValue || a.provider === providerValue) return -1;
-          if (b.id === providerValue || b.provider === providerValue) return 1;
-          return 0;
-        });
-      }
+      // The active provider leads: by exact id, else the first of its type.
+      const activeId = env["AI_REVIEW_ACTIVE_PROVIDER_ID"] ?? providerValue;
+      const byId = providersData.findIndex(
+        (d: any) => d.id && d.id === activeId,
+      );
+      const leadIndex = Math.max(
+        byId >= 0
+          ? byId
+          : providersData.findIndex((d: any) => d.provider === providerValue),
+        0,
+      );
+      const sortedProvidersData = [
+        providersData[leadIndex],
+        ...providersData.filter((_: unknown, i: number) => i !== leadIndex),
+      ].filter(Boolean);
 
       for (const data of sortedProvidersData) {
         if (data.provider === "mock") continue;
+        // The generic key belongs to the active provider: another entry with no
+        // key of its own must not send it to a different endpoint.
+        const keyEnv =
+          data === providersData[leadIndex]
+            ? env
+            : { ...env, AI_REVIEW_LLM_API_KEY: undefined };
         const preset =
           resolveProviderPreset(data.provider) ??
           resolveProviderPreset("openai")!;
@@ -584,7 +614,7 @@ export function providersFromEnv(
           data.provider,
           preset.envPrefix,
           data.apiKey,
-          env,
+          keyEnv,
         );
         const inputCostPer1M =
           typeof data.inputCostPer1M === "number"

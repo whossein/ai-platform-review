@@ -1,8 +1,9 @@
 /**
  * Contributing & Documentation Compliance Skill (Phase 4, ADR-0003).
  *
- * Verifies release-change documentation, branch naming, commit conventions,
- * changelogs, and contributing guidelines compliance from diff and file lists.
+ * Checks commit message and branch name format when provided. Documentation and
+ * changelog requirements are project-specific, so they are left to the reviewer
+ * (which reads the project's own guidelines) rather than assumed here.
  */
 
 import type {
@@ -29,7 +30,7 @@ export const contributingComplianceSkill: Skill = {
     id: "skill.governance.contributing-compliance" as SkillId,
     name: "Contributing & Docs Compliance",
     description:
-      "Verifies release-change documentation, branch naming, commit conventions, and contributing guidelines adherence.",
+      "Checks commit message and branch name format when they are provided. Whether docs or a changelog are required is project-specific and left to the reviewer.",
     inputSchema: {
       type: "object",
       properties: {
@@ -50,10 +51,6 @@ export const contributingComplianceSkill: Skill = {
     },
   },
   async execute(input: SkillInput): AsyncResult<SkillOutput> {
-    const diff = String(input.args.diff ?? "");
-    const files = Array.isArray(input.args.files)
-      ? (input.args.files as string[])
-      : [];
     const branchName = input.args.branchName
       ? String(input.args.branchName)
       : undefined;
@@ -64,35 +61,7 @@ export const contributingComplianceSkill: Skill = {
     const missing: string[] = [];
     const findings: ContributingComplianceResult["findings"] = [];
 
-    // 1. Check for changelog or documentation updates on substantive changes
-    const isCodeChange = files.some(
-      (f) =>
-        f.endsWith(".ts") ||
-        f.endsWith(".tsx") ||
-        f.endsWith(".js") ||
-        f.endsWith(".jsx") ||
-        f.endsWith(".py") ||
-        f.endsWith(".go")
-    );
-
-    const hasDocUpdate = files.some(
-      (f) =>
-        f.toLowerCase().includes("readme") ||
-        f.toLowerCase().includes("changelog") ||
-        f.toLowerCase().includes("docs/") ||
-        f.toLowerCase().includes(".changeset")
-    );
-
-    if (isCodeChange && !hasDocUpdate && !diff.includes("CHANGELOG")) {
-      missing.push("documentation or changelog update");
-      findings.push({
-        rule: "docs/changelog-entry",
-        level: "warning",
-        message: "Code changes detected without corresponding documentation or CHANGELOG entry.",
-      });
-    }
-
-    // 2. Validate conventional commit format if provided
+    // 1. Validate conventional commit format if provided
     if (commitMessage) {
       const conventionalPattern =
         /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9_-]+\))?:\s.+/i;
@@ -105,7 +74,7 @@ export const contributingComplianceSkill: Skill = {
       }
     }
 
-    // 3. Validate branch naming convention if provided
+    // 2. Validate branch naming convention if provided
     if (branchName) {
       const validBranchPattern =
         /^(feature|feat|fix|bugfix|hotfix|chore|docs|release|refactor)\/[a-z0-9_-]+$/i;

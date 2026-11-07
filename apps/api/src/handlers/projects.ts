@@ -7,8 +7,9 @@
 
 import type { ProjectStore } from "../project-store.js";
 import type { SecurityContext } from "../security/security-context.js";
-import type { SafeUser, ProjectId, IsoTimestamp } from "@ai-review/core";
+import type { SafeUser, ProjectId, IsoTimestamp, RuleSuppression } from "@ai-review/core";
 import { fetchChangeRequestMeta, fetchChangeRequestCommitMessages, resolveDiffInput } from "@ai-review/git";
+import { DEFAULT_RULES, RULE_ENGINE_AGENT } from "@ai-review/orchestrator";
 import { providersFromEnv } from "@ai-review/llm";
 import { estimateAiUsage, type AiJudge } from "../ai-usage.js";
 import { buildEffectiveEnv } from "./client-env.js";
@@ -328,6 +329,72 @@ export async function deleteProjectHandler(
   return { success: true };
 }
 
+/**
+ * Rules that may only be silenced per file; decided here, never by the request.
+ * `no-eval` has kind "eslint" (shared with lint rules, and the kind drives the
+ * finding category and critic merging), so it is listed explicitly.
+ */
+const EXTRA_SECURITY_RULE_IDS = ["no-eval"];
+export const SECURITY_RULE_IDS: ReadonlySet<string> = new Set([
+  ...DEFAULT_RULES.filter((r) =>
+    ["security", "secret_detection", "sql_injection", "cors_misconfig"].includes(r.kind),
+  ).map((r) => r.id),
+  ...EXTRA_SECURITY_RULE_IDS,
+]);
+
+/**
+ * Suppressions the review/scan engines may honour: project-wide entries for
+ * security rules (e.g. stored before a rule was classified as security) are
+ * dropped; file-scoped ones stay.
+ */
+export function enforceableSuppressions(
+  suppressed: readonly RuleSuppression[] | undefined,
+): RuleSuppression[] {
+  return (suppressed ?? []).filter((s) => s.file !== undefined || !SECURITY_RULE_IDS.has(s.ruleId));
+}
+
+/** Re-enables a rule a manager silenced via feedback. Manager-only. */
+export async function removeSuppressedRuleHandler(
+  projectStore: ProjectStore,
+  projectId: string,
+  body: { ruleId?: string; file?: string },
+  security?: SecurityContext,
+  currentUser?: SafeUser | null
+) {
+  const fail = (status: number, message: string) => {
+    const error = new Error(message);
+    (error as any).status = status;
+    return error;
+  };
+  if (!body?.ruleId || typeof body.ruleId !== "string") throw fail(400, "Field 'ruleId' is required");
+  if (security && currentUser) {
+    const allowed = await security.canAccessProject(currentUser, projectId as ProjectId, "project:manage");
+    if (!allowed) throw fail(403, "Access denied: You do not have permission to manage this project.");
+  }
+  let project;
+  try {
+    project = await projectStore.removeRuleSuppression(
+      projectId,
+      body.ruleId,
+      typeof body.file === "string" && body.file ? body.file : undefined,
+    );
+  } catch (err: any) {
+    throw fail(404, err.message);
+  }
+  if (security && currentUser) {
+    await security.auditStore.log({
+      actorUserId: currentUser.id,
+      actorName: currentUser.name,
+      actorEmail: currentUser.email,
+      action: "PROJECT_UPDATED",
+      entityType: "project",
+      entityId: projectId,
+      metadata: { unsuppressedRule: body.ruleId, ...(body.file ? { file: body.file } : {}) },
+    });
+  }
+  return { project };
+}
+
 export async function submitFeedbackHandler(
   projectStore: ProjectStore,
   projectId: string,
@@ -341,6 +408,7 @@ export async function submitFeedbackHandler(
       title?: string;
       category?: string;
       severity?: string;
+      producedBy?: string;
       location?: { file?: string };
     };
   },
@@ -365,7 +433,28 @@ export async function submitFeedbackHandler(
   }
 
   const wantsRule = body.addToRules === true && Boolean(body.rule?.trim());
-  const rule = wantsRule && canManage ? body.rule!.slice(0, 500) : undefined;
+  const fromRuleEngine = body.issue.producedBy === RULE_ENGINE_AGENT;
+  const issueFile = body.issue.location?.file || "";
+
+  // A rejected deterministic finding is silenced for real: appending text to the
+  // AI guidelines would never stop the regex rule firing. Security rules are
+  // always file-scoped so one false positive cannot disable secret or
+  // prompt-injection detection for the whole project.
+  let suppression: RuleSuppression | undefined;
+  let suppressDenied: string | undefined;
+  if (wantsRule && canManage && fromRuleEngine) {
+    const security_ =
+      body.issue.category === "security" || SECURITY_RULE_IDS.has(body.issue.title);
+    if (security_ && !issueFile) {
+      suppressDenied = "Feedback saved, but this security rule can only be silenced for a specific file.";
+    } else {
+      suppression = {
+        ruleId: body.issue.title.slice(0, 200),
+        ...(security_ ? { file: issueFile } : {}),
+      };
+    }
+  }
+  const rule = wantsRule && canManage && !fromRuleEngine ? body.rule!.slice(0, 500) : undefined;
 
   const { record, project } = await projectStore.addFeedback(
     projectId,
@@ -380,12 +469,26 @@ export async function submitFeedbackHandler(
       ...(currentUser ? { author: currentUser.name } : {}),
     },
     rule,
+    suppression,
   );
+
+  if (suppression && security && currentUser) {
+    await security.auditStore.log({
+      actorUserId: currentUser.id,
+      actorName: currentUser.name,
+      actorEmail: currentUser.email,
+      action: "PROJECT_UPDATED",
+      entityType: "project",
+      entityId: projectId,
+      metadata: { suppressedRule: suppression.ruleId, ...(suppression.file ? { file: suppression.file } : {}) },
+    });
+  }
 
   return {
     record,
     project,
     ruleAdded: record.ruleAdded,
+    ...(suppressDenied ? { ruleDenied: suppressDenied } : {}),
     ...(wantsRule && !canManage
       ? { ruleDenied: "Feedback saved, but only project managers can change the project rules." }
       : {}),

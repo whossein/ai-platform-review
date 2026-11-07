@@ -18,30 +18,33 @@ Paste a diff or an MR/PR link. The platform runs free deterministic checks first
 
 **Review pipeline**
 - 🤖 **14 specialist reviewers:** React, Next.js, React Native, Angular, Vue, TypeScript, .NET/C#, Python, Android, iOS, Security, Performance, general code quality, and contributing/governance.
-- ⚡ **34 built-in rules that cost nothing.** They run before any AI call and only on added lines: hardcoded secrets, SQL injection, wildcard CORS, disabled TLS checks, `eval`, prompt-injection attempts, plus language rules for Python, Java, C#, PHP, Go, Kotlin, Swift, shell and Dockerfiles. Tick **Rules only (no AI)** for an instant, free review.
+- ⚡ **35 built-in rules that cost nothing.** They run before any AI call and only on added lines: hardcoded secrets, SQL injection, wildcard CORS, disabled TLS checks, `eval`, `child_process.exec` with a built-up command, prompt-injection attempts, plus language rules for Python, Java, C#, PHP, Go, Kotlin, Swift, shell and Dockerfiles. Tick **Rules only (no AI)** for an instant, free review. Rule messages follow the comment language (English or Persian).
 - 🎯 **Smart routing:** a planner reads the changed files and wakes only the relevant specialists.
 - 🛡️ **Hardened prompts:** the diff is treated as data, never as instructions. Docs changed in the MR (`AGENTS.md`, `.cursorrules`…) are reviewed, not obeyed, and injection attempts are reported as critical findings.
+- 🧹 **One defect, one finding:** the critic merges reports of the same problem from different specialists. Optionally (`AI_REVIEW_LLM_DEDUP=1`) one cheap AI call also merges same-line findings that are worded differently.
 - 🧠 **Index-aware context:** each project keeps a per-branch structural index (exports, imports, dependants), so reviewers see which untouched files a change can break.
 
 **Inputs and outputs**
 - 📥 Review a raw diff, a GitLab MR or GitHub PR URL, a ZIP, a local path, or a repository.
-- 💬 Publish accepted findings to GitLab as inline discussions plus a summary. GitHub PRs can be reviewed, but publishing back is GitLab-only for now.
+- 💬 Publish accepted findings to GitLab MRs or GitHub PRs as inline comments plus a summary (set `GITHUB_TOKEN` / `GITLAB_TOKEN` in Settings).
 - 🩹 **AI sample fix:** ask for a corrected snippet on a finding and, for GitLab MRs, commit it to the source branch after confirmation.
 - 🔎 **Project scan:** run the built-in rules over every file of a branch and get a filterable report.
 
 **Teams and projects**
 - 📁 **Projects** with per-project guidelines. Guidelines are split by heading so each specialist only receives the sections that concern it.
+- 🧩 **Per-project review settings (Skills & Rules tab):** managers switch specialists and rules on or off and give each specialist extra instructions. The Security reviewer and security rules can't be switched off for a whole project. Rejecting a rule finding can silence that rule.
 - 🔐 **Users and roles:** first-run admin setup, system roles (`ADMIN`, `MEMBER`) and project roles (`OWNER`, `MANAGER`, `REVIEWER`, `VIEWER`), rate-limited login and an append-only audit log.
 - 🔑 **Encrypted Git tokens:** personal GitLab/GitHub tokens are stored with AES-256-GCM and never returned by the API.
 - 📊 **MR grades and developers:** reviewers grade each MR 0-10 (the system suggests a grade), see per-developer averages, and can estimate how likely an MR was AI-written.
 
 **Cost control**
 - 🔌 **Any LLM provider:** Gemini, OpenAI, Anthropic, OpenRouter, DeepSeek, Azure OpenAI, Avalai, Ollama (local), or any OpenAI-compatible gateway. With no key configured it falls back to an offline mock.
-- 💰 **Hard budgets** on tokens, dollars and wall-clock time per review, with cheapest-capable model routing, provider prompt caching and a response cache.
+- 🔀 **Several providers at once:** each specialist asks for a model tier (`cheap`, `mid`, `premium`), the active default is honored, and a failing provider hands the call to the next one. On HTTP 429 the review waits and retries instead of failing.
+- 💰 **Hard budgets** on tokens, dollars and wall-clock time per review, with cheapest-capable model routing, provider prompt caching and a response cache. Models missing from the price table are charged at a cautious fallback rate and the cost is marked as estimated. The cost estimate leaves out specialists a project switched off.
 
 **Also included**
 - 🖥️ Electron desktop app.
-- 📐 An offline evaluation harness (`@ai-review/eval`) that scores reviewer precision and recall against ground-truth datasets.
+- 📐 An evaluation harness (`@ai-review/eval`) that scores reviewer precision and recall against ground-truth cases, including real open-source bug fixes: `npm run eval:rules` (offline) and `npm run eval:live` (uses your provider).
 
 Release notes are in [GitHub Releases](https://github.com/whossein/ai-platform-review/releases) (older history in [CHANGELOG.md](CHANGELOG.md)).
 
@@ -88,6 +91,8 @@ Forgot the admin password? Stop the server and run `npm run reset-password -- <e
 | `AI_REVIEW_TOKEN_BUDGET` / `_DOLLAR_BUDGET` / `_EXECUTION_BUDGET_MS` | Per-review limits | `2000000` / `25` / `600000` |
 | `AI_REVIEW_LLM_CACHE` | Set `0` to disable the AI response cache | on |
 | `AI_REVIEW_CACHE_WARMUP` | Set `0` to skip the prompt-cache warm-up call | on |
+| `AI_REVIEW_LLM_MAX_CONCURRENCY` | Parallel requests per provider | `4` |
+| `AI_REVIEW_LLM_DEDUP` | Set `1` to merge same-line duplicate findings with one cheap AI call | off |
 | `AI_REVIEW_GOVERNANCE_RULES` | Set `1` to also check branch names and MR titles | off |
 | `GITLAB_TOKEN` / `GITHUB_TOKEN` | Server-level Git tokens (per-user tokens in the app are preferred) | none |
 | `GITLAB_BASE_URL` | Self-hosted GitLab URL | `https://gitlab.com` |
@@ -108,6 +113,9 @@ All runtime data (users, projects, encrypted tokens, review memory) lives in `./
 | `npm run e2e` | End-to-end smoke test (after `npm run build`) |
 | `npm run reset-password` | List users, or reset one user's password |
 | `npm run eval:mock` | Run the evaluation harness on synthetic cases |
+| `npm run eval:rules` | Score the built-in rules on the eval cases (no AI) |
+| `npm run eval:live` | Score a full review with your provider (`--pace-ms <n>` for rate-limited keys) |
+| `npm run repo:sync` | Print or `-- --apply` the GitHub description and topics; `-- --check` fails if docs show wrong counts |
 | `npm run desktop` | Run the server and the Electron desktop app |
 | `npm run build:desktop` | Package the desktop app for macOS, Windows, or Linux |
 
@@ -151,26 +159,29 @@ main.cjs             Electron main process
 
 **ریویو**
 - 🤖 **۱۴ تا ریویوکننده‌ی متخصص** داره: برای React، Next.js، React Native، Angular، Vue، TypeScript، ‏.NET/C#‏، Python، Android، iOS، امنیت، پرفورمنس، کیفیت کلی کد و قوانین تیم.
-- ⚡ **۳۴ تا قانون رایگان** قبل از هوش مصنوعی اجرا می‌شن و فقط خط‌های جدید رو می‌بینن؛ مثلاً کلید API لو رفته، SQL Injection، ‏`eval`، یا کامنتی که بخواد هوش مصنوعی رو گول بزنه. اگه فقط همینا رو می‌خوای، تیک **Rules only (no AI)** رو بزن: فوریه و هیچ هزینه‌ای نداره.
+- ⚡ **۳۵ تا قانون رایگان** قبل از هوش مصنوعی اجرا می‌شن و فقط خط‌های جدید رو می‌بینن؛ مثلاً کلید API لو رفته، SQL Injection، ‏`eval`، یا کامنتی که بخواد هوش مصنوعی رو گول بزنه. اگه فقط همینا رو می‌خوای، تیک **Rules only (no AI)** رو بزن: فوریه و هیچ هزینه‌ای نداره. پیام این قانون‌ها هم مثل کامنت‌ها فارسی یا انگلیسیه.
 - 🎯 فقط ریویوکننده‌هایی که لازمن صدا زده می‌شن، پس هم سریع‌تره هم ارزون‌تر.
 - 🛡️ اگه کسی توی کد یا مستندات MR بخواد به هوش مصنوعی دستور بده، اون دستور اجرا نمی‌شه و به‌عنوان یه مشکل جدی گزارش می‌شه.
+- 🧹 اگه چندتا ریویوکننده یه مشکل رو گزارش کنن، یه بار نشونت می‌ده. اگه `AI_REVIEW_LLM_DEDUP=1` رو بذاری، یه درخواست ارزون به هوش مصنوعی هم یافته‌هایی رو که توی یه خط هستن ولی جور دیگه نوشته شدن یکی می‌کنه.
 - 🧠 ساختار پروژه‌ت رو می‌شناسه (کدوم فایل کدوم رو import کرده)، پس می‌فهمه تغییرت ممکنه کدوم فایل‌های دیگه رو خراب کنه.
 
 **ورودی و خروجی**
 - 📥 می‌تونی Diff، لینک MR گیت‌لب، لینک PR گیت‌هاب، فایل ZIP، یه پوشه روی سیستمت یا یه مخزن بهش بدی.
-- 💬 یافته‌هایی که تأیید کردی رو مستقیم روی MR گیت‌لب کامنت می‌کنه. برای گیت‌هاب فعلاً فقط ریویو می‌کنه و کامنت نمی‌ذاره.
+- 💬 یافته‌هایی که تأیید کردی رو مستقیم روی MR گیت‌لب یا PR گیت‌هاب کامنت می‌کنه. فقط کافیه توکن گیت‌هاب یا گیت‌لب رو توی تنظیمات بذاری.
 - 🩹 برای هر یافته می‌تونی ازش بخوای یه نسخه‌ی اصلاح‌شده‌ی کد پیشنهاد بده و اگه خواستی، با تأیید خودت مستقیم روی برنچ MR کامیتش کنه.
 - 🔎 می‌تونی کل یه برنچ رو با همون قانون‌های رایگان اسکن کنی.
 
 **تیم و پروژه‌ها**
 - 📁 هر پروژه می‌تونه راهنمای مخصوص خودش رو داشته باشه و هر ریویوکننده فقط بخشی رو می‌گیره که به کارش میاد.
+- 🧩 توی تب **Skills & Rules** مدیر پروژه می‌تونه ریویوکننده‌ها و قانون‌ها رو برای پروژه‌ش روشن و خاموش کنه و به هر ریویوکننده دستور اضافه بده. ریویوکننده‌ی امنیت و قانون‌های امنیتی برای کل پروژه خاموش نمی‌شن.
 - 🔐 کاربر و نقش داره: بار اول یه حساب مدیر می‌سازی، بعد برای هر نفر و هر پروژه سطح دسترسی تعیین می‌کنی.
 - 🔑 توکن‌های گیت‌لب و گیت‌هابت رمزنگاری‌شده ذخیره می‌شن و هیچ‌وقت از API بیرون نمی‌آن.
 - 📊 می‌تونی به هر MR از ۰ تا ۱۰ نمره بدی (خود سیستم هم یه نمره پیشنهاد می‌ده)، میانگین هر توسعه‌دهنده رو ببینی و حتی تخمین بزنی MR با هوش مصنوعی نوشته شده یا نه.
 
 **هزینه**
 - 🔌 با هر سرویسی کار می‌کنه: Gemini، OpenAI، Anthropic، OpenRouter، DeepSeek، Azure، آوال‌ای (Avalai)، Ollama روی سیستم خودت، یا هر Gateway سازگار با OpenAI.
-- 💰 برای هر ریویو سقف توکن، دلار و زمان می‌ذاری و خودش ارزون‌ترین مدلی رو انتخاب می‌کنه که از پس کار برمیاد.
+- 🔀 می‌تونی چندتا سرویس رو با هم داشته باشی. هر ریویوکننده مدل مناسب خودش رو می‌گیره و اگه یه سرویس وسط کار خطا بده، کار می‌ره سراغ بعدی. اگه سرویس بگه «زیادی درخواست دادی»، صبر می‌کنه و دوباره امتحان می‌کنه.
+- 💰 برای هر ریویو سقف توکن، دلار و زمان می‌ذاری و خودش ارزون‌ترین مدلی رو انتخاب می‌کنه که از پس کار برمیاد. اگه قیمت یه مدل معلوم نباشه، با یه نرخ محتاطانه حساب می‌شه و هزینه «تخمینی» نوشته می‌شه.
 
 تغییرات هر نسخه توی [GitHub Releases](https://github.com/whossein/ai-platform-review/releases) هست (تاریخچه‌ی قدیمی‌تر توی [CHANGELOG.md](CHANGELOG.md)).
 

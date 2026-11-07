@@ -2,6 +2,7 @@ import type { IssueCategory, Severity } from "@ai-review/core";
 
 export type BenchmarkOrigin =
   | "synthetic_unit"
+  | "real_oss"
   | "historical_mr"
   | "human_verified_feed";
 
@@ -28,6 +29,14 @@ export interface AntiFinding {
   explanation: string;
 }
 
+/** Provenance of a case built from a real public bug-fix commit. */
+export interface BenchmarkSource {
+  repo: string;
+  commit: string;
+  license: string;
+  note?: string;
+}
+
 export interface BenchmarkCase {
   id: string;
   name: string;
@@ -35,6 +44,8 @@ export interface BenchmarkCase {
   status: GroundTruthStatus;
   datasetVersion: string;
   annotationVersion: string;
+  /** Set for origin "real_oss": where the code was taken from. */
+  source?: BenchmarkSource;
   tags: string[];
   inputFiles: Array<{
     path: string;

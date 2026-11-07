@@ -515,7 +515,7 @@ export function ReviewView({
         inputMode === "pr" ? prUrl.trim() : undefined,
       );
 
-      const res = await requestEstimate(diffToEstimate, envOverrides);
+      const res = await requestEstimate(diffToEstimate, envOverrides, associatedProject?.id);
       // Keep the user's manual unticks across a re-estimate: only specialists
       // that were already listed and are now unticked stay off.
       const known = new Set([
@@ -2555,8 +2555,8 @@ export function ReviewView({
                       }
                       language={language}
                       projectId={associatedProject?.id}
-                      onRulesUpdated={(ci) =>
-                        setAssociatedProject((p) => (p ? { ...p, customInstructions: ci } : p))
+                      onRulesUpdated={(update) =>
+                        setAssociatedProject((p) => (p ? { ...p, ...update } : p))
                       }
                       fileUrl={codeLinks[`${issue.location.file}|${issue.location.line ?? ""}`]}
                       snippetError={snippetErrors[issue.location.file] ?? snippetErrors["*"]}

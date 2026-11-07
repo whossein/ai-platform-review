@@ -8,7 +8,7 @@ import {
 } from "@ai-review/shared";
 import { MapAgentRegistry } from "@ai-review/agent-runtime";
 import { PersistentMemoryStore } from "@ai-review/memory";
-import type { GitCredentialProvider, ProjectId } from "@ai-review/core";
+import type { GitCredentialProvider, Project, ProjectId, ProjectMergeRequest, SafeUser } from "@ai-review/core";
 import {
   buildEffectiveEnv,
   estimateHandler,
@@ -29,6 +29,9 @@ import {
   findOrCreateProjectHandler,
   recordReviewHandler,
   submitFeedbackHandler,
+  removeSuppressedRuleHandler,
+  reviewCatalogHandler,
+  updateReviewConfigHandler,
   deleteProjectHandler,
   attachMergeRequestMeta,
   gradeMergeRequestHandler,
@@ -74,6 +77,20 @@ import { ProjectIndexStore, IndexJobManager } from "@ai-review/project-index";
 import { ProjectStore, instructionsForPrompt } from "./apps/api/src/project-store.js";
 import { ScanStore, ScanJobManager } from "./apps/api/src/scan-manager.js";
 import { SecurityContext } from "./apps/api/src/security/index.js";
+
+/** Request with the signed-in user attached by requireAuth (or populateAuth on optional routes). */
+type AuthedRequest = express.Request & { user: SafeUser; session: unknown };
+
+const getUser = (req: express.Request): SafeUser => (req as AuthedRequest).user;
+
+/** Fields the route handlers read from a thrown error. */
+interface HttpError {
+  status?: number;
+  code?: string;
+  message?: string;
+  existingProject?: unknown;
+  latencyMs?: number;
+}
 
 loadDotEnv();
 
@@ -139,8 +156,9 @@ async function startServer() {
     try {
       const auth = await security.authenticateRequest(req);
       if (auth) {
-        (req as any).user = auth.user;
-        (req as any).session = auth.session;
+        const authed = req as AuthedRequest;
+        authed.user = auth.user;
+        authed.session = auth.session;
       }
     } catch {
       // Ignored for optional auth
@@ -164,7 +182,8 @@ async function startServer() {
     try {
       const result = await getAuthStatusHandler(security, req);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to check auth status" });
     }
   });
@@ -174,7 +193,8 @@ async function startServer() {
       const ip = req.ip || req.socket.remoteAddress || "unknown";
       const result = await setupFirstAdminHandler(security, req.body || {}, ip);
       res.status(201).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({
         error: err.message || "First-run setup failed",
         code: err.code,
@@ -188,7 +208,8 @@ async function startServer() {
       const userAgent = req.headers["user-agent"] || "";
       const result = await loginHandler(security, req.body || {}, ip, userAgent);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 401).json({
         error: err.message || "Login failed",
         code: err.code,
@@ -199,32 +220,35 @@ async function startServer() {
   app.post("/api/auth/logout", populateAuth, async (req, res) => {
     try {
       const token = security.extractToken(req);
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await logoutHandler(security, token, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Logout failed" });
     }
   });
 
   app.get("/api/auth/me", requireAuth, (req, res) => {
-    res.status(200).json({ user: (req as any).user });
+    res.status(200).json({ user: getUser(req) });
   });
 
   app.patch("/api/auth/me", requireAuth, async (req, res) => {
     try {
-      const updated = await updateProfileHandler(security, (req as any).user, req.body || {});
+      const updated = await updateProfileHandler(security, getUser(req), req.body || {});
       res.status(200).json({ user: updated });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to update profile" });
     }
   });
 
   app.post("/api/auth/change-password", requireAuth, async (req, res) => {
     try {
-      const result = await changePasswordHandler(security, (req as any).user, req.body || {});
+      const result = await changePasswordHandler(security, getUser(req), req.body || {});
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 400).json({
         error: err.message || "Failed to change password",
         code: err.code,
@@ -235,18 +259,20 @@ async function startServer() {
   app.get("/api/auth/sessions", requireAuth, async (req, res) => {
     try {
       const token = security.extractToken(req) || undefined;
-      const sessions = await listSessionsHandler(security, (req as any).user, token);
+      const sessions = await listSessionsHandler(security, getUser(req), token);
       res.status(200).json({ sessions });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to list sessions" });
     }
   });
 
   app.delete("/api/auth/sessions/:id", requireAuth, async (req, res) => {
     try {
-      const result = await revokeSessionHandler(security, (req as any).user, req.params.id);
+      const result = await revokeSessionHandler(security, getUser(req), req.params.id);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to revoke session" });
     }
   });
@@ -259,16 +285,18 @@ async function startServer() {
     try {
       const users = await listUsersHandler(security);
       res.status(200).json({ users });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to list users" });
     }
   });
 
   app.post("/api/users", requireAdmin, async (req, res) => {
     try {
-      const created = await createUserHandler(security, (req as any).user, req.body || {});
+      const created = await createUserHandler(security, getUser(req), req.body || {});
       res.status(201).json({ user: created });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({
         error: err.message || "Failed to create user",
         code: err.code,
@@ -280,16 +308,18 @@ async function startServer() {
     try {
       const user = await getUserHandler(security, req.params.id);
       res.status(200).json({ user });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 404).json({ error: err.message || "User not found" });
     }
   });
 
   app.patch("/api/users/:id", requireAdmin, async (req, res) => {
     try {
-      const updated = await updateUserHandler(security, (req as any).user, req.params.id, req.body || {});
+      const updated = await updateUserHandler(security, getUser(req), req.params.id, req.body || {});
       res.status(200).json({ user: updated });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to update user" });
     }
   });
@@ -298,12 +328,13 @@ async function startServer() {
     try {
       const updated = await setUserStatusHandler(
         security,
-        (req as any).user,
+        getUser(req),
         req.params.id,
         req.body?.status
       );
       res.status(200).json({ user: updated });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 400).json({
         error: err.message || "Failed to change user status",
         code: err.code,
@@ -315,12 +346,13 @@ async function startServer() {
     try {
       const updated = await setUserRoleHandler(
         security,
-        (req as any).user,
+        getUser(req),
         req.params.id,
         req.body?.role
       );
       res.status(200).json({ user: updated });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 400).json({
         error: err.message || "Failed to change user role",
         code: err.code,
@@ -332,21 +364,23 @@ async function startServer() {
     try {
       const result = await resetUserPasswordHandler(
         security,
-        (req as any).user,
+        getUser(req),
         req.params.id,
         req.body || {}
       );
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 400).json({ error: err.message || "Failed to reset password" });
     }
   });
 
   app.delete("/api/users/:id", requireAdmin, async (req, res) => {
     try {
-      const result = await deleteUserHandler(security, (req as any).user, req.params.id);
+      const result = await deleteUserHandler(security, getUser(req), req.params.id);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 400).json({
         error: err.message || "Failed to delete user",
         code: err.code,
@@ -360,9 +394,10 @@ async function startServer() {
 
   app.get("/api/me/git-credentials", requireAuth, async (req, res) => {
     try {
-      const credentials = await getGitCredentialsHandler(security, (req as any).user);
+      const credentials = await getGitCredentialsHandler(security, getUser(req));
       res.status(200).json({ credentials });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to list credentials" });
     }
   });
@@ -375,12 +410,13 @@ async function startServer() {
       }
       const summary = await setGitCredentialHandler(
         security,
-        (req as any).user,
+        getUser(req),
         provider,
         req.body || {}
       );
       res.status(200).json({ credential: summary });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to save credential" });
     }
   });
@@ -390,11 +426,12 @@ async function startServer() {
       const provider = req.params.provider.toLowerCase() as GitCredentialProvider;
       const result = await deleteGitCredentialHandler(
         security,
-        (req as any).user,
+        getUser(req),
         provider
       );
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to revoke credential" });
     }
   });
@@ -407,7 +444,8 @@ async function startServer() {
     try {
       const result = await getAuditLogsHandler(security, req.query);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to fetch audit logs" });
     }
   });
@@ -416,32 +454,40 @@ async function startServer() {
   // PROJECT REGISTRY & TEAM MEMBERS ROUTES
   // ==========================================
 
+  // What a review is made of: the AI specialists and deterministic rules that really exist
+  app.get("/api/review-catalog", requireAuth, (_req, res) => {
+    res.status(200).json(reviewCatalogHandler());
+  });
+
   app.get("/api/projects", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await listProjectsHandler(projectStore, security, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ error: err.message || "Failed to list projects" });
     }
   });
 
   app.get("/api/projects/:id", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await getProjectDetailsHandler(projectStore, req.params.id, security, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to fetch project" });
     }
   });
 
   app.post("/api/projects", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await createProjectHandler(projectStore, req.body || {}, security, user);
       res.status(201).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({
         error: err.message || "Failed to create project",
         code: err.code,
@@ -452,7 +498,7 @@ async function startServer() {
 
   app.post("/api/projects/find-or-create", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await findOrCreateProjectHandler(projectStore, req.body || {}, security, user);
 
       // Fetch the MR author with the caller's Git token (request env first, then stored credential)
@@ -477,46 +523,50 @@ async function startServer() {
         if (mr) result.mergeRequest = mr;
       }
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 400).json({ error: err.message || "Failed to resolve project" });
     }
   });
 
   app.post("/api/projects/:id/reviews", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await recordReviewHandler(projectStore, req.params.id, req.body || {}, security, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to record review" });
     }
   });
 
   app.put("/api/projects/:id/merge-requests/:mrId/grade", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await gradeMergeRequestHandler(
         projectStore, req.params.id, req.params.mrId, req.body || {}, security, user
       );
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to grade merge request" });
     }
   });
 
   app.delete("/api/projects/:id/merge-requests/:mrId/grade", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await clearMergeRequestGradeHandler(projectStore, req.params.id, req.params.mrId, security, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to clear grade" });
     }
   });
 
   app.post("/api/projects/:id/merge-requests/:mrId/ai-usage", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const env: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.body?.env || {})) {
         if (typeof v === "string" && v) env[k] = v;
@@ -536,43 +586,69 @@ async function startServer() {
       res.status(200).json(
         await estimateMergeRequestAiUsageHandler(projectStore, req.params.id, req.params.mrId, env, security, user)
       );
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to estimate AI usage" });
     }
   });
 
   app.get("/api/projects/:id/developers", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       res.status(200).json(await listProjectDevelopersHandler(projectStore, req.params.id, security, user));
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to list developers" });
     }
   });
 
   app.post("/api/projects/:id/feedback", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await submitFeedbackHandler(projectStore, req.params.id, req.body || {}, security, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to save feedback" });
+    }
+  });
+
+  app.delete("/api/projects/:id/suppressed-rules", requireAuth, async (req, res) => {
+    try {
+      const user = getUser(req);
+      const result = await removeSuppressedRuleHandler(projectStore, req.params.id, req.body || {}, security, user);
+      res.status(200).json(result);
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
+      res.status(err.status || 500).json({ error: err.message || "Failed to remove suppressed rule" });
+    }
+  });
+
+  app.put("/api/projects/:id/review-config", requireAuth, async (req, res) => {
+    try {
+      const user = getUser(req);
+      const result = await updateReviewConfigHandler(projectStore, req.params.id, req.body || {}, security, user);
+      res.status(200).json(result);
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
+      res.status(err.status || 500).json({ error: err.message || "Failed to save review settings" });
     }
   });
 
   app.patch("/api/projects/:id", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await updateProjectHandler(projectStore, req.params.id, req.body || {}, security, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to update project" });
     }
   });
 
   app.post("/api/projects/:id/instructions/optimize", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const env: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.body?.env || {})) {
         if (typeof v === "string" && v) env[k] = v;
@@ -580,31 +656,34 @@ async function startServer() {
       res.status(200).json(
         await optimizeProjectInstructionsHandler(projectStore, req.params.id, { text: req.body?.text, english: req.body?.english, env }, security, user)
       );
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to optimize guidelines" });
     }
   });
 
   app.put("/api/projects/:id", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await updateProjectHandler(projectStore, req.params.id, req.body || {}, security, user);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to update project" });
     }
   });
 
   app.delete("/api/projects/:id", requireAuth, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = getUser(req);
       const result = await deleteProjectHandler(projectStore, req.params.id, security, user);
       indexJobs.cancelJob(req.params.id);
       scanJobs.cancelJob(req.params.id);
       await indexStore.deleteProjectIndex(req.params.id).catch(() => undefined);
       await scanStore.deleteProject(req.params.id).catch(() => undefined);
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to delete project" });
     }
   });
@@ -612,41 +691,46 @@ async function startServer() {
   // Project Structural Index
   app.get("/api/projects/:id/index", requireAuth, async (req, res) => {
     try {
-      res.status(200).json(await getProjectIndexHandler(indexDeps, req.params.id, (req as any).user));
-    } catch (err: any) {
+      res.status(200).json(await getProjectIndexHandler(indexDeps, req.params.id, getUser(req)));
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to read project index" });
     }
   });
 
   app.get("/api/projects/:id/index/history", requireAuth, async (req, res) => {
     try {
-      res.status(200).json(await getProjectIndexHistoryHandler(indexDeps, req.params.id, (req as any).user));
-    } catch (err: any) {
+      res.status(200).json(await getProjectIndexHistoryHandler(indexDeps, req.params.id, getUser(req)));
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to read index history" });
     }
   });
 
   app.get("/api/projects/:id/index/branches", requireAuth, async (req, res) => {
     try {
-      res.status(200).json(await listProjectBranchesHandler(indexDeps, req.params.id, (req as any).user, req.get("x-git-token") || undefined));
-    } catch (err: any) {
+      res.status(200).json(await listProjectBranchesHandler(indexDeps, req.params.id, getUser(req), req.get("x-git-token") || undefined));
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to list branches" });
     }
   });
 
   app.post("/api/projects/:id/index", requireAuth, async (req, res) => {
     try {
-      const result = await startProjectIndexHandler(indexDeps, req.params.id, (req as any).user, req.body || {}, req.get("x-git-token") || undefined);
+      const result = await startProjectIndexHandler(indexDeps, req.params.id, getUser(req), req.body || {}, req.get("x-git-token") || undefined);
       res.status(202).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to start indexing" });
     }
   });
 
   app.delete("/api/projects/:id/index/job", requireAuth, async (req, res) => {
     try {
-      res.status(200).json(await cancelProjectIndexHandler(indexDeps, req.params.id, (req as any).user));
-    } catch (err: any) {
+      res.status(200).json(await cancelProjectIndexHandler(indexDeps, req.params.id, getUser(req)));
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to cancel indexing" });
     }
   });
@@ -654,25 +738,28 @@ async function startServer() {
   // Project rule scan (no AI)
   app.get("/api/projects/:id/scan", requireAuth, async (req, res) => {
     try {
-      res.status(200).json(await getProjectScanHandler(scanDeps, req.params.id, (req as any).user, { ref: req.query.ref }));
-    } catch (err: any) {
+      res.status(200).json(await getProjectScanHandler(scanDeps, req.params.id, getUser(req), { ref: req.query.ref }));
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to read scan" });
     }
   });
 
   app.post("/api/projects/:id/scan", requireAuth, async (req, res) => {
     try {
-      const result = await startProjectScanHandler(scanDeps, req.params.id, (req as any).user, req.body || {}, req.get("x-git-token") || undefined);
+      const result = await startProjectScanHandler(scanDeps, req.params.id, getUser(req), req.body || {}, req.get("x-git-token") || undefined);
       res.status(202).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to start scan" });
     }
   });
 
   app.delete("/api/projects/:id/scan/job", requireAuth, async (req, res) => {
     try {
-      res.status(200).json(await cancelProjectScanHandler(scanDeps, req.params.id, (req as any).user));
-    } catch (err: any) {
+      res.status(200).json(await cancelProjectScanHandler(scanDeps, req.params.id, getUser(req)));
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to cancel scan" });
     }
   });
@@ -683,10 +770,11 @@ async function startServer() {
       const members = await listProjectMembersHandler(
         security,
         req.params.id as ProjectId,
-        (req as any).user
+        getUser(req)
       );
       res.status(200).json({ members });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to list members" });
     }
   });
@@ -696,11 +784,12 @@ async function startServer() {
       const member = await addProjectMemberHandler(
         security,
         req.params.id as ProjectId,
-        (req as any).user,
+        getUser(req),
         req.body || {}
       );
       res.status(201).json({ member });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({
         error: err.message || "Failed to add member",
         code: err.code,
@@ -713,12 +802,13 @@ async function startServer() {
       const member = await updateProjectMemberRoleHandler(
         security,
         req.params.id as ProjectId,
-        (req as any).user,
+        getUser(req),
         req.params.userId,
         req.body || {}
       );
       res.status(200).json({ member });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to update member" });
     }
   });
@@ -728,11 +818,12 @@ async function startServer() {
       const result = await removeProjectMemberHandler(
         security,
         req.params.id as ProjectId,
-        (req as any).user,
+        getUser(req),
         req.params.userId
       );
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(err.status || 500).json({ error: err.message || "Failed to remove member" });
     }
   });
@@ -743,15 +834,39 @@ async function startServer() {
 
   app.post("/api/estimate", requireAuth, async (req, res) => {
     try {
+      // With a project the estimate follows its settings (switched-off specialists, guidelines).
+      let project: Project | undefined;
+      if (typeof req.body?.projectId === "string") {
+        const user = getUser(req);
+        const fetched = await projectStore.getProject(req.body.projectId);
+        if (fetched) {
+          if (user && !(await security.canAccessProject(user, fetched.project.id, "project:review"))) {
+            return res.status(403).json({
+              error: "Access denied: You do not have permission to run reviews on this project.",
+              code: "FORBIDDEN",
+            });
+          }
+          project = fetched.project;
+        }
+      }
       const result = await estimateHandler(
         {
           diff: req.body?.diff,
           env: req.body?.env || req.body?.envOverrides,
+          ...(project
+            ? {
+                disabledAgents: project.disabledAgents ?? [],
+                hasProjectInstructions:
+                  Boolean(project.customInstructions?.trim()) ||
+                  Boolean(project.agentInstructions?.["agent.contributing-reviewer"]?.trim()),
+              }
+            : {}),
         },
         agentRegistry
       );
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       const msg = err.message || "internal error";
       const isClientError = msg.includes("required") || msg.includes("invalid");
       res.status(isClientError ? 400 : 500).json({ error: msg });
@@ -761,11 +876,11 @@ async function startServer() {
   app.post("/api/review", requireAuth, async (req, res) => {
     try {
       const diffStr = (req.body?.diff || "").trim();
-      const user = (req as any).user;
+      const user = getUser(req);
 
       // Pre-resolve project to inject custom system instructions and guidelines into AI context
-      let preProject: any = undefined;
-      let preMr: any = undefined;
+      let preProject: Project | undefined = undefined;
+      let preMr: ProjectMergeRequest | undefined = undefined;
       try {
         if (req.body?.projectId) {
           const fetched = await projectStore.getProject(req.body.projectId);
@@ -838,11 +953,11 @@ async function startServer() {
       const feedbackDigest = preProject
         ? await projectStore.getFeedbackDigest(preProject.id).catch(() => "")
         : "";
+      // The stored project wins: it may have a token-saving compact version.
+      // Only the project's own instructions; the feedback digest is untrusted
+      // and travels separately as `rejectedFeedback`.
       const customInstructions =
-        // The stored project wins: it may have a token-saving compact version.
-        [instructionsForPrompt(preProject) || req.body?.customInstructions, feedbackDigest]
-          .filter(Boolean)
-          .join("\n\n") || undefined;
+        instructionsForPrompt(preProject) || req.body?.customInstructions || undefined;
       const projectName = req.body?.projectName || preProject?.name;
 
       if (user) {
@@ -868,6 +983,10 @@ async function startServer() {
           selectedSpecialists: req.body?.selectedSpecialists,
           customInstructions,
           projectName,
+          suppressedRules: preProject?.suppressedRules,
+          disabledAgents: preProject?.disabledAgents,
+          agentInstructions: preProject?.agentInstructions,
+          ...(feedbackDigest ? { rejectedFeedback: feedbackDigest } : {}),
           ...(projectContextProvider ? { projectContextProvider } : {}),
         },
         buildRequestRegistry(buildEffectiveEnv(process.env, reviewEnv)),
@@ -892,8 +1011,8 @@ async function startServer() {
       }
 
       // Auto-associate review with project if diff is a URL or if projectId is supplied
-      let associatedProject: any = preProject;
-      let associatedMr: any = preMr;
+      let associatedProject: Project | undefined = preProject;
+      let associatedMr: ProjectMergeRequest | undefined = preMr;
       try {
         if (diffStr.startsWith("http://") || diffStr.startsWith("https://")) {
           if (!associatedProject) {
@@ -929,7 +1048,7 @@ async function startServer() {
       try {
         if (associatedProject && associatedMr) {
           const fresh = await projectStore.getProject(associatedProject.id);
-          associatedMr = fresh?.mergeRequests.find((m) => m.id === associatedMr.id) ?? associatedMr;
+          associatedMr = fresh?.mergeRequests.find((m) => m.id === associatedMr?.id) ?? associatedMr;
         }
         if (associatedProject && user) {
           projectRole =
@@ -946,7 +1065,8 @@ async function startServer() {
         ...(associatedMr ? { mergeRequest: associatedMr } : {}),
         ...(projectRole ? { projectRole } : {}),
       });
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       const msg = err.message || "internal error";
       const isClientError = msg.includes("required") || msg.includes("invalid");
       res.status(isClientError ? 400 : 500).json({ error: msg });
@@ -957,7 +1077,8 @@ async function startServer() {
     try {
       const result = await testProviderHandler(req.body || {});
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({
         ok: false,
         error: err.message || "Internal error",
@@ -970,7 +1091,8 @@ async function startServer() {
     try {
       const result = await testGitConnectionHandler(req.body || {});
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ ok: false, error: err.message || "Internal error" });
     }
   });
@@ -979,7 +1101,8 @@ async function startServer() {
     try {
       const result = await modelsHandler(req.body || {});
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ ok: false, error: err.message || "Internal error" });
     }
   });
@@ -988,7 +1111,8 @@ async function startServer() {
     try {
       const result = await publishHandler(req.body || {});
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ success: false, error: err.message || "Internal error" });
     }
   });
@@ -996,7 +1120,8 @@ async function startServer() {
   app.post("/api/code-context", requireAuth, async (req, res) => {
     try {
       res.status(200).json(await codeContextHandler(req.body || {}));
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ success: false, error: err.message || "Internal error" });
     }
   });
@@ -1004,7 +1129,8 @@ async function startServer() {
   app.post("/api/suggest-code", requireAuth, async (req, res) => {
     try {
       res.status(200).json(await suggestCodeHandler(req.body || {}));
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ success: false, error: err.message || "Internal error" });
     }
   });
@@ -1012,7 +1138,8 @@ async function startServer() {
   app.post("/api/commit-suggestion", requireAuth, async (req, res) => {
     try {
       res.status(200).json(await commitSuggestionHandler(req.body || {}));
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ success: false, error: err.message || "Internal error" });
     }
   });
@@ -1021,7 +1148,8 @@ async function startServer() {
     try {
       const result = await applyLocalHandler(req.body || {});
       res.status(200).json(result);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as HttpError;
       res.status(500).json({ success: false, error: err.message || "internal error" });
     }
   });

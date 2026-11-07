@@ -32,12 +32,29 @@ export interface RuleContext {
   readonly repositoryId: string;
   /** Restrict checks to changed files when reviewing a diff. */
   readonly changedPaths?: readonly string[];
+  /** Language for finding messages (`en` or `fa`); English when omitted. */
+  readonly language?: string | undefined;
+}
+
+/**
+ * A rule a project manager silenced after rejecting one of its findings. With
+ * `file` it applies to that file only (always the case for security rules);
+ * without it, to the whole project.
+ */
+export interface RuleSuppression {
+  readonly ruleId: string;
+  readonly file?: string | undefined;
 }
 
 /** A single deterministic check. Implementations live in `config`/plugins. */
 export interface Rule {
   readonly kind: RuleKind;
+  /** Matches the `ruleId` of the findings it reports (that is what silencing keys on). */
   readonly id: string;
+  /** What the rule checks, in a sentence; shown to users in the rules catalog. */
+  readonly description?: string;
+  /** Severity of the findings it reports. */
+  readonly severity?: RuleFinding["severity"];
   run(ctx: RuleContext): AsyncResult<readonly RuleFinding[]>;
 }
 

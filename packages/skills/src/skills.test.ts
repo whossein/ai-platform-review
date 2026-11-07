@@ -93,7 +93,7 @@ describe("Skill Registry & Accessor", () => {
 });
 
 describe("contributingComplianceSkill", () => {
-  it("flags missing documentation when code files change without docs", async () => {
+  it("does not demand docs or a changelog; flags only provided commit/branch formats", async () => {
     const slice = makeDummyContextSlice();
     const res = await contributingComplianceSkill.execute({
       skillId: contributingComplianceSkill.descriptor.id,
@@ -107,10 +107,11 @@ describe("contributingComplianceSkill", () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       const result = res.value.result as any;
-      expect(result.compliant).toBe(false);
-      expect(result.missingRequirements).toContain("documentation or changelog update");
-      expect(result.findings.some((f: any) => f.rule === "git/conventional-commit")).toBe(true);
-      expect(result.findings.some((f: any) => f.rule === "git/branch-naming")).toBe(true);
+      expect(result.compliant).toBe(true);
+      expect(result.missingRequirements).toEqual([]);
+      expect(result.findings.some((f: { rule: string }) => f.rule === "docs/changelog-entry")).toBe(false);
+      expect(result.findings.some((f: { rule: string }) => f.rule === "git/conventional-commit")).toBe(true);
+      expect(result.findings.some((f: { rule: string }) => f.rule === "git/branch-naming")).toBe(true);
     }
   });
 
@@ -130,6 +131,22 @@ describe("contributingComplianceSkill", () => {
       expect(result.compliant).toBe(true);
       expect(result.missingRequirements.length).toBe(0);
       expect(result.score).toBe(100);
+    }
+  });
+});
+
+describe("contributingComplianceSkill without commit or branch", () => {
+  it("reports no findings for code changes without docs", async () => {
+    const res = await contributingComplianceSkill.execute({
+      skillId: contributingComplianceSkill.descriptor.id,
+      args: { files: ["src/app.ts"], diff: "+x" },
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const result = res.value.result as { compliant: boolean; score: number; findings: unknown[] };
+      expect(result.compliant).toBe(true);
+      expect(result.score).toBe(100);
+      expect(result.findings).toEqual([]);
     }
   });
 });
@@ -234,6 +251,23 @@ describe("diffAnalysisSkill", () => {
       expect(result.filesChanged).toBe(1);
       expect(result.linesAdded).toBe(2);
       expect(result.linesDeleted).toBe(1);
+    }
+  });
+});
+
+describe("diffAnalysisSkill project_structure bullets", () => {
+  it("counts '- path' bullets as deleted only when they are part of the diff", async () => {
+    const run = (diff: string) =>
+      diffAnalysisSkill.execute({ skillId: diffAnalysisSkill.descriptor.id, args: { diff } });
+    const raw = "+++ b/a.ts\n+a";
+    const rendered = `<project_structure>\n- x\n</project_structure>\n${raw}`;
+    const a = await run(raw);
+    const b = await run(rendered);
+    expect(a.ok && b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect((a.value.result as { linesDeleted: number }).linesDeleted).toBe(0);
+      // Documents why callers must pass the raw diff, not the rendered prompt.
+      expect((b.value.result as { linesDeleted: number }).linesDeleted).toBe(1);
     }
   });
 });

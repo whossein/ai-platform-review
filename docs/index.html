@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Code Review Platform | Self-hosted multi-agent code review</title>
-  <meta name="description" content="Self-hosted, multi-agent AI code review for GitLab merge requests, GitHub pull requests and diffs. 34 free rules, 14 specialist reviewers, any LLM provider, hard budgets.">
+  <meta name="description" content="Self-hosted, multi-agent AI code review for GitLab merge requests, GitHub pull requests and diffs. 35 free rules, 14 specialist reviewers, any LLM provider, hard budgets.">
   <meta property="og:title" content="AI Code Review Platform">
   <meta property="og:description" content="Self-hosted multi-agent AI code review. Free rules first, specialist AI reviewers second, hard budget always.">
   <meta property="og:image" content="https://whossein.github.io/ai-platform-review/assets/review.png">
@@ -117,7 +117,7 @@
         <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">Cheap checks first. AI only where it counts.</h2>
         <ol class="mt-8 space-y-6">
           <li class="flex gap-4"><i class="ph ph-magnifying-glass mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Context</p><p class="text-muted">Reads the diff, your project index and guidelines.</p></div></li>
-          <li class="flex gap-4"><i class="ph ph-lightning mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Rules</p><p class="text-muted">34 deterministic checks run first. No tokens spent.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-lightning mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Rules</p><p class="text-muted">35 deterministic checks run first. No tokens spent.</p></div></li>
           <li class="flex gap-4"><i class="ph ph-users-three mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Specialists</p><p class="text-muted">Only the reviewers that match your files run, in parallel.</p></div></li>
           <li class="flex gap-4"><i class="ph ph-scales mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Critic and judge</p><p class="text-muted">Duplicates are merged and low-confidence findings dropped.</p></div></li>
           <li class="flex gap-4"><i class="ph ph-chat-centered-text mt-0.5 text-xl text-accent"></i><div><p class="font-medium">Report</p><p class="text-muted">Markdown, JSON, or inline comments on the merge request.</p></div></li>
@@ -133,7 +133,7 @@
 
           <article class="reveal rounded-2xl border border-line bg-accent/[0.07] p-7 md:col-span-4">
             <i class="ph ph-shield-check text-2xl text-accent"></i>
-            <h3 class="mt-4 text-xl font-semibold">34 checks that cost nothing</h3>
+            <h3 class="mt-4 text-xl font-semibold">35 checks that cost nothing</h3>
             <p class="mt-2 max-w-[60ch] text-muted">Deterministic rules run before any AI call, on added lines only, including attempts to give the AI reviewer instructions. Tick <em>Rules only</em> for an instant, free review.</p>
             <ul class="mt-6 flex flex-wrap gap-2 font-mono text-[13px]">
               <li class="rounded-md border border-line bg-panel px-2.5 py-1">secret.hardcoded</li>
@@ -152,21 +152,21 @@
           <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
             <i class="ph ph-users-three text-2xl text-accent"></i>
             <h3 class="mt-4 text-xl font-semibold">14 specialists</h3>
-            <p class="mt-2 text-muted">A planner reads the changed files and wakes only the reviewers that match.</p>
+            <p class="mt-2 text-muted">A planner reads the changed files and wakes only the reviewers that match. When several report the same problem, you see it once.</p>
             <p class="mt-5 text-sm leading-7 text-muted">React, Next.js, React Native, Angular, Vue, TypeScript, .NET, Python, Android, iOS, Security, Performance, Code quality, Governance</p>
           </article>
 
           <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
             <i class="ph ph-coins text-2xl text-accent"></i>
             <h3 class="mt-4 text-xl font-semibold">Any model, hard budget</h3>
-            <p class="mt-2 text-muted">Token, dollar and time caps per review. The router picks the cheapest model that can do the job and caches the rest.</p>
+            <p class="mt-2 text-muted">Token, dollar and time caps per review. The router picks the cheapest model that can do the job and caches the rest. Use several providers at once: a failing one hands the call to the next, and rate limits are waited out instead of failing the review.</p>
           </article>
 
           <article id="user-access-control" class="dots reveal rounded-2xl border border-line bg-panel p-7 md:col-span-4">
             <span id="project-registry"></span>
             <i class="ph ph-buildings text-2xl text-accent"></i>
             <h3 class="mt-4 text-xl font-semibold">Built for teams</h3>
-            <p class="mt-2 max-w-[60ch] text-muted">Projects with their own guidelines, roles from Owner to Viewer, Git tokens encrypted at rest and an audit log of every change. Reviewers grade each merge request and see per-developer averages.</p>
+            <p class="mt-2 max-w-[60ch] text-muted">Projects with their own guidelines, roles from Owner to Viewer, Git tokens encrypted at rest and an audit log of every change. Reviewers grade each merge request and see per-developer averages. In the Skills &amp; Rules tab, managers switch specialists and rules on or off per project and add guidance for each specialist; security checks always stay on.</p>
             <ul class="mt-6 flex flex-wrap gap-2 text-sm">
               <li class="rounded-full border border-line bg-panel px-3 py-1">Owner</li>
               <li class="rounded-full border border-line bg-panel px-3 py-1">Manager</li>
@@ -176,7 +176,7 @@
           </article>
 
           <article id="project-intelligence-index" class="reveal grid gap-6 rounded-2xl border border-line bg-panel p-7 md:col-span-6 md:grid-cols-3">
-            <div><i class="ph ph-git-merge text-2xl text-accent"></i><h3 class="mt-4 font-semibold">Back to the merge request</h3><p class="mt-2 text-muted">Publish accepted findings as inline GitLab comments. GitHub PRs can be reviewed too.</p></div>
+            <div><i class="ph ph-git-merge text-2xl text-accent"></i><h3 class="mt-4 font-semibold">Back to the merge request</h3><p class="mt-2 text-muted">Publish accepted findings as inline comments on GitLab MRs and GitHub PRs.</p></div>
             <div><i class="ph ph-wrench text-2xl text-accent"></i><h3 class="mt-4 font-semibold">AI sample fixes</h3><p class="mt-2 text-muted">Ask for a corrected snippet and commit it to the MR branch after you confirm.</p></div>
             <div><i class="ph ph-tree-structure text-2xl text-accent"></i><h3 class="mt-4 font-semibold">Knows your codebase</h3><p class="mt-2 text-muted">A per-branch index shows which untouched files a change can break.</p></div>
           </article>
@@ -280,7 +280,7 @@ npm install && npm run dev</code></pre>
         <h2 class="text-3xl font-bold leading-snug md:text-4xl">اول چک‌های ارزون، هوش مصنوعی فقط جایی که لازمه.</h2>
         <ol class="mt-8 space-y-6">
           <li class="flex gap-4"><i class="ph ph-magnifying-glass mt-1 text-xl text-accent"></i><div><p class="font-medium">شناخت کد</p><p class="text-muted">Diff، ساختار پروژه و راهنمای تیمت رو می‌خونه.</p></div></li>
-          <li class="flex gap-4"><i class="ph ph-lightning mt-1 text-xl text-accent"></i><div><p class="font-medium">قانون‌ها</p><p class="text-muted">۳۴ تا چک ثابت اول اجرا می‌شن. هیچ توکنی خرج نمی‌شه.</p></div></li>
+          <li class="flex gap-4"><i class="ph ph-lightning mt-1 text-xl text-accent"></i><div><p class="font-medium">قانون‌ها</p><p class="text-muted">۳۵ تا چک ثابت اول اجرا می‌شن. هیچ توکنی خرج نمی‌شه.</p></div></li>
           <li class="flex gap-4"><i class="ph ph-users-three mt-1 text-xl text-accent"></i><div><p class="font-medium">ریویوکننده‌ها</p><p class="text-muted">فقط اونایی که به فایل‌هات ربط دارن، هم‌زمان کار می‌کنن.</p></div></li>
           <li class="flex gap-4"><i class="ph ph-scales mt-1 text-xl text-accent"></i><div><p class="font-medium">منتقد و داور</p><p class="text-muted">تکراری‌ها یکی می‌شن و موردهای نامطمئن کنار می‌رن.</p></div></li>
           <li class="flex gap-4"><i class="ph ph-chat-centered-text mt-1 text-xl text-accent"></i><div><p class="font-medium">گزارش</p><p class="text-muted">به‌شکل Markdown، ‏JSON یا کامنت مستقیم روی MR.</p></div></li>
@@ -295,7 +295,7 @@ npm install && npm run dev</code></pre>
 
           <article class="reveal rounded-2xl border border-line bg-accent/[0.07] p-7 md:col-span-4">
             <i class="ph ph-shield-check text-2xl text-accent"></i>
-            <h3 class="mt-4 text-xl font-bold">۳۴ تا چک کاملاً رایگان</h3>
+            <h3 class="mt-4 text-xl font-bold">۳۵ تا چک کاملاً رایگان</h3>
             <p class="mt-2 max-w-[60ch] leading-loose text-muted">قبل از هر درخواست به هوش مصنوعی و فقط روی خط‌های جدید اجرا می‌شن؛ حتی اگه کسی بخواد با کامنت به ریویوکننده‌ی هوش مصنوعی دستور بده، می‌گیرنش. تیک <em>Rules only</em> رو بزن تا یه ریویوی فوری و مجانی بگیری.</p>
             <ul class="mt-6 flex flex-wrap gap-2 font-mono text-[13px]" dir="ltr">
               <li class="rounded-md border border-line bg-panel px-2.5 py-1">secret.hardcoded</li>
@@ -314,20 +314,20 @@ npm install && npm run dev</code></pre>
           <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
             <i class="ph ph-users-three text-2xl text-accent"></i>
             <h3 class="mt-4 text-xl font-bold">۱۴ تا ریویوکننده‌ی متخصص</h3>
-            <p class="mt-2 leading-loose text-muted">فایل‌های تغییرکرده رو نگاه می‌کنه و فقط متخصص‌های مربوط رو صدا می‌زنه.</p>
+            <p class="mt-2 leading-loose text-muted">فایل‌های تغییرکرده رو نگاه می‌کنه و فقط متخصص‌های مربوط رو صدا می‌زنه. اگه چندتاشون یه مشکل رو بگن، یه بار می‌بینیش.</p>
             <p class="mt-5 text-sm leading-7 text-muted" dir="ltr">React, Next.js, React Native, Angular, Vue, TypeScript, .NET, Python, Android, iOS, Security, Performance, Code quality, Governance</p>
           </article>
 
           <article class="reveal rounded-2xl border border-line bg-panel p-7 md:col-span-2">
             <i class="ph ph-coins text-2xl text-accent"></i>
             <h3 class="mt-4 text-xl font-bold">هر مدلی، با سقف هزینه</h3>
-            <p class="mt-2 leading-loose text-muted">برای هر ریویو سقف توکن، دلار و زمان می‌ذاری. خودش ارزون‌ترین مدلی رو که از پس کار برمیاد انتخاب می‌کنه.</p>
+            <p class="mt-2 leading-loose text-muted">برای هر ریویو سقف توکن، دلار و زمان می‌ذاری. خودش ارزون‌ترین مدلی رو که از پس کار برمیاد انتخاب می‌کنه. می‌تونی چندتا سرویس داشته باشی؛ اگه یکی خطا بده، کار می‌ره سراغ بعدی.</p>
           </article>
 
           <article class="dots reveal rounded-2xl border border-line bg-panel p-7 md:col-span-4">
             <i class="ph ph-buildings text-2xl text-accent"></i>
             <h3 class="mt-4 text-xl font-bold">ساخته‌شده برای تیم</h3>
-            <p class="mt-2 max-w-[60ch] leading-loose text-muted">هر پروژه راهنمای خودش رو داره، برای هر نفر سطح دسترسی تعیین می‌کنی، توکن‌های گیت رمزنگاری‌شده ذخیره می‌شن و همه‌ی تغییرها ثبت می‌شه. به هر MR نمره می‌دی و میانگین هر توسعه‌دهنده رو می‌بینی.</p>
+            <p class="mt-2 max-w-[60ch] leading-loose text-muted">هر پروژه راهنمای خودش رو داره، برای هر نفر سطح دسترسی تعیین می‌کنی، توکن‌های گیت رمزنگاری‌شده ذخیره می‌شن و همه‌ی تغییرها ثبت می‌شه. به هر MR نمره می‌دی و میانگین هر توسعه‌دهنده رو می‌بینی. توی تب Skills &amp; Rules مدیر پروژه ریویوکننده‌ها و قانون‌ها رو روشن و خاموش می‌کنه و به هر کدوم دستور اضافه می‌ده؛ چک‌های امنیتی همیشه روشن می‌مونن.</p>
             <ul class="mt-6 flex flex-wrap gap-2 text-sm" dir="ltr">
               <li class="rounded-full border border-line bg-panel px-3 py-1">Owner</li>
               <li class="rounded-full border border-line bg-panel px-3 py-1">Manager</li>
@@ -337,7 +337,7 @@ npm install && npm run dev</code></pre>
           </article>
 
           <article class="reveal grid gap-6 rounded-2xl border border-line bg-panel p-7 md:col-span-6 md:grid-cols-3">
-            <div><i class="ph ph-git-merge text-2xl text-accent"></i><h3 class="mt-4 font-bold">برمی‌گرده سراغ MR</h3><p class="mt-2 leading-loose text-muted">یافته‌های تأییدشده رو به‌شکل کامنت روی MR گیت‌لب می‌ذاره. PRهای گیت‌هاب رو هم ریویو می‌کنه.</p></div>
+            <div><i class="ph ph-git-merge text-2xl text-accent"></i><h3 class="mt-4 font-bold">برمی‌گرده سراغ MR</h3><p class="mt-2 leading-loose text-muted">یافته‌های تأییدشده رو به‌شکل کامنت روی MR گیت‌لب و PR گیت‌هاب می‌ذاره.</p></div>
             <div><i class="ph ph-wrench text-2xl text-accent"></i><h3 class="mt-4 font-bold">پیشنهاد اصلاح با AI</h3><p class="mt-2 leading-loose text-muted">یه نسخه‌ی درست‌شده‌ی کد می‌گیری و اگه تأیید کنی، روی برنچ MR کامیت می‌شه.</p></div>
             <div><i class="ph ph-tree-structure text-2xl text-accent"></i><h3 class="mt-4 font-bold">پروژه‌ت رو می‌شناسه</h3><p class="mt-2 leading-loose text-muted">برای هر برنچ یه ایندکس داره و می‌فهمه تغییرت کدوم فایل‌های دیگه رو ممکنه خراب کنه.</p></div>
           </article>

@@ -124,7 +124,10 @@ export function App(): JSX.Element {
     <div className="dashboard-layout">
       {/* Mobile Header */}
       <div className="mobile-header">
-        <h2>AI Review</h2>
+        <h2 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <img src="/icon-192.png" alt="" width={28} height={28} style={{ borderRadius: 6 }} />
+          AI Review
+        </h2>
         <button
           className="icon-btn"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -136,8 +139,11 @@ export function App(): JSX.Element {
       {/* Sidebar */}
       <aside className={`sidebar ${isMobileMenuOpen ? "open" : ""}`} style={{ display: "flex", flexDirection: "column" }}>
         <div className="sidebar-brand">
-          <h2>AI Review</h2>
-          <span className="version">v0.2.0</span>
+          <h2 style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <img src="/icon-192.png" alt="" width={32} height={32} style={{ borderRadius: 8 }} />
+            AI Review
+          </h2>
+          <span className="version">v{__APP_VERSION__}</span>
         </div>
 
         {config.BUDGET_LIMIT && (

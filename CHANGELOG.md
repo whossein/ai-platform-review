@@ -1,5 +1,159 @@
 # Changelog
 
+## [0.9.0] - 2026-11-07
+
+### Added
+- **EN:** Optional AI merge of duplicate findings: with `AI_REVIEW_LLM_DEDUP=1`, findings on the same file and line that the rules could not join are sent in one cheap-tier call, and only those the model says are the same defect are merged. It never merges across lines, and if the call fails the findings stay as they were. Off by default. In a live comparison on 16 cases, delivered findings fell from 33 to 22 with the same 13 of 15 expected defects found, for about 4% more tokens.
+- **FA:** ادغام اختیاری یافته‌های تکراری با AI: با `AI_REVIEW_LLM_DEDUP=1`، یافته‌هایی که در یک فایل و یک خط هستند و Ruleها نتوانسته‌اند ادغامشان کنند، در یک فراخوانی ارزان به مدل فرستاده می‌شوند و فقط مواردی که مدل یکی بداند ادغام می‌شوند. هیچ‌وقت بین خط‌های مختلف ادغام نمی‌کند و اگر فراخوانی شکست بخورد، یافته‌ها همان‌طور می‌مانند. به‌طور پیش‌فرض خاموش است. در مقایسهٔ زنده روی ۱۶ نمونه، یافته‌های تحویل‌شده از ۳۳ به ۲۲ رسید و همان ۱۳ از ۱۵ مشکل مورد انتظار پیدا شد، با حدود ۴٪ توکن بیشتر.
+- **EN:** The evaluation set (`npm run eval:live`, `eval:rules`) now has 16 cases: 5 come from real bug-fix commits in open-source projects (TypeScript, JavaScript, Go, Python, Java; MIT, BSD and Apache licenses), each with its source commit recorded. Two real defects that reviewers found in case `v2-03` are now counted as correct instead of false positives.
+- **FA:** مجموعهٔ ارزیابی (`npm run eval:live` و `eval:rules`) حالا ۱۶ نمونه دارد: ۵ نمونه از commitهای واقعی رفع باگ در پروژه‌های متن‌باز آمده‌اند (TypeScript، JavaScript، Go، Python و Java؛ با مجوزهای MIT، BSD و Apache) و commit منبع هر کدام ثبت شده است. دو مشکل واقعی که ریویوکننده‌ها در نمونهٔ `v2-03` پیدا کرده بودند حالا درست شمرده می‌شوند، نه هشدار غلط.
+
+## [0.8.0] - 2026-11-07
+
+### Added
+- **EN:** New deterministic rule `security.js-command-exec` flags `child_process.exec` and `execSync` calls with a dynamic command in JavaScript and TypeScript (a bare `exec(` counts only when the file imports `child_process`). It is a security rule, so it cannot be silenced for a whole project.
+- **FA:** Rule قطعی جدید `security.js-command-exec` فراخوانی‌های `child_process.exec` و `execSync` را با دستور پویا در JavaScript و TypeScript علامت می‌زند (`exec(` بدون پیشوند تنها وقتی شمرده می‌شود که فایل `child_process` را وارد کرده باشد). این یک Rule امنیتی است، پس برای کل پروژه قابل خاموش شدن نیست.
+- **EN:** The cost estimate (`POST /api/estimate`) accepts an optional `projectId`. When it is sent, the estimate leaves out specialists the project has switched off (the Security Reviewer is always counted) and the Contributing reviewer when the project has no guidelines.
+- **FA:** تخمین هزینه (`POST /api/estimate`) یک `projectId` اختیاری می‌پذیرد. با ارسال آن، تخمین متخصص‌هایی را که پروژه خاموش کرده حذف می‌کند (Security Reviewer همیشه شمرده می‌شود) و Contributing reviewer را وقتی پروژه Guidelineی ندارد.
+
+### Changed
+- **EN:** Rule messages are now localized in English and Persian and follow `AI_REVIEW_COMMENT_LANGUAGE`. When it is unset they are in Persian, like the AI comments; set it to `en` for English.
+- **FA:** پیام‌های Ruleها حالا به انگلیسی و فارسی ترجمه شده‌اند و از `AI_REVIEW_COMMENT_LANGUAGE` پیروی می‌کنند. اگر این متغیر تنظیم نشده باشد، پیام‌ها مثل کامنت‌های AI فارسی هستند؛ برای انگلیسی آن را `en` بگذارید.
+- **EN:** The Contributing & Governance reviewer is skipped when the project has no saved guidelines, because it then has nothing to apply except the project's own rules. This saves one model call.
+- **FA:** متخصص Contributing & Governance وقتی پروژه Guidelineی ذخیره‌شده ندارد اجرا نمی‌شود، چون فقط قواعد خود پروژه را اعمال می‌کند. این کار یک فراخوانی مدل را ذخیره می‌کند.
+- **EN:** A model that is missing from the price table is now charged to the dollar budget at a conservative fallback rate ($5 input / $15 output per 1M tokens), and the report marks the cost as estimated instead of showing $0.
+- **FA:** اگر مدلی در جدول قیمت نباشد، هزینه‌اش با نرخ محتاطانهٔ جایگزین (۵ دلار ورودی و ۱۵ دلار خروجی به ازای هر ۱M توکن) از بودجه دلاری کسر می‌شود و گزارش هزینه را «تخمینی» علامت می‌زند، به‌جای نمایش ۰ دلار.
+- **EN:** Findings at the same file and line whose titles share most of their wording are now merged into one.
+- **FA:** یافته‌هایی که در همان فایل و خط هستند و بیشتر عنوانشان مشترک است حالا در یک مورد ادغام می‌شوند.
+- **EN:** The sidebar shows the real app version, read from `package.json` at build time, instead of a fixed v0.2.0.
+- **FA:** نوار کناری به‌جای نسخهٔ ثابت v0.2.0 نسخهٔ واقعی برنامه را نشان می‌دهد؛ این نسخه هنگام build از `package.json` خوانده می‌شود.
+- **EN:** The How It Works page now matches the behavior: reviewers apply the project's saved guidelines (and the index when it is available), and branch and commit checks are opt-in.
+- **FA:** صفحهٔ How It Works با رفتار واقعی هماهنگ شده است: متخصص‌ها Guidelineهای ذخیره‌شدهٔ پروژه را اعمال می‌کنند (و index را وقتی در دسترس باشد)، و بررسی branch و commit اختیاری است.
+
+### Security
+- **EN:** Text from recently rejected findings (titles and reasons) is no longer added to the project's trusted guidelines in the review prompt. It now reaches reviewers as a separate untrusted data block, so wording that came from model output on a merge request cannot act as an instruction.
+- **FA:** متن یافته‌های اخیراً ردشده (عنوان و دلیل) دیگر به دستورالعمل‌های مورداعتماد پروژه در پرامپت ریویو اضافه نمی‌شود. این متن حالا در یک بلوک دادهٔ جدا و غیرقابل‌اعتماد به ریویوکننده‌ها می‌رسد، تا متنی که از خروجی مدل روی یک MR آمده نتواند مثل دستور عمل کند.
+
+### Fixed
+- **EN:** After a rule is silenced from a review result, the project data held by the review page refreshes its silenced-rules list too.
+- **FA:** پس از خاموش کردن یک Rule از نتیجهٔ ریویو، داده‌های پروژهٔ نگه‌داشته‌شده در صفحهٔ ریویو فهرست Ruleهای خاموش‌شده را هم به‌روز می‌کند.
+
+## [0.7.1] - 2026-11-07
+
+### Added
+- **EN:** `npm run repo:sync` keeps the GitHub repo description and topics in line with the code: it counts the real specialists and rules, `-- --check` fails if README or the docs page show a different count, and `-- --apply` updates the repo. A new "Repo sync" GitHub Action runs it on `main` when specialists or rules change; set the repository secret `REPO_ADMIN_TOKEN` to enable the update (without it the step is skipped).
+- **FA:** دستور `npm run repo:sync` توضیحات و تاپیک‌های ریپوی GitHub را با کد هماهنگ نگه می‌دارد: تعداد واقعی متخصص‌ها و Ruleها را می‌شمارد، با `-- --check` اگر README یا صفحهٔ docs عدد دیگری نشان بدهند خطا می‌دهد و با `-- --apply` ریپو را به‌روز می‌کند. یک GitHub Action جدید به نام «Repo sync» با تغییر متخصص‌ها یا Ruleها روی `main` آن را اجرا می‌کند؛ برای فعال شدن به‌روزرسانی، secret با نام `REPO_ADMIN_TOKEN` را در ریپو بسازید (بدون آن این مرحله رد می‌شود).
+
+### Fixed
+- **EN:** README and the docs page now say 14 specialists (they said 13).
+- **FA:** README و صفحهٔ docs حالا ۱۴ متخصص را نشان می‌دهند (قبلاً ۱۳ بود).
+
+## [0.7.0] - 2026-11-07
+
+### Added
+- **EN:** The Skills & Rules tab now controls real reviews. Per project, managers can switch AI specialists and rules on or off and give each specialist extra instructions; settings are stored on the server. The Security Reviewer and security rules cannot be switched off for a whole project. New endpoints: `GET /api/review-catalog` and `PUT /api/projects/:id/review-config`.
+- **FA:** تب Skills & Rules حالا واقعاً روی ریویو اثر می‌گذارد. مدیر پروژه می‌تواند برای هر پروژه متخصص‌های هوش مصنوعی و Ruleها را روشن یا خاموش کند و به هر متخصص دستور اضافه بدهد؛ این تنظیمات روی سرور ذخیره می‌شوند. Security Reviewer و Ruleهای امنیتی برای کل پروژه خاموش نمی‌شوند. Endpointهای جدید: `GET /api/review-catalog` و `PUT /api/projects/:id/review-config`.
+- **EN:** Reviews now wait and retry when a provider returns HTTP 429, respecting the time it asks for, instead of failing specialists at once. Requests per provider are limited to 4 at a time by default; change this with `AI_REVIEW_LLM_MAX_CONCURRENCY`.
+- **FA:** ریویو حالا هنگام دریافت خطای HTTP 429 از provider صبر می‌کند و دوباره تلاش می‌کند و زمان اعلام‌شده را رعایت می‌کند، به‌جای اینکه متخصص‌ها فوراً شکست بخورند. درخواست‌های هم‌زمان هر provider به‌طور پیش‌فرض به ۴ محدود است و با `AI_REVIEW_LLM_MAX_CONCURRENCY` قابل تغییر است.
+
+### Changed
+- **EN:** Custom skills in the Skills & Rules tab are removed. They were stored only in the browser and never affected reviews. Any you saved there are no longer shown.
+- **FA:** Skillهای سفارشی از تب Skills & Rules حذف شدند. این Skillها فقط در مرورگر ذخیره می‌شدند و هیچ اثری روی ریویو نداشتند. Skillهایی که آنجا ذخیره کرده بودید دیگر نمایش داده نمی‌شوند.
+
+### Fixed
+- **EN:** Findings on the same line under different categories now merge when their titles are identical or their wording is very similar. Differently worded reports of one defect can still appear separately.
+- **FA:** یافته‌های یک خط با دسته‌های متفاوت حالا اگر عنوانشان یکسان یا متنشان خیلی مشابه باشد ادغام می‌شوند. گزارش‌هایی از یک مشکل که متفاوت نوشته شده باشند ممکن است هنوز جدا نمایش داده شوند.
+- **EN:** A specialist that crashes with an unexpected error is now counted in the review's failed specialists warning.
+- **FA:** متخصصی که با خطای غیرمنتظره از کار بیفتد حالا در هشدار متخصص‌های ناموفق ریویو شمرده می‌شود.
+
+### Security
+- **EN:** The critical `no-eval` rule now counts as a security rule, so it can only be silenced for a single file.
+- **FA:** Rule بحرانی `no-eval` حالا Rule امنیتی حساب می‌شود و فقط برای یک فایل می‌توان آن را خاموش کرد.
+
+## [0.6.2] - 2026-11-07
+
+### Fixed
+- **EN:** Reviews no longer report one defect several times when specialists word it differently. A security finding confirmed by a rule now appears once, listing every reviewer that agreed. In a live comparison on the sample set, delivered findings fell from 76 to 59 across three runs, and every expected defect was still found.
+- **FA:** ریویو دیگر یک مشکل را چند بار گزارش نمی‌کند، حتی اگر متخصص‌ها آن را با عبارت‌های متفاوت توضیح داده باشند. یافتهٔ امنیتی‌ای که Rule هم آن را تأیید کرده باشد حالا فقط یک بار و همراه با نام همهٔ بررسی‌کننده‌ها نمایش داده می‌شود. در مقایسهٔ زنده روی نمونه‌ها، تعداد یافته‌های تحویل‌شده در سه اجرا از ۷۶ به ۵۹ رسید و همهٔ مشکلات مورد انتظار همچنان پیدا شدند.
+
+### Changed
+- **EN:** `npm run eval:live` gains `--pace-ms <n>` to wait between cases on rate-limited API keys. A run with any agent error now prints `INVALID RUN`, exits with code 2 and is marked `valid: false` in the report, so a rate-limited run can't be mistaken for a clean result.
+- **FA:** `npm run eval:live` گزینهٔ `--pace-ms <n>` را برای ایجاد فاصله بین نمونه‌ها در کلیدهای دارای محدودیت نرخ دارد. اجرایی که خطای Agent داشته باشد حالا `INVALID RUN` چاپ می‌کند، با کد ۲ خارج می‌شود و در گزارش با `valid: false` مشخص می‌شود تا با نتیجهٔ سالم اشتباه گرفته نشود.
+
+## [0.6.1] - 2026-11-04
+
+### Changed
+- **EN:** New app icon, used as the browser favicon (including Apple touch icon), in the sidebar and mobile header, on the sign-in and first-run setup screens, and on the GitHub Pages landing page.
+- **FA:** آیکون جدید برنامه به‌عنوان favicon مرورگر (و آیکون Apple)، در نوار کناری و هدر موبایل، صفحه‌های ورود و راه‌اندازی اولیه و صفحهٔ GitHub Pages استفاده شده است.
+
+## [0.6.0] - 2026-11-04
+
+### Added
+- **EN:** A project manager who rejects a rule finding with "Add to project rules" now really silences that rule. Security rules are silenced only for that file; other rules for the whole project. Project scans respect it too. The project page lists silenced rules with a Remove button (API: `DELETE /api/projects/:id/suppressed-rules`).
+- **FA:** مدیر پروژه با رد یک یافتهٔ Rule و زدن «Add to project rules» حالا واقعاً آن Rule را خاموش می‌کند. Ruleهای امنیتی فقط برای همان فایل خاموش می‌شوند و بقیه برای کل پروژه. اسکن پروژه هم همین را رعایت می‌کند. صفحهٔ پروژه فهرست Ruleهای خاموش را با دکمهٔ Remove نشان می‌دهد (API: `DELETE /api/projects/:id/suppressed-rules`).
+- **EN:** New `npm run eval:rules` (no AI, no key) and `npm run eval:live` (uses your configured provider and spends tokens) measure review precision and recall on a set of 11 synthetic samples.
+- **FA:** دستورهای جدید `npm run eval:rules` (بدون AI و بدون کلید) و `npm run eval:live` (از provider تنظیم‌شده استفاده می‌کند و توکن مصرف می‌کند) دقت و پوشش ریویو را روی ۱۱ نمونهٔ ساختگی می‌سنجند.
+
+### Changed
+- **EN:** AI specialists now receive a goal and a checklist for their focus, plus shared definitions of severity and confidence and an instruction to report only problems the change introduces. Expect different, and usually fewer, findings than before.
+- **FA:** متخصص‌های AI حالا هدف و چک‌لیست حوزهٔ خودشان را می‌گیرند، به‌علاوهٔ تعریف مشترک severity و confidence و این دستور که فقط مشکلاتی را گزارش کنند که همین تغییر ایجاد کرده. یافته‌ها با قبل فرق می‌کنند و معمولاً کمتر می‌شوند.
+- **EN:** Specialists are chosen on real evidence: Java/TS generics no longer trigger the React reviewer, `.h`, `.java`, `.xml` and `pom.xml` alone no longer trigger iOS or Android, and `namespace` and `ref(` no longer trigger .NET or Vue. This lowers cost.
+- **FA:** انتخاب متخصص‌ها حالا بر اساس شواهد واقعی است: generic در Java/TS دیگر React Reviewer را اجرا نمی‌کند، `.h`، `.java`، `.xml` و `pom.xml` به‌تنهایی iOS یا Android را فعال نمی‌کنند و `namespace` و `ref(` هم دیگر .NET یا Vue را فعال نمی‌کنند. این هزینه را کم می‌کند.
+- **EN:** The `governance.require-release-change` rule fires only when the project's saved guidelines ask for a changelog, as one `medium` finding on the MR. The Contributing reviewer no longer treats a missing changelog as a violation on every project.
+- **FA:** Rule مربوط به `governance.require-release-change` فقط وقتی فعال می‌شود که دستورالعمل ذخیره‌شدهٔ پروژه Changelog را بخواهد و یک یافتهٔ `medium` روی MR ثبت می‌کند. Contributing Reviewer هم دیگر نبود Changelog را در هر پروژه‌ای تخلف حساب نمی‌کند.
+- **EN:** When specialists are ticked manually they run by priority, so a tight budget drops the least important ones first and not Security.
+- **FA:** وقتی متخصص‌ها دستی انتخاب شوند به ترتیب اولویت اجرا می‌شوند، پس اگر بودجه کم بیاید اول کم‌اهمیت‌ترها حذف می‌شوند، نه Security.
+
+### Fixed
+- **EN:** Rule false positives removed: `/task-identifier` as a secret, placeholder values like `${PASSWORD}`, the word "debugger" in text, `Modal.confirm(`, a local `prompt(` function, JS `exec(` reported as `eval`, and code rules firing on comment lines.
+- **FA:** هشدارهای غلط Ruleها حذف شد: `/task-identifier` به‌عنوان secret، مقدارهای placeholder مثل `${PASSWORD}`، کلمهٔ «debugger» در متن، `Modal.confirm(`، تابع محلی `prompt(`، گزارش `exec(` در JS به‌عنوان `eval` و اجرای Ruleهای کد روی خطوط کامنت.
+- **EN:** Two different problems reported by two specialists on the same line are no longer merged into one finding with inflated confidence.
+- **FA:** دو مشکل متفاوت که دو متخصص روی یک خط گزارش می‌کنند دیگر در یک یافته با confidence بادشده ادغام نمی‌شوند.
+- **EN:** Project guideline headings route correctly: "Formatting", "Platform" and "Information" are no longer database rules, "Authors" is not security, and "Git hooks" goes to governance instead of React. A section whose specialist is not running now reaches the Code Reviewer.
+- **FA:** تیترهای دستورالعمل پروژه درست مسیردهی می‌شوند: «Formatting»، «Platform» و «Information» دیگر قانون دیتابیس نیستند، «Authors» امنیتی نیست و «Git hooks» به‌جای React به governance می‌رود. بخشی که متخصصش اجرا نمی‌شود حالا به Code Reviewer می‌رسد.
+- **EN:** Specialist prompts no longer contain the literal text `undefined`, and diff statistics no longer count project-structure bullets as deleted lines.
+- **FA:** پرامپت متخصص‌ها دیگر متن `undefined` ندارد و آمار diff هم بولت‌های ساختار پروژه را خط حذف‌شده حساب نمی‌کند.
+
+### Security
+- **EN:** Secret detection now catches `sk-proj-`, `sk-ant-`, `ghp_`, `github_pat_`, `glpat-`, `AIza` and Slack `xox*` keys in plain strings, and prompt-injection detection covers Persian text.
+- **FA:** تشخیص secret حالا کلیدهای `sk-proj-`، `sk-ant-`، `ghp_`، `github_pat_`، `glpat-`، `AIza` و `xox*` اسلک را در رشتهٔ معمولی هم می‌گیرد و تشخیص تزریق پرامپت متن فارسی را هم پوشش می‌دهد.
+
+## [0.5.1] - 2026-11-04
+
+### Changed
+- **EN:** Settings → AI Providers: each routing notice now also has a plain-language Persian explanation under the English text.
+- **FA:** تنظیمات ← AI Providers: هر پیام مسیریابی حالا زیر متن انگلیسی یک توضیح ساده فارسی هم دارد.
+
+## [0.5.0] - 2026-11-04
+
+### Added
+- **EN:** Review failover: when a provider fails (network error, timeout, HTTP 401/403/404/429/5xx), a specialist's call moves to the next enabled provider: the same model first, then the same tier, then the rest. HTTP 400/422 is not retried elsewhere. The review diff can therefore reach every enabled provider, so disable any you don't want to receive it.
+- **FA:** Failover در ریویو: وقتی یک provider خطا بدهد (خطای شبکه، timeout، HTTP 401/403/404/429/5xx)، درخواست متخصص به provider فعال بعدی می‌رود: اول همان مدل، بعد همان tier و بعد بقیه. خطای HTTP 400/422 به provider دیگری فرستاده نمی‌شود. به همین دلیل diff ریویو ممکن است به هر provider فعالی برسد؛ هر کدام را که نمی‌خواهید diff دریافت کند غیرفعال کنید.
+- **EN:** Settings → AI Providers warns when no enabled provider covers the `mid` or `premium` tier, or when two entries share a model.
+- **FA:** تنظیمات ← AI Providers وقتی هیچ provider فعالی tier `mid` یا `premium` را پوشش ندهد، یا دو ورودی مدل یکسانی داشته باشند، هشدار می‌دهد.
+
+### Changed
+- **EN:** Active Default now decides routing: it wins within its own tier and serves any agent whose tier no enabled provider has. A cheaper or free provider (e.g. Ollama) no longer takes over a review just by being added; give it its own tier if you want agents to use it.
+- **FA:** Active Default حالا واقعاً مسیر را تعیین می‌کند: در tier خودش اولویت دارد و agentهایی را که هیچ provider فعالی tier موردنیازشان را ندارد سرویس می‌دهد. یک provider ارزان‌تر یا رایگان (مثل Ollama) دیگر صرفاً با اضافه شدن، ریویو را در اختیار نمی‌گیرد؛ اگر می‌خواهید agentها از آن استفاده کنند، tier جدا به آن بدهید.
+
+### Fixed
+- **EN:** With two entries of the same vendor, or the same model on two providers, the chosen default is now the one used. AI fixes and other single-provider features follow it too.
+- **FA:** با دو ورودی از یک سرویس، یا یک مدل روی دو provider، حالا همان پیش‌فرض انتخاب‌شده استفاده می‌شود. پیشنهاد اصلاح AI و قابلیت‌های تک‌providerی دیگر هم از آن پیروی می‌کنند.
+- **EN:** The cost estimate prices each agent at the model it will really use, instead of pricing all of them at the Active Default's rate.
+- **FA:** تخمین هزینه هر agent را با مدلی که واقعاً استفاده می‌کند حساب می‌کند، نه همه را با قیمت Active Default.
+
+### Security
+- **EN:** A provider entry with no API key no longer receives the active provider's key through `AI_REVIEW_LLM_API_KEY`, so that key is not sent to another provider's endpoint.
+- **FA:** ورودی provider بدون کلید API دیگر کلید provider فعال را از طریق `AI_REVIEW_LLM_API_KEY` نمی‌گیرد، پس آن کلید به endpoint یک provider دیگر فرستاده نمی‌شود.
+
+## [0.4.0] - 2026-11-04
+
+### Added
+- **EN:** Settings → AI Providers: "Fetch List" now opens a searchable model picker (type to filter, arrow keys + Enter) showing each model's context size. When the provider reports prices (OpenRouter, Together), the price per 1M tokens is shown and picking a model fills the Input / Output cost fields. `POST /api/models` additionally returns `modelInfos` (`id`, `name`, `inputCostPer1M`, `outputCostPer1M`, `contextLength`); `models` is unchanged.
+- **FA:** تنظیمات ← AI Providers: دکمه «Fetch List» حالا یک انتخابگر جستجوپذیر مدل باز می‌کند (تایپ برای فیلتر، کلیدهای جهت‌نما + Enter) و اندازه context هر مدل را نشان می‌دهد. اگر provider قیمت را اعلام کند (OpenRouter، Together) قیمت هر ۱M توکن نمایش داده می‌شود و با انتخاب مدل فیلدهای Input / Output cost پر می‌شوند. `POST /api/models` علاوه بر آن `modelInfos` را هم برمی‌گرداند (`id`، `name`، `inputCostPer1M`، `outputCostPer1M`، `contextLength`)؛ فیلد `models` تغییری نکرده است.
+- **EN:** Gemini model ids are listed without the `models/` prefix.
+- **FA:** شناسه مدل‌های Gemini بدون پیشوند `models/` نمایش داده می‌شوند.
+
 ## [0.3.2] - 2026-11-03
 
 ### Security

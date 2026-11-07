@@ -52,6 +52,7 @@ export const RESERVED_PROMPT_TAGS: readonly string[] = [
   "project_structure",
   "code_context",
   "skill_insights",
+  "rejected_feedback",
   "project_guidelines",
   "review_task",
 ];
