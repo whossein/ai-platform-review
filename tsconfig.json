@@ -16,6 +16,8 @@
       "@/*": ["./*"]
     },
     "allowImportingTsExtensions": true,
+    "strict": true,
     "noEmit": true
-  }
+  },
+  "exclude": ["node_modules", "dist", "**/dist", "**/*.test.ts", "apps/web/vite.config.ts"]
 }

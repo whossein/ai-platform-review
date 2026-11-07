@@ -67,7 +67,9 @@ export class MarkdownReporter implements Reporter {
     lines.push(
       `**${accepted.length} issue(s)** · ` +
         `${input.metrics.totalPromptTokens + input.metrics.totalCompletionTokens} tokens · ` +
-        `$${input.metrics.totalCostUsd.toFixed(4)} · ` +
+        (input.metrics.hasUnpricedModels
+          ? `~$${input.metrics.totalCostUsd.toFixed(4)} (estimated, model not in price table) · `
+          : `$${input.metrics.totalCostUsd.toFixed(4)} · `) +
         `${input.metrics.totalExecutionMs}ms`,
     );
     lines.push("");

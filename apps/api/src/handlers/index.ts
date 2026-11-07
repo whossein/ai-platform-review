@@ -59,6 +59,7 @@ export {
   findOrCreateProjectHandler,
   recordReviewHandler,
   submitFeedbackHandler,
+  removeSuppressedRuleHandler,
   deleteProjectHandler,
   attachMergeRequestMeta,
   gradeMergeRequestHandler,
@@ -66,6 +67,13 @@ export {
   listProjectDevelopersHandler,
   estimateMergeRequestAiUsageHandler,
 } from "./projects.js";
+
+export {
+  reviewCatalogHandler,
+  updateReviewConfigHandler,
+  type ReviewCatalog,
+  type ReviewConfigBody,
+} from "./review-config.js";
 
 export * from "./auth-handlers.js";
 export * from "./user-handlers.js";

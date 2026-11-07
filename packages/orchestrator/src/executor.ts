@@ -17,6 +17,7 @@ import type {
   LLMClient,
   ReviewMetrics,
   ReviewId,
+  RuleSuppression,
   WorkflowStage,
 } from "@ai-review/core";
 
@@ -34,7 +35,16 @@ import { MarkdownReporter, JsonReporter } from "@ai-review/reporting";
 import type { ReservableBudgetGuard } from "./budget.js";
 import { isTransientError } from "./budget.js";
 import { critique } from "./critic.js";
+import { candidateGroups, estimateDedupTokens, llmDedup } from "./llm-dedup.js";
 import { anchorIssues } from "./diff-anchor.js";
+
+/**
+ * Conservative fallback rate (USD per 1M tokens) for models absent from the
+ * price table, so the dollar budget still counts their spend. Deliberately
+ * above the $2/1M reservation estimate used in `runAgent`.
+ */
+export const FALLBACK_INPUT_COST_PER_1M = 5;
+export const FALLBACK_OUTPUT_COST_PER_1M = 15;
 
 export interface ModelPricing {
   readonly inputCostPer1M: number;
@@ -45,8 +55,14 @@ export interface ReviewExecutionContext {
   readonly diff: string;
   /** Enables MR metadata (branch/title) governance rules. */
   readonly governanceRules?: boolean | undefined;
+  /** Enables the optional LLM merge of same-line findings after the critic. */
+  readonly llmDedup?: boolean | undefined;
+  /** Language of deterministic rule messages (`fa`/`en`); English when omitted. */
+  readonly language?: string | undefined;
   readonly files?: readonly { path: string; text: string }[] | undefined;
   readonly slice: ContextSlice;
+  /** Rules a project manager silenced; matching deterministic findings are dropped. */
+  readonly suppressedRules?: readonly RuleSuppression[] | undefined;
   readonly baseCtx: AgentExecutionContext;
   readonly runtime: AgentRuntime;
   readonly reservableGuard: ReservableBudgetGuard;
@@ -126,6 +142,14 @@ export class ReviewStageExecutor implements StageExecutor {
       }
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
+      // A specialist that throws must still show up in `errors`; the retry and
+      // permanent-failure paths of runAgent already record theirs before returning.
+      if (stage.kind === "agent") {
+        const agentId = (stage.agentId ?? stage.id) as AgentId;
+        if (!this.ctx.agentErrors.some((e) => e.agentId === agentId)) {
+          this.recordAgentFailure(agentId, reason, 0);
+        }
+      }
       return { ok: true, value: { kind: "failed", reason } };
     }
   }
@@ -159,10 +183,22 @@ export class ReviewStageExecutor implements StageExecutor {
       const ruleCtx: FileRuleContext = {
         repositoryId: "repo.local",
         files: filesToScan,
+        projectInstructions: this.ctx.slice.projectInstructions,
+        language: this.ctx.language,
       };
       const ruleRes = await ruleEngine.run(ruleCtx);
       if (ruleRes.ok) {
+        const suppressed = this.ctx.suppressedRules ?? [];
         for (const finding of ruleRes.value.findings) {
+          if (
+            suppressed.some(
+              (s) =>
+                s.ruleId === finding.ruleId &&
+                (!s.file || s.file === finding.location.file),
+            )
+          ) {
+            continue;
+          }
           const issue = ruleFindingToIssue(finding);
           this.ctx.deterministicIssues.push(issue);
           this.ctx.allIssues.push(issue);
@@ -255,10 +291,17 @@ export class ReviewStageExecutor implements StageExecutor {
       complete: (req) => this.ctx.baseCtx.llm.complete(req),
     };
 
-    const execResult = await this.ctx.runtime.execute(agentId, {
-      ...this.ctx.baseCtx,
-      llm: agentLlm,
-    });
+    let execResult: Awaited<ReturnType<AgentRuntime["execute"]>>;
+    try {
+      execResult = await this.ctx.runtime.execute(agentId, {
+        ...this.ctx.baseCtx,
+        llm: agentLlm,
+      });
+    } catch (err) {
+      // Do not leak the reservation; execute() records the failure.
+      this.ctx.reservableGuard.release(reservationId);
+      throw err;
+    }
 
     const executionMs = Date.now() - agentStart;
 
@@ -269,10 +312,12 @@ export class ReviewStageExecutor implements StageExecutor {
       const totalTokens = promptTokens + completionTokens;
 
       const price = value.model ? this.ctx.pricing.get(value.model) : undefined;
-      const costUsd = price
-        ? (promptTokens / 1_000_000) * price.inputCostPer1M +
-          (completionTokens / 1_000_000) * price.outputCostPer1M
-        : 0;
+      const costEstimated = !price;
+      const costUsd =
+        (promptTokens / 1_000_000) *
+          (price?.inputCostPer1M ?? FALLBACK_INPUT_COST_PER_1M) +
+        (completionTokens / 1_000_000) *
+          (price?.outputCostPer1M ?? FALLBACK_OUTPUT_COST_PER_1M);
 
       // Post-execution reconciliation
       this.ctx.reservableGuard.reconcile(reservationId, {
@@ -290,6 +335,7 @@ export class ReviewStageExecutor implements StageExecutor {
         promptTokens,
         completionTokens,
         costUsd,
+        ...(costEstimated ? { costEstimated: true } : {}),
         cacheHits: 0,
         cacheMisses: 0,
       });
@@ -342,8 +388,70 @@ export class ReviewStageExecutor implements StageExecutor {
   }
 
   private async executeCritic(): AsyncResult<StageOutcome> {
-    this.ctx.consolidatedIssues = critique(this.ctx.allIssues);
+    const critiqued = critique(this.ctx.allIssues);
+    this.ctx.consolidatedIssues = this.ctx.llmDedup
+      ? await this.runLlmDedup(critiqued)
+      : critiqued;
     return { ok: true, value: { kind: "completed" } };
+  }
+
+  /**
+   * Optional LLM merge of same-line duplicates. Best effort: a refused budget,
+   * failed call or bad answer keeps the deterministic result and is NOT an
+   * agent error (it must not invalidate eval runs).
+   */
+  private async runLlmDedup(
+    critiqued: ReturnType<typeof critique>,
+  ): Promise<ReturnType<typeof critique>> {
+    const eligible = (i: { confidence: number }) =>
+      i.confidence >= this.ctx.threshold;
+    const groups = candidateGroups(critiqued, eligible);
+    if (groups.length === 0) return critiqued;
+
+    const estimatedTokens = estimateDedupTokens(critiqued, groups);
+    const reservation = this.ctx.reservableGuard.reserve({
+      tokens: estimatedTokens,
+      dollars: (estimatedTokens / 1_000_000) * 2.0,
+    });
+    if (!reservation.ok) return critiqued;
+
+    const start = Date.now();
+    let res: Awaited<ReturnType<typeof llmDedup>>;
+    try {
+      res = await llmDedup(critiqued, this.ctx.baseCtx.llm, { eligible });
+    } catch {
+      this.ctx.reservableGuard.release(reservation.reservationId);
+      return critiqued;
+    }
+
+    const usage = res.response?.usage;
+    if (!res.response || !usage) {
+      this.ctx.reservableGuard.release(reservation.reservationId);
+      return res.issues;
+    }
+    const promptTokens = usage.promptTokens ?? 0;
+    const completionTokens = usage.completionTokens ?? 0;
+    const price = this.ctx.pricing.get(res.response.model);
+    const costUsd =
+      (promptTokens / 1_000_000) *
+        (price?.inputCostPer1M ?? FALLBACK_INPUT_COST_PER_1M) +
+      (completionTokens / 1_000_000) *
+        (price?.outputCostPer1M ?? FALLBACK_OUTPUT_COST_PER_1M);
+    this.ctx.reservableGuard.reconcile(reservation.reservationId, {
+      tokensUsed: promptTokens + completionTokens,
+      dollarsSpent: costUsd,
+    });
+    this.ctx.agentMetrics.push({
+      agentId: "llm-dedup" as AgentId,
+      executionMs: Date.now() - start,
+      promptTokens,
+      completionTokens,
+      costUsd,
+      ...(price ? {} : { costEstimated: true }),
+      cacheHits: 0,
+      cacheMisses: 0,
+    });
+    return res.issues;
   }
 
   private async executeJudge(): AsyncResult<StageOutcome> {
@@ -380,6 +488,9 @@ export class ReviewStageExecutor implements StageExecutor {
         (sum, a) => sum + a.costUsd,
         0,
       ),
+      ...(this.ctx.agentMetrics.some((a) => a.costEstimated)
+        ? { hasUnpricedModels: true }
+        : {}),
       cacheHits: 0,
       cacheMisses: 0,
       agents: this.ctx.agentMetrics,

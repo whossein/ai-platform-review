@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ShieldCheck, UserCheck, Lock, Mail, ArrowRight, AlertCircle, Sparkles } from "lucide-react";
+import { UserCheck, Lock, Mail, ArrowRight, AlertCircle, Sparkles } from "lucide-react";
 import { useAuth } from "./AuthContext.js";
 
 export function SetupView(): JSX.Element {
@@ -52,7 +52,7 @@ export function SetupView(): JSX.Element {
       <div className="auth-card" style={{ maxWidth: "520px" }}>
         <div className="auth-header">
           <div className="auth-icon-badge" style={{ background: "rgba(139, 92, 246, 0.15)", borderColor: "rgba(139, 92, 246, 0.3)" }}>
-            <ShieldCheck size={32} className="text-purple-400" />
+            <img src="/icon-192.png" alt="AI Review" width={48} height={48} style={{ borderRadius: 10 }} />
           </div>
           <h2>First-Run Setup</h2>
           <p>

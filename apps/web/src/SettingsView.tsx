@@ -22,6 +22,9 @@ import {
   X,
   Power,
 } from "lucide-react";
+import { routingNotices } from "./provider-routing.js";
+import { ModelPicker } from "./ModelPicker.js";
+import type { ModelInfo, ModelListState } from "./ModelPicker.js";
 import { useAppConfig, defaultGitBaseUrl } from "./Settings.js";
 import type { AIProviderConfig, AppConfig, GitConnection } from "./Settings.js";
 import {
@@ -136,9 +139,7 @@ export function SettingsView() {
   const [editForm, setEditForm] = useState<AIProviderConfig | null>(null);
 
   const [testStates, setTestStates] = useState<Record<string, TestState>>({});
-  const [modelLists, setModelLists] = useState<
-    Record<string, { loading: boolean; models: string[]; error?: string }>
-  >({});
+  const [modelLists, setModelLists] = useState<Record<string, ModelListState>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFetchModels = async (
@@ -165,7 +166,10 @@ export function SettingsView() {
       if (!data.ok) throw new Error(data.error || "Failed to fetch models");
       setModelLists((prev) => ({
         ...prev,
-        [key]: { loading: false, models: data.models },
+        [key]: {
+          loading: false,
+          models: (data.modelInfos as ModelInfo[] | undefined) ?? (data.models as string[]).map((id) => ({ id })),
+        },
       }));
     } catch (err: any) {
       setModelLists((prev) => ({
@@ -686,6 +690,61 @@ export function SettingsView() {
           </div>
         </div>
 
+        {/* Routing outcome when several providers are enabled */}
+        {(() => {
+          const modelOf = (p: AIProviderConfig) =>
+            p.model ||
+            (PRESET_DEFAULTS[p.provider] || PRESET_DEFAULTS.custom)
+              .defaultModel;
+          const notices = routingNotices(
+            local.AI_PROVIDERS || [],
+            local.AI_REVIEW_LLM_PROVIDER,
+            (p) =>
+              `${(PRESET_DEFAULTS[p.provider] || PRESET_DEFAULTS.custom).label || p.provider} / ${modelOf(p)}`,
+            modelOf,
+          );
+          if (notices.length === 0) return null;
+          return (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.7rem",
+                marginBottom: "1rem",
+                padding: "0.6rem 0.8rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--bg)",
+                fontSize: "0.8rem",
+              }}
+            >
+              {notices.map((n, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: n.kind === "warning" ? "var(--medium)" : "var(--muted)",
+                  }}
+                >
+                  <div>
+                    {n.kind === "warning" ? "Warning: " : ""}
+                    {n.text}
+                  </div>
+                  <div
+                    dir="rtl"
+                    style={{
+                      marginTop: "0.2rem",
+                      textAlign: "right",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {n.textFa}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* List of Configured Providers */}
         <div
           style={{
@@ -858,63 +917,21 @@ export function SettingsView() {
                       marginTop: "0.75rem",
                     }}
                   >
-                    <div
-                      className="form-group"
-                      style={{ flex: 1, marginBottom: 0 }}
-                    >
-                      <label
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span>Model Name</span>
-                        <button
-                          type="button"
-                          onClick={() => handleFetchModels("edit", editForm)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--accent)",
-                            cursor: "pointer",
-                            fontSize: "0.8rem",
-                            padding: 0,
-                          }}
-                        >
-                          {modelLists["edit"]?.loading
-                            ? "Loading..."
-                            : modelLists["edit"]?.models?.length
-                              ? `Loaded (${modelLists["edit"].models.length})`
-                              : "Fetch List"}
-                        </button>
-                      </label>
-                      <input
-                        type="text"
-                        value={editForm.model}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, model: e.target.value })
-                        }
-                        placeholder={`Default: ${editPreset.defaultModel}`}
-                        list="edit-models-list"
-                      />
-                      {modelLists["edit"]?.error && (
-                        <div
-                          style={{
-                            color: "var(--error)",
-                            fontSize: "0.8rem",
-                            marginTop: "0.25rem",
-                          }}
-                        >
-                          {modelLists["edit"].error}
-                        </div>
-                      )}
-                      <datalist id="edit-models-list">
-                        {modelLists["edit"]?.models?.map((m) => (
-                          <option key={m} value={m} />
-                        ))}
-                      </datalist>
-                    </div>
+                    <ModelPicker
+                label="Model Name"
+                value={editForm.model}
+                placeholder={`Default: ${editPreset.defaultModel}`}
+                list={modelLists["edit"]}
+                onFetch={() => handleFetchModels("edit", editForm)}
+                onChange={(id, info) =>
+                  setEditForm((prev) => prev && ({
+                    ...prev,
+                    model: id,
+                    ...(info?.inputCostPer1M !== undefined ? { inputCostPer1M: info.inputCostPer1M } : {}),
+                    ...(info?.outputCostPer1M !== undefined ? { outputCostPer1M: info.outputCostPer1M } : {}),
+                  }))
+                }
+              />
                     <div
                       className="form-group"
                       style={{ flex: 1, marginBottom: 0 }}
@@ -1165,6 +1182,7 @@ export function SettingsView() {
                     )}
                     {isDefault && (
                       <span
+                        title="Used when no enabled provider matches an agent's tier, and wins within its own tier."
                         style={{
                           fontSize: "0.75rem",
                           background: "var(--accent)",
@@ -1218,7 +1236,7 @@ export function SettingsView() {
                     {!isDefault && !isDisabled && (
                       <button
                         onClick={() => handleSetDefaultProvider(p.id)}
-                        title="Set as Active Default Provider"
+                        title="Set as Active Default Provider (used when no provider matches an agent's tier; wins within its own tier)"
                         style={{
                           padding: "0.4rem",
                           background: "transparent",
@@ -1549,60 +1567,21 @@ export function SettingsView() {
           )}
 
           <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem" }}>
-            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-              <label
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>Model Name (Optional)</span>
-                <button
-                  type="button"
-                  onClick={() => handleFetchModels("new", newProvider)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--accent)",
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                    padding: 0,
-                  }}
-                >
-                  {modelLists["new"]?.loading
-                    ? "Loading..."
-                    : modelLists["new"]?.models?.length
-                      ? `Loaded (${modelLists["new"].models.length})`
-                      : "Fetch List"}
-                </button>
-              </label>
-              <input
-                type="text"
+            <ModelPicker
+                label="Model Name (Optional)"
                 value={newProvider.model}
-                onChange={(e) =>
-                  setNewProvider({ ...newProvider, model: e.target.value })
-                }
                 placeholder={`Default: ${PRESET_DEFAULTS[newProvider.provider]?.defaultModel || "gpt-4o-mini"}`}
-                list="new-models-list"
+                list={modelLists["new"]}
+                onFetch={() => handleFetchModels("new", newProvider)}
+                onChange={(id, info) =>
+                  setNewProvider((prev) => ({
+                    ...prev,
+                    model: id,
+                    ...(info?.inputCostPer1M !== undefined ? { inputCostPer1M: info.inputCostPer1M } : {}),
+                    ...(info?.outputCostPer1M !== undefined ? { outputCostPer1M: info.outputCostPer1M } : {}),
+                  }))
+                }
               />
-              {modelLists["new"]?.error && (
-                <div
-                  style={{
-                    color: "var(--error)",
-                    fontSize: "0.8rem",
-                    marginTop: "0.25rem",
-                  }}
-                >
-                  {modelLists["new"].error}
-                </div>
-              )}
-              <datalist id="new-models-list">
-                {modelLists["new"]?.models?.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-            </div>
             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
               <label>Tier / Speed</label>
               <select

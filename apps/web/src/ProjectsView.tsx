@@ -29,6 +29,7 @@ import {
   optimizeProjectInstructions,
   type OptimizedInstructions,
   deleteProject,
+  removeSuppressedRule,
   type ProjectWithStats,
   type ProjectDetailsResponse,
   type ProjectMergeRequest,
@@ -1797,6 +1798,64 @@ export function ProjectsView({
                   )}
                 </div>
               )}
+
+              {/* Rules silenced via review feedback (managers only; hidden when none) */}
+              {(projectDetails.userRole === "OWNER" || projectDetails.userRole === "MANAGER") &&
+                (projectDetails.project.suppressedRules?.length ?? 0) > 0 && (
+                  <div
+                    style={{
+                      background: "var(--panel)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "10px",
+                      padding: "1rem 1.25rem",
+                      marginTop: "1rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.6rem",
+                    }}
+                  >
+                    <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text)" }}>
+                      Silenced rules / قوانین خاموش‌شده
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                      Includes rules switched off project-wide in Skills & Rules.
+                    </div>
+                    {projectDetails.project.suppressedRules!.map((s) => (
+                      <div
+                        key={`${s.ruleId}|${s.file ?? ""}`}
+                        style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", fontSize: "0.82rem" }}
+                      >
+                        <code style={{ color: "var(--text)" }}>{s.ruleId}</code>
+                        <span style={{ color: "var(--muted)", flex: 1, wordBreak: "break-all" }}>
+                          {s.file ?? "whole project / کل پروژه"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setGuidelinesError(null);
+                              const updated = await removeSuppressedRule(projectDetails.project.id, s);
+                              setProjectDetails((prev) => (prev ? { ...prev, project: updated } : prev));
+                            } catch (err: any) {
+                              setGuidelinesError(err.message || "Failed to remove silenced rule");
+                            }
+                          }}
+                          style={{
+                            background: "rgba(255, 255, 255, 0.05)",
+                            border: "1px solid var(--border)",
+                            color: "var(--muted)",
+                            borderRadius: "6px",
+                            padding: "0.25rem 0.6rem",
+                            fontSize: "0.75rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Remove / حذف
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
           )}
 

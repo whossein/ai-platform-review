@@ -35,6 +35,8 @@ export function buildEnvOverrides(config: any, language: string, targetUrl?: str
     );
     if (active && active.enabled !== false) {
       envOverrides.AI_REVIEW_LLM_PROVIDER = active.provider;
+      // The type alone can't tell two entries of the same vendor apart.
+      envOverrides.AI_REVIEW_ACTIVE_PROVIDER_ID = active.id;
       if (active.apiKey) envOverrides.AI_REVIEW_LLM_API_KEY = active.apiKey;
       if (active.model) envOverrides.AI_REVIEW_LLM_MODEL = active.model;
       if (active.baseUrl) envOverrides.AI_REVIEW_LLM_BASE_URL = active.baseUrl;
@@ -51,6 +53,7 @@ export function buildEnvOverrides(config: any, language: string, targetUrl?: str
       const fallback = enabledProviders[0];
       if (fallback) {
         envOverrides.AI_REVIEW_LLM_PROVIDER = fallback.provider;
+        envOverrides.AI_REVIEW_ACTIVE_PROVIDER_ID = fallback.id;
         if (fallback.apiKey)
           envOverrides.AI_REVIEW_LLM_API_KEY = fallback.apiKey;
         if (fallback.model) envOverrides.AI_REVIEW_LLM_MODEL = fallback.model;

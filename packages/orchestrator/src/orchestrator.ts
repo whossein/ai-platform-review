@@ -26,11 +26,13 @@ import type {
   MemoryStore,
   WorkflowEngine,
   BudgetGuard,
+  RuleSuppression,
 } from "@ai-review/core";
 import type { StageExecutor } from "@ai-review/workflow-engine";
 import type { SourceFile } from "@ai-review/context-engine";
 import { untrustedBlock } from "@ai-review/core";
 
+import { ruleLanguageFromEnv } from "@ai-review/config";
 import { plan, type ReviewPlan } from "./planner.js";
 import { annotateDiffLineNumbers } from "./diff-anchor.js";
 import { ReservableBudgetGuard } from "./budget.js";
@@ -93,7 +95,24 @@ export interface RunOptions {
   readonly projectName?: string;
   /** Optional structural context (e.g. from the project index) appended to every reviewer's input. */
   readonly projectContext?: string;
+  /** Deterministic rules silenced for this project. */
+  readonly suppressedRules?: readonly RuleSuppression[];
+  /**
+   * Specialist ids the project switched off. Removed after planning, also from an
+   * explicit `selectedSpecialists`. The security reviewer is never removed.
+   */
+  readonly disabledAgents?: readonly string[];
+  /** Project-manager guidance per specialist id; sent only in that specialist's own task message. */
+  readonly agentInstructions?: Readonly<Record<string, string>>;
+  /**
+   * Digest of the project's recently rejected findings. Untrusted: shown to
+   * reviewers only as a data block in their final message, never as guidelines.
+   */
+  readonly rejectedFeedback?: string;
 }
+
+/** Specialists a project cannot switch off, whatever its settings say. */
+const ALWAYS_ON_AGENTS: ReadonlySet<string> = new Set(["agent.security-reviewer"]);
 
 export class ReviewOrchestrator {
   constructor(private readonly ctx: OrchestratorContext) {}
@@ -140,9 +159,46 @@ export class ReviewOrchestrator {
       ? `\n\n${untrustedBlock("project_structure", opts.projectContext.trim())}`
       : "";
 
+    // Plan smart routing for specialists
+    const registry = this.ctx.registry;
+    const availableAgents = registry.list();
+    const reviewPlan: ReviewPlan = plan({
+      diff: opts.diff,
+      agents: availableAgents,
+      hasProjectInstructions:
+        Boolean(projectInstructions) ||
+        Boolean(opts.agentInstructions?.["agent.contributing-reviewer"]?.trim()),
+    });
+
+    // Highest priority first, so a tight budget drops the least important reviewers.
+    const chosenAgents = opts.selectedSpecialists
+      ? availableAgents
+          .filter((s) => opts.selectedSpecialists?.includes(s.name))
+          .sort((a, b) => b.priority - a.priority)
+      : reviewPlan.selected;
+    // A project's switched-off specialists never run. With none left the review
+    // still completes: deterministic rules, critic and report, as for an empty selection.
+    const disabled = new Set(
+      (opts.disabledAgents ?? []).filter((id) => !ALWAYS_ON_AGENTS.has(id)),
+    );
+    const agentsToRun = chosenAgents.filter((a) => !disabled.has(a.id as string));
+    const agentInstructions = Object.fromEntries(
+      Object.entries(opts.agentInstructions ?? {}).filter(
+        ([id, text]) =>
+          typeof text === "string" &&
+          text.trim() !== "" &&
+          agentsToRun.some((a) => a.id === id),
+      ),
+    );
+
+    const rejectedFeedback = opts.rejectedFeedback?.trim() || undefined;
     const instructionFields = {
+      rawDiff: opts.diff,
+      activeAgentIds: agentsToRun.map((a) => a.id as string),
       ...(projectInstructions ? { projectInstructions } : {}),
       ...(opts.projectName ? { projectName: opts.projectName } : {}),
+      ...(Object.keys(agentInstructions).length > 0 ? { agentInstructions } : {}),
+      ...(rejectedFeedback ? { rejectedFeedback } : {}),
     };
 
     if (built.ok) {
@@ -188,7 +244,6 @@ export class ReviewOrchestrator {
       set: (key, value) => memoryStore.set("review", key, value),
       delete: (key) => memoryStore.delete("review", key),
     };
-    const registry = this.ctx.registry;
     const runtime = this.ctx.runtime;
     const pricing = this.ctx.pricing;
     // Base execution context passed into agents through AgentRuntime
@@ -211,21 +266,13 @@ export class ReviewOrchestrator {
       seedSlice: slice,
     };
 
-    // Plan smart routing for specialists
-    const availableAgents = registry.list();
-    const reviewPlan: ReviewPlan = plan({
-      diff: opts.diff,
-      agents: availableAgents,
-    });
-
-    const agentsToRun = opts.selectedSpecialists
-      ? availableAgents.filter((s) => opts.selectedSpecialists?.includes(s.name))
-      : reviewPlan.selected;
-
     // Construct ReviewExecutionContext
     const reviewCtx: ReviewExecutionContext = {
       diff: opts.diff,
       governanceRules: opts.env?.AI_REVIEW_GOVERNANCE_RULES === "1",
+      llmDedup: opts.env?.AI_REVIEW_LLM_DEDUP === "1",
+      language: ruleLanguageFromEnv({ ...process.env, ...opts.env }),
+      suppressedRules: opts.suppressedRules ?? [],
       files: opts.files,
       slice,
       baseCtx,

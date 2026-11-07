@@ -16,7 +16,9 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@ai-review/config": "*",
     "@ai-review/core": "*",
+    "@ai-review/git": "*",
     "@ai-review/orchestrator": "*",
     "@ai-review/llm": "*"
   },

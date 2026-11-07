@@ -14,11 +14,13 @@ import { runReview } from "@ai-review/orchestrator";
 import { resolveDiffInput, parseDiffToFiles } from "@ai-review/git";
 import { providersFromEnv } from "@ai-review/llm";
 import { buildEffectiveEnv } from "./client-env.js";
+import { enforceableSuppressions } from "./projects.js";
 import type {
   AgentRegistry,
   LLMProvider,
   MemoryStore,
   Project,
+  RuleSuppression,
 } from "@ai-review/core";
 
 export interface ReviewRequest {
@@ -30,6 +32,14 @@ export interface ReviewRequest {
   readonly projectId?: string;
   readonly projectName?: string;
   readonly customInstructions?: string;
+  /** Deterministic rules the project's managers silenced via feedback. */
+  readonly suppressedRules?: readonly RuleSuppression[] | undefined;
+  /** Specialists (agent ids) the project switched off. */
+  readonly disabledAgents?: readonly string[] | undefined;
+  /** Project-manager guidance per specialist id. */
+  readonly agentInstructions?: Readonly<Record<string, string>> | undefined;
+  /** Untrusted digest of rejected findings; reaches reviewers as a data block only. */
+  readonly rejectedFeedback?: string | undefined;
   /**
    * Called with the changed file paths once the diff is resolved; may return
    * extra structural context (e.g. from the project index) for the reviewers.
@@ -75,8 +85,14 @@ export async function reviewHandler(
     selectedSpecialists,
     customInstructions,
     projectName,
+    suppressedRules,
+    disabledAgents,
+    agentInstructions,
+    rejectedFeedback,
   } = request;
   const effectiveMemoryStore = memoryStore || request.memoryStore;
+  // Project-wide silencing of a security rule is never honoured, even if stored.
+  const enforceable = enforceableSuppressions(suppressedRules);
 
   if (!diff || typeof diff !== "string" || diff.trim().length === 0) {
     throw new Error('field "diff" is required');
@@ -112,6 +128,10 @@ export async function reviewHandler(
       ...(effectiveMemoryStore ? { memoryStore: effectiveMemoryStore } : {}),
       ...(customInstructions ? { customInstructions } : {}),
       ...(projectName ? { projectName } : {}),
+      ...(enforceable.length ? { suppressedRules: enforceable } : {}),
+      ...(disabledAgents?.length ? { disabledAgents } : {}),
+      ...(agentInstructions && Object.keys(agentInstructions).length > 0 ? { agentInstructions } : {}),
+      ...(rejectedFeedback?.trim() ? { rejectedFeedback } : {}),
       ...(projectContext ? { projectContext } : {}),
     },
     extraProviders

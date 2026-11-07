@@ -33,6 +33,8 @@ export interface ReviewIssue {
   };
   readonly location: { readonly file: string; readonly line?: number };
   readonly category: string;
+  /** Producer agent id; "agent.rule-engine" marks a deterministic rule finding. */
+  readonly producedBy?: string | undefined;
   readonly accepted: boolean;
   readonly rankScore: number;
 }
@@ -125,11 +127,12 @@ export async function authFetch(
 export async function requestEstimate(
   diff: string,
   env?: Record<string, string>,
+  projectId?: string,
 ): Promise<EstimateResponse> {
   const res = await authFetch("/api/estimate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ diff, ...(env ? { env } : {}) }),
+    body: JSON.stringify({ diff, ...(env ? { env } : {}), ...(projectId ? { projectId } : {}) }),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -303,7 +306,7 @@ export interface FeedbackInput {
 export interface FeedbackResult {
   ruleAdded: boolean;
   ruleDenied?: string;
-  project?: { id: string; customInstructions?: string };
+  project?: { id: string; customInstructions?: string; suppressedRules?: readonly SuppressedRule[] };
 }
 
 export function requestFeedback(
@@ -406,8 +409,19 @@ export interface Project {
   /** Token-saving version sent to reviewers while present (cleared when the full text changes). */
   readonly compactInstructions?: string | undefined;
   readonly userRole?: string | undefined;
+  /** Deterministic rules a manager silenced; `file` absent means the whole project. */
+  readonly suppressedRules?: readonly SuppressedRule[] | undefined;
+  /** Specialists (agent ids) switched off for this project. */
+  readonly disabledAgents?: readonly string[] | undefined;
+  /** Extra guidance per specialist id. */
+  readonly agentInstructions?: Readonly<Record<string, string>> | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface SuppressedRule {
+  readonly ruleId: string;
+  readonly file?: string | undefined;
 }
 
 export interface MergeRequestAuthor {
@@ -640,6 +654,74 @@ export async function estimateMergeRequestAiUsage(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Estimate failed (${res.status})`);
   return data.mergeRequest;
+}
+
+/** Re-enables a silenced rule (managers only). Returns the updated project. */
+export async function removeSuppressedRule(
+  projectId: string,
+  rule: SuppressedRule,
+): Promise<Project> {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(projectId)}/suppressed-rules`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(rule),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to remove silenced rule (${res.status})`);
+  }
+  return data.project as Project;
+}
+
+export interface CatalogAgent {
+  readonly id: string;
+  readonly name: string;
+  readonly goal: string;
+  readonly checklist: string;
+  readonly focus: string;
+  /** Cannot be switched off. */
+  readonly locked: boolean;
+}
+
+export interface CatalogRule {
+  readonly id: string;
+  readonly description: string;
+  readonly severity: string | null;
+  /** Can only be silenced for one file, never project-wide. */
+  readonly security: boolean;
+}
+
+export interface ReviewCatalog {
+  readonly agents: readonly CatalogAgent[];
+  readonly rules: readonly CatalogRule[];
+  readonly limits: { readonly maxAgentInstructionLength: number };
+}
+
+/** The AI specialists and deterministic rules a review is really made of. */
+export async function fetchReviewCatalog(): Promise<ReviewCatalog> {
+  const res = await authFetch("/api/review-catalog");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to load the review catalog (${res.status})`);
+  return data as ReviewCatalog;
+}
+
+/** Saves which specialists/rules are off and the per-specialist guidance (managers only). */
+export async function saveReviewConfig(
+  projectId: string,
+  config: {
+    disabledAgents?: readonly string[];
+    agentInstructions?: Readonly<Record<string, string>>;
+    disabledRules?: readonly string[];
+  },
+): Promise<Project> {
+  const res = await authFetch(`/api/projects/${encodeURIComponent(projectId)}/review-config`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Failed to save review settings (${res.status})`);
+  return data.project as Project;
 }
 
 export async function deleteProject(id: string): Promise<boolean> {

@@ -35,6 +35,13 @@ export {
   MR_METADATA_PATH,
   mrMetadataFile,
 } from "./rules.js";
+export {
+  RULE_MESSAGES,
+  ruleLanguageFromEnv,
+  ruleMessage,
+  toRuleLanguage,
+} from "./rule-messages.js";
+export type { RuleLanguage } from "./rule-messages.js";
 export type { FileRuleContext } from "./rules.js";
 
 /** The synthetic agent id attributed to deterministic (non-AI) findings. */

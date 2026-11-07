@@ -33,23 +33,23 @@ export function HowItWorksView(): JSX.Element {
         "Instead of passing the entire codebase to a single, easily confused LLM, the Orchestrator splits the task. It wakes up a specific agent for React components, another for Python backend, and another for Security. They run in parallel, reducing latency and token costs.",
       deepDive2Title: "Deterministic + Probabilistic",
       deepDive2Desc:
-        "Why waste LLM tokens on checking branch names or regex patterns? The system runs a blazing-fast static rule engine first. Only complex, semantic reviews are passed to the expensive AI models.",
+        "Why waste LLM tokens on things a pattern can catch, like leftover debug code or hardcoded secrets? The system runs a blazing-fast static rule engine first. Only complex, semantic reviews are passed to the expensive AI models.",
       deepDive3Title: "Project-Aware Context",
       deepDive3Desc:
-        "The system dynamically reads docs/contributing/ and .eslintrc. Agents don't just review generic code; they review against your specific repository standards, branch naming conventions, and linting rules.",
+        "Each project can save its own guidelines, and the reviewers apply them (only the sections relevant to each specialist). If the repository is indexed, they also get its structure as context. Docs changed by the merge request are reviewed as changes, never adopted as rules.",
       steps: [
         {
           id: "context",
           title: "Context Engine",
           description:
-            "Parses the MR/PR, extracts diffs, codebase context, and dynamically reads local project guidelines from your docs/.",
+            "Parses the MR/PR, extracts the diff and code context, and adds your project's saved guidelines and, when indexed, its structure.",
           color: "#3fb950",
         },
         {
           id: "static",
           title: "Static Analysis",
           description:
-            "Zero-cost deterministic rule engine runs instantly. Checks syntax, basic linting, and branch naming conventions without wasting AI tokens.",
+            "Zero-cost deterministic rule engine runs instantly. Catches secrets, debug leftovers, unsafe patterns and similar problems without spending AI tokens. Branch and commit checks are available as an opt-in setting.",
           color: "#d29922",
         },
         {
@@ -94,23 +94,23 @@ export function HowItWorksView(): JSX.Element {
         "به جای ارسال کل کد برای یک مدل هوش مصنوعی عمومی که به راحتی گیج می‌شود، ارکستراتور کار را تقسیم می‌کند. یک ایجنت برای فرانت‌اند، یکی برای بک‌اند و یکی برای امنیت بیدار شده و موازی کار می‌کنند.",
       deepDive2Title: "ترکیب قطعی و احتمالی",
       deepDive2Desc:
-        "چرا برای بررسی نام برنچ‌ها توکن‌های هوش مصنوعی را هدر دهیم؟ سیستم ابتدا یک موتور قوانین قطعی و سریع را اجرا می‌کند. فقط کدهای پیچیده به مدل‌های گران‌قیمت AI ارسال می‌شوند.",
+        "چرا برای چیزهایی که با یک الگو پیدا می‌شوند، مثل کد دیباگ جامانده یا کلید لو رفته، توکن هوش مصنوعی هدر دهیم؟ سیستم ابتدا یک موتور قوانین قطعی و سریع را اجرا می‌کند. فقط کدهای پیچیده به مدل‌های گران‌قیمت AI ارسال می‌شوند.",
       deepDive3Title: "آگاه به ساختار پروژه شما",
       deepDive3Desc:
-        "سیستم فایل‌های راهنمای پروژه شما (مثل docs/) را می‌خواند. ایجنت‌ها صرفاً قوانین عمومی را چک نمی‌کنند، بلکه کد را بر اساس استانداردهای دقیق مخزن شما بررسی می‌کنند.",
+        "هر پروژه می‌تواند دستورالعمل‌های خودش را ذخیره کند و ریویوکننده‌ها آن را اعمال می‌کنند (برای هر متخصص فقط بخش‌های مرتبط). اگر مخزن ایندکس شده باشد، ساختار آن هم به‌عنوان زمینه داده می‌شود. مستنداتی که خود MR تغییر داده، به‌عنوان تغییر بررسی می‌شوند و هیچ‌وقت به‌عنوان قانون پذیرفته نمی‌شوند.",
       steps: [
         {
           id: "context",
           title: "موتور کانتکست (Context)",
           description:
-            "تغییرات کد (Diff) را دریافت کرده و همزمان فایل‌های راهنما و مستندات اختصاصی پروژه شما (مثل docs/ یا lint) را برای بررسی می‌خواند.",
+            "تغییرات کد (Diff) و زمینهٔ کد را دریافت می‌کند و دستورالعمل‌های ذخیره‌شدهٔ پروژه شما و، در صورت ایندکس بودن، ساختار آن را اضافه می‌کند.",
           color: "#3fb950",
         },
         {
           id: "static",
           title: "تحلیل استاتیک (بدون هزینه)",
           description:
-            "اجرای آنی موتور قوانین قطعی. بررسی‌های اولیه مانند سینتکس و نام‌گذاری برنچ‌ها قبل از درگیر کردن هوش مصنوعی بررسی می‌شوند.",
+            "اجرای آنی موتور قوانین قطعی. مواردی مثل کلید لو رفته، کد دیباگ جامانده و الگوهای ناامن بدون خرج توکن پیدا می‌شوند. بررسی نام برنچ و پیام commit به‌صورت تنظیم اختیاری در دسترس است.",
           color: "#d29922",
         },
         {
