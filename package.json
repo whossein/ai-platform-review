@@ -43,8 +43,6 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
-    "@semantic-release/changelog": "^7.0.0",
-    "@semantic-release/git": "^11.0.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "concurrently": "^10.0.5",
@@ -91,28 +89,6 @@
     "plugins": [
       "@semantic-release/commit-analyzer",
       "@semantic-release/release-notes-generator",
-      [
-        "@semantic-release/changelog",
-        {
-          "changelogTitle": "# Changelog"
-        }
-      ],
-      [
-        "@semantic-release/npm",
-        {
-          "npmPublish": false
-        }
-      ],
-      [
-        "@semantic-release/git",
-        {
-          "assets": [
-            "package.json",
-            "package-lock.json",
-            "CHANGELOG.md"
-          ]
-        }
-      ],
       "@semantic-release/github"
     ]
   }
