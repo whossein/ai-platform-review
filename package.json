@@ -39,6 +39,7 @@
     "@ai-review/project-index": "*",
     "@ai-review/shared": "*",
     "@ai-review/workflow-engine": "*",
+    "electron-updater": "^6.8.11",
     "express": "^4.22.3",
     "express-rate-limit": "^8.7.4",
     "lucide-react": "^1.31.0",
@@ -63,6 +64,12 @@
   "build": {
     "appId": "com.aireview.app",
     "productName": "AI Code Reviewer",
+    "artifactName": "AI-Code-Reviewer-${version}-${os}-${arch}.${ext}",
+    "publish": {
+      "provider": "github",
+      "owner": "whossein",
+      "repo": "ai-platform-review"
+    },
     "directories": {
       "output": "release"
     },

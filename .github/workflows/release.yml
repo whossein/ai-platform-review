@@ -140,6 +140,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           shopt -s nullglob
-          files=(release/*.{exe,dmg,zip,AppImage})
+          files=(release/*.{exe,dmg,zip,AppImage,blockmap} release/latest*.yml) # latest*.yml + blockmaps feed electron-updater
           gh release upload "$TAG" "${files[@]}" --clobber
           { echo "### ${{ runner.os }} → $TAG"; printf -- '- %s\n' "${files[@]#release/}"; } >> "$GITHUB_STEP_SUMMARY"

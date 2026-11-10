@@ -1,4 +1,5 @@
 const { app, BrowserWindow } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const { fork } = require("child_process");
 const http = require("http");
@@ -55,7 +56,14 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // ponytail: macOS builds are unsigned and Squirrel.Mac rejects them; drop this check once signing is added.
+  if (process.platform !== "darwin") {
+    // Rejects while a release has no installers attached yet; the next launch retries.
+    autoUpdater.checkForUpdatesAndNotify().catch(console.error);
+  }
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
