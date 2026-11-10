@@ -1,0 +1,3 @@
+# Same gate as CI's check job, minus build/e2e (turbo-cached, so repeat pushes are fast).
+# Skip once with: git push --no-verify
+npm run lint && npm test

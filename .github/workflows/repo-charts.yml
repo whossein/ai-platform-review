@@ -1,0 +1,50 @@
+# Self-hosted star history + downloads charts for the README (third-party star-history embeds lost
+# stargazer API access in 2026; GITHUB_TOKEN still has it). Output lives on the orphan `badges` branch
+# as a single force-pushed commit; downloads-history.json there is the only state, carried run to run.
+name: Repo charts
+
+on:
+  schedule:
+    - cron: "17 4 * * *" # daily, off the hour
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: repo-charts
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish charts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push to the badges branch
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false # no cache in a job that pushes (zizmor: cache-poisoning)
+      # The one piece of state that can't be recomputed; absent on the first run.
+      - name: Recover downloads history
+        run: |
+          mkdir -p badge-out
+          git fetch --quiet origin badges && git show FETCH_HEAD:downloads-history.json > badge-out/downloads-history.json || rm -f badge-out/downloads-history.json
+      - name: Build charts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: node scripts/repo-charts.mjs badge-out >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish to badges branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          tree=$(for f in badge-out/*; do printf '100644 blob %s\t%s\n' "$(git hash-object -w "$f")" "${f#badge-out/}"; done | git mktree)
+          if [ "$tree" = "$(git rev-parse -q --verify FETCH_HEAD^{tree} || true)" ]; then echo "unchanged"; exit 0; fi
+          git push --force origin "$(git commit-tree "$tree" -m 'chore: update repo charts [skip ci]'):refs/heads/badges"

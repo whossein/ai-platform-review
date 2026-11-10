@@ -2,6 +2,7 @@
  * Diff parser + resolver tests (Phase 7).
  */
 
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import type { ReviewInputSource } from "@ai-review/core";
 import { parseUnifiedDiff } from "./diff.js";
@@ -90,7 +91,7 @@ describe("LocalFolderRepository", () => {
   it("lists its own source files and matches `**/*.ts` including top-level files", async () => {
     // This package's own src/ is a convenient, always-present fixture.
     const repo = new LocalFolderRepository(
-      new URL(".", import.meta.url).pathname,
+      fileURLToPath(new URL(".", import.meta.url)),
     );
     const listed = await repo.listFiles(["**/*.ts"]);
     expect(listed.ok).toBe(true);
@@ -104,7 +105,7 @@ describe("LocalFolderRepository", () => {
 
   it("reads a file it lists and refuses path traversal", async () => {
     const repo = new LocalFolderRepository(
-      new URL(".", import.meta.url).pathname,
+      fileURLToPath(new URL(".", import.meta.url)),
     );
     const read = await repo.readFile("diff.ts");
     expect(read.ok).toBe(true);
