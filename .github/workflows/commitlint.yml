@@ -16,13 +16,15 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
-          node-version: lts/*
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
           HUSKY: 0
+      # Dependabot bodies break body-max-line-length; its PR title is still linted below.
       - name: Lint PR commits
+        if: github.actor != 'dependabot[bot]'
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
       # Squash merges use the PR title as the commit message, so it must be conventional too.
       - name: Lint PR title
