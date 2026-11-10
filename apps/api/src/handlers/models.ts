@@ -5,6 +5,7 @@
  * the list of available models.
  */
 
+import { hostMatches } from "@ai-review/llm";
 import { isTrustedEndpoint, stripLlmSecrets } from "./client-env.js";
 
 export interface ModelsRequest {
@@ -128,18 +129,12 @@ export async function modelsHandler(
       headers[customAuthHeaderName] = customAuthHeaderPrefix
         ? `${customAuthHeaderPrefix}${effectiveApiKey}`
         : effectiveApiKey;
-    } else if (provider === "anthropic" || effectiveBaseUrl.includes("anthropic.com")) {
+    } else if (provider === "anthropic" || hostMatches(effectiveBaseUrl, "anthropic.com")) {
       headers["x-api-key"] = effectiveApiKey;
       headers["anthropic-version"] = "2023-06-01";
-    } else if (
-      effectiveBaseUrl.includes("googleapis.com") ||
-      effectiveBaseUrl.includes("generativelanguage")
-    ) {
+    } else if (hostMatches(effectiveBaseUrl, "googleapis.com")) {
       headers["x-goog-api-key"] = effectiveApiKey;
-    } else if (
-      effectiveBaseUrl.includes("azure.com") ||
-      effectiveBaseUrl.includes("openai.azure.com")
-    ) {
+    } else if (hostMatches(effectiveBaseUrl, "azure.com")) {
       headers["api-key"] = effectiveApiKey;
     } else {
       headers["Authorization"] = `Bearer ${effectiveApiKey}`;

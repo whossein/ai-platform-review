@@ -21,6 +21,7 @@ import {
   type SourceTreeEntry,
   type BranchListing,
 } from "./source.js";
+import { trimSlashes, trimTrailingSlashes } from "@ai-review/shared";
 
 export interface GitLabSourceOptions {
   readonly baseUrl: string;
@@ -60,9 +61,9 @@ export class GitLabRepositorySource implements RepositorySource {
     private readonly http: HttpClient,
     options: GitLabSourceOptions,
   ) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(options.baseUrl);
     this.encodedProjectId = encodeURIComponent(
-      options.projectPath.replace(/^\/+|\/+$/g, ""),
+      trimSlashes(options.projectPath),
     );
     this.token = options.token;
     this.defaultBranch = options.defaultBranch;

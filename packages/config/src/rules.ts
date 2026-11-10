@@ -57,6 +57,19 @@ const DOC_FILE = /\.(?:md|mdx|markdown|txt|rst)$/i;
  * `#` only counts in languages where it starts a comment (not JS `#private`,
  * C# `#region`, PHP 8 `#[Attr]`) and `--` never in JS (`--i;`).
  */
+/**
+ * A `debugger` statement: alone on the line or after `;`, `{`, `}`, `)`, followed
+ * only by `;`, `}`, whitespace or a trailing comment. Two linear passes instead
+ * of one regex with stacked optional `\s*` (ReDoS on long runs of spaces).
+ */
+function isDebuggerStatement(line: string): boolean {
+  const m = /(?:^|[;{})])\s*debugger\b(.*)$/.exec(line);
+  if (!m) return false;
+  const rest = m[1]!;
+  const comment = rest.search(/\/[/*]/);
+  return /^[\s;}]*$/.test(comment === -1 ? rest : rest.slice(0, comment));
+}
+
 function isCommentLine(line: string, path = ""): boolean {
   if (DOC_FILE.test(path)) return false;
   const t = line.trimStart();
@@ -182,7 +195,7 @@ export const noDebuggerRule: Rule = {
         (line, path) =>
           // A statement: alone on the line (optional `;` / trailing comment) or after `;`, `{`, `}`, `)`.
           !isCommentLine(line, path) &&
-          /(?:^|[;{})])\s*debugger\s*;?\s*\}?\s*(?:\/\/.*|\/\*.*)?$/.test(line)
+          isDebuggerStatement(line)
             ? "debugger statement"
             : undefined,
         (file, line) => ({
@@ -464,7 +477,7 @@ export const commitConventionRule: Rule = {
     const findings: RuleFinding[] = [];
     for (const file of ctx.files) {
       if (file.path !== MR_METADATA_PATH) continue;
-      const title = /^Message:\s*(.*)$/m.exec(file.text)?.[1]?.trim();
+      const title = /^Message:(.*)$/m.exec(file.text)?.[1]?.trim();
       if (title && !conventional.test(title)) {
         findings.push({
           ruleKind: "governance",
@@ -492,7 +505,7 @@ export const branchNamingRule: Rule = {
     const findings: RuleFinding[] = [];
     for (const file of ctx.files) {
       if (file.path !== MR_METADATA_PATH) continue;
-      const branch = /^Source Branch:\s*(.*)$/m.exec(file.text)?.[1]?.trim();
+      const branch = /^Source Branch:(.*)$/m.exec(file.text)?.[1]?.trim();
       if (branch && !valid.test(branch)) {
         findings.push({
           ruleKind: "governance",
@@ -529,7 +542,7 @@ export const sqlInjectionRule: Rule = {
       /\b(select\s[^;]*\sfrom|insert\s+into|update\s+\w+\s+set|delete\s+from)\b/i;
     // template literal / Python f-string / C# `$"..."` interpolation, `.format(`, `% (`
     const interpolated =
-      /\$\{[^}]+\}|\bf["'][^"']*\{[^}]+\}|\$"[^"]*\{[^}]+\}|["']\s*\.format\s*\(|["']\s*%\s*[(\w]/;
+      /\$\{[^{}]+\}|\bf["'][^"']*\{[^{}]+\}|\$"[^"]*\{[^{}]+\}|["']\s*\.format\s*\(|["']\s*%\s*[(\w]/;
     const concatenated = /(['"`])\s*\+\s*[A-Za-z_$]|[A-Za-z_$)\]]\s*\+\s*(['"`])/;
     return {
       ok: true,

@@ -57,16 +57,33 @@ export function parseJsonc<T = unknown>(raw: string): T | undefined {
     return JSON.parse(raw) as T;
   } catch {
     try {
-      const stripped = raw
-        .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
-          g ? "" : m,
-        )
-        .replace(/,\s*([}\]])/g, "$1");
+      const stripped = stripJsonComments(raw).replace(/,\s*([}\]])/g, "$1");
       return JSON.parse(stripped) as T;
     } catch {
       return undefined;
     }
   }
+}
+
+/** Removes `//` and `/* *\/` comments outside strings. Single pass: no regex backtracking on hostile input. */
+function stripJsonComments(s: string): string {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]!;
+    if (c === '"') {
+      const start = i;
+      for (i++; i < s.length && s[i] !== '"'; i++) if (s[i] === "\\") i++;
+      out += s.slice(start, i + 1);
+    } else if (c === "/" && s[i + 1] === "/") {
+      while (i + 1 < s.length && s[i + 1] !== "\n") i++;
+    } else if (c === "/" && s[i + 1] === "*") {
+      const end = s.indexOf("*/", i + 2);
+      i = end === -1 ? s.length : end + 1;
+    } else {
+      out += c;
+    }
+  }
+  return out;
 }
 
 function resolveCandidateFile(
@@ -280,7 +297,7 @@ function resolveImportSpecifier(
           trimmed.length - suffix.length,
         );
         for (const targetPattern of targets) {
-          const replaced = targetPattern.replace("*", matchedMiddle);
+          const replaced = targetPattern.replaceAll("*", matchedMiddle);
           const hit = resolveCandidateFile(replaced, knownFiles);
           if (hit) return hit;
         }

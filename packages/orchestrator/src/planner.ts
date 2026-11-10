@@ -43,8 +43,10 @@ export interface ReviewPlan {
 export function changedFiles(diff: string): string[] {
   const files = new Set<string>();
   for (const line of diff.split("\n")) {
-    const git = /^diff --git a\/.+ b\/(.+)$/.exec(line);
-    if (git?.[1]) files.add(git[1]);
+    if (line.startsWith("diff --git a/")) {
+      const b = line.lastIndexOf(" b/");
+      if (b > 13 && b + 3 < line.length) files.add(line.slice(b + 3));
+    }
     const plus = /^\+\+\+ b\/(.+)$/.exec(line);
     if (plus?.[1] && plus[1] !== "/dev/null") files.add(plus[1]);
   }

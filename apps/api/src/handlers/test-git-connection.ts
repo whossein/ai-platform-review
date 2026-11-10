@@ -1,3 +1,4 @@
+import { trimTrailingSlashes } from "@ai-review/shared";
 /**
  * Test Git Connection handler — verifies a Git host token by fetching the
  * authenticated user from the GitLab / GitHub API.
@@ -17,7 +18,7 @@ export interface TestGitConnectionResponse {
 }
 
 function userEndpoint(type: "gitlab" | "github", baseUrl: string): string {
-  const base = baseUrl.replace(/\/+$/, "");
+  const base = trimTrailingSlashes(baseUrl);
   if (type === "gitlab") return `${base}/api/v4/user`;
   return base === "https://github.com"
     ? "https://api.github.com/user"

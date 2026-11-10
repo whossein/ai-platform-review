@@ -62,10 +62,10 @@ export function parseDiffChanges(diff: string): DiffFileChange[] {
   const lines = diff.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    const git = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
-    if (git) {
+    const b = line.startsWith("diff --git a/") ? line.lastIndexOf(" b/") : -1;
+    if (b > 13 && b + 3 < line.length) {
       flush();
-      cur = start(git[1]!, git[2]!);
+      cur = start(line.slice(13, b), line.slice(b + 3));
       continue;
     }
     if (cur && !cur.inHunk) {

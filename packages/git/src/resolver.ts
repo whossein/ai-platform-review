@@ -1,6 +1,7 @@
 import { parseChangeRequestUrl, baseUrlFromChangeRequestUrl } from "./url.js";
 import { GitLabProvider } from "./gitlab.js";
 import { FetchHttpClient } from "./http.js";
+import { trimTrailingSlashes } from "@ai-review/shared";
 
 /**
  * Pure function to parse unified diff text into simulated file representations
@@ -119,7 +120,7 @@ export async function resolveDiffInput(
     const token = env.GITHUB_TOKEN || env.GIT_TOKEN;
     const diffUrl = trimmed.endsWith(".diff")
       ? trimmed
-      : `${trimmed.replace(/\/+$/, "")}.diff`;
+      : `${trimTrailingSlashes(trimmed)}.diff`;
     const headers: Record<string, string> = {
       "User-Agent": "AI-Review-Platform",
       Accept: "text/plain, application/vnd.github.v3.diff",

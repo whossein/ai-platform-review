@@ -98,7 +98,10 @@ export class ScanStore {
   }
 
   private dir(projectId: string): string {
-    return path.join(this.baseDir, seg(projectId));
+    const dir = path.resolve(this.baseDir, seg(projectId));
+    // seg() lets "." and ".." through; never resolve to baseDir or outside it.
+    if (!dir.startsWith(this.baseDir + path.sep)) throw new Error("Invalid project id");
+    return dir;
   }
 
   private refFile(projectId: string, ref: string): string {

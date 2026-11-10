@@ -1,4 +1,5 @@
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import path from "path";
 import {
   SPECIALISTS,
@@ -149,6 +150,9 @@ async function startServer() {
   const indexDeps = { projectStore, security, indexStore, indexJobs };
   const scanDeps = { ...indexDeps, scanStore, scanJobs };
 
+  // ponytail: in-memory per-IP limit, generous enough for the UI's 2s polling.
+  // Behind a reverse proxy set `trust proxy`, or every client shares one bucket.
+  app.use(rateLimit({ windowMs: 60_000, limit: 600, standardHeaders: "draft-8", legacyHeaders: false }));
   app.use(express.json({ limit: "50mb" }));
 
   // Helper middleware for optional authentication (populates req.user if token valid)

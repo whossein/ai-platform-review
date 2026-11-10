@@ -14,6 +14,7 @@
  *  - Atomic file writes for crash safety.
  */
 
+import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { User, SafeUser, UserRole, UserStatus, IsoTimestamp } from "@ai-review/core";
@@ -103,7 +104,7 @@ export class UserStore {
     }
 
     const now = new Date().toISOString() as IsoTimestamp;
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const userId = `user_${Date.now()}_${randomBytes(4).toString("hex")}`;
     const passwordHash = await hashPassword(params.password);
 
     const user: User = {
@@ -224,7 +225,7 @@ export class UserStore {
     }
 
     const now = new Date().toISOString() as IsoTimestamp;
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const userId = `user_${Date.now()}_${randomBytes(4).toString("hex")}`;
     const passwordHash = await hashPassword(params.password);
 
     const user: User = {

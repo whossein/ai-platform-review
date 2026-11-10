@@ -18,6 +18,7 @@ import type {
   PlatformError,
 } from "@ai-review/core";
 import type { HttpClient, HttpRequest } from "./http.js";
+import { trimTrailingSlashes } from "@ai-review/shared";
 
 export interface GitHubOptions {
   /** Web origin, e.g. https://github.com or https://ghe.example.com */
@@ -61,7 +62,7 @@ export class GitHubProvider implements GitProvider {
     private readonly http: HttpClient,
     private readonly opts: GitHubOptions,
   ) {
-    const origin = opts.baseUrl.replace(/\/+$/, "");
+    const origin = trimTrailingSlashes(opts.baseUrl);
     this.api =
       origin === "https://github.com" || origin === "https://www.github.com"
         ? "https://api.github.com"

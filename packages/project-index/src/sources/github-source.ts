@@ -23,6 +23,7 @@ import {
   type SourceTreeEntry,
   type BranchListing,
 } from "./source.js";
+import { trimSlashes, trimTrailingSlashes } from "@ai-review/shared";
 
 export interface GitHubSourceOptions {
   /** Repository path in `owner/repo` format. */
@@ -69,7 +70,7 @@ export function resolveGitHubApiBaseUrl(
   explicitApiBaseUrl?: string | undefined,
 ): string {
   if (explicitApiBaseUrl?.trim()) {
-    return explicitApiBaseUrl.trim().replace(/\/+$/, "");
+    return trimTrailingSlashes(explicitApiBaseUrl.trim());
   }
   const host = (gitHost ?? "github.com").toLowerCase().trim();
   if (!host || host === "github.com" || host === "www.github.com") {
@@ -95,7 +96,7 @@ export class GitHubRepositorySource implements RepositorySource {
       options.gitHost,
       options.apiBaseUrl,
     );
-    this.repoPath = options.repositoryPath.replace(/^\/+|\/+$/g, "");
+    this.repoPath = trimSlashes(options.repositoryPath);
     this.token = options.token;
     this.defaultBranch = options.defaultBranch;
     this.maxRetryAfterMs = options.maxRetryAfterMs;

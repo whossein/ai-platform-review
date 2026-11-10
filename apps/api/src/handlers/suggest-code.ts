@@ -17,6 +17,7 @@ import {
 } from "@ai-review/git";
 import { buildEffectiveEnv } from "./client-env.js";
 import { providersFromEnv } from "@ai-review/llm";
+import { trimTrailingSlashes } from "@ai-review/shared";
 
 const CONTEXT_RADIUS = 15;
 const MAX_REPLACE_LINES = 60;
@@ -118,11 +119,9 @@ async function resolveGitLab(
   const merged = buildEffectiveEnv(process.env, env, { targetUrl: mrUrl });
   const token = merged["GITLAB_TOKEN"] || merged["GIT_TOKEN"];
   if (!token) throw new Error("GITLAB_TOKEN is not configured in settings or environment");
-  const baseUrl = (
-    merged["GITLAB_BASE_URL"] ||
-    baseUrlFromChangeRequestUrl(mrUrl) ||
-    "https://gitlab.com"
-  ).replace(/\/+$/, "");
+  const baseUrl = trimTrailingSlashes(
+    merged["GITLAB_BASE_URL"] || baseUrlFromChangeRequestUrl(mrUrl) || "https://gitlab.com",
+  );
 
   const provider = new GitLabProvider(new FetchHttpClient(), { baseUrl, token });
   const mr = await provider.getChangeRequest(ref);
