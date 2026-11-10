@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AsyncResult, Project, ProjectId } from "@ai-review/core";
 import type { HttpClient, HttpRequest, HttpResponse } from "@ai-review/git";
+import { parseJsonc } from "./graph.js";
 import {
   DEFAULT_MAX_FILE_SIZE_BYTES,
   GitHubRepositorySource,
@@ -796,5 +797,19 @@ describe("listBranches", () => {
     );
     await expect(source.listBranches!()).rejects.toThrow(/HTTP 401/);
     await expect(source.listBranches!()).rejects.not.toThrow(/glpat-SECRET123/);
+  });
+});
+
+describe("parseJsonc", () => {
+  it("strips comments outside strings and trailing commas", () => {
+    const text = '{\n  // c\n  "a": "x//y /* z */", /* b */ "b": [1, 2,],\n  "c": "say \\"hi\\"",\n}';
+    expect(parseJsonc(text)).toEqual({ a: "x//y /* z */", b: [1, 2], c: 'say "hi"' });
+  });
+
+  it("stays linear on hostile input", () => {
+    const t = Date.now();
+    expect(parseJsonc('"' + '\\"'.repeat(100_000))).toBeUndefined();
+    expect(parseJsonc("/*" + "a/*".repeat(100_000))).toBeUndefined();
+    expect(Date.now() - t).toBeLessThan(500);
   });
 });
