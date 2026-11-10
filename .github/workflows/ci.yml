@@ -33,3 +33,14 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # Boots dist/server.cjs against a fake GitLab + fake LLM; no secrets needed.
+      - run: npm run e2e
+
+  # Fails a PR that adds a dependency with a known high/critical vulnerability.
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high

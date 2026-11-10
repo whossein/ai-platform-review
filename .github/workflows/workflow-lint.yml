@@ -1,0 +1,19 @@
+name: Workflow lint
+
+on:
+  pull_request:
+    paths: [".github/workflows/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  # Static security audit of the workflows themselves (template injection, over-broad permissions, ...).
+  zizmor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10
+      - run: uvx zizmor --min-severity high .github/workflows
