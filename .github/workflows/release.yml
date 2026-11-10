@@ -4,6 +4,8 @@ name: Release
 #   1. action: release           → lint + test, then semantic-release tags vX.Y.Z and creates the GitHub Release.
 #   2. action: build-installers  → build desktop apps for a tag and attach them to its release
 #                                  (version blank = latest release).
+run-name: "${{ inputs.action == 'release' && 'Release' || format('Build installers {0}', inputs.version || '(latest)') }}"
+
 on:
   workflow_dispatch:
     inputs:
@@ -29,41 +31,53 @@ env:
 
 jobs:
   release:
+    name: Create release
     if: inputs.action == 'release'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write # tag, GitHub release
       issues: write # comment on released issues
       pull-requests: write # comment on released PRs
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # semantic-release needs full history + tags
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore Turbo cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .turbo/cache
           key: turbo-${{ runner.os }}-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-
-      - run: npm run lint
-      - run: npm test
-      - run: npx semantic-release
+      - name: Typecheck
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Release
+        run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   resolve:
+    name: Resolve version
     if: inputs.action == 'build-installers'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - id: tag
+      - name: Resolve tag
+        id: tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -72,14 +86,17 @@ jobs:
           if [ -n "$VERSION" ]; then TAG="v${VERSION#v}"; else TAG=$(gh release view --json tagName -q .tagName); fi
           gh release view "$TAG" >/dev/null # fail early if the release doesn't exist
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building installers for [$TAG](${{ github.server_url }}/${{ github.repository }}/releases/tag/$TAG)" >> "$GITHUB_STEP_SUMMARY"
 
   desktop:
+    name: Build ${{ matrix.os }}
     needs: resolve
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     permissions:
       contents: write # upload release assets
     env:
@@ -88,27 +105,33 @@ jobs:
       ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.TAG }}
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore Electron and Turbo cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .cache
             .turbo/cache
           key: desktop-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ env.TAG }}
           restore-keys: desktop-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1 # electron-builder fetches its own Electron
       # Version lives only in the tag (main is PR-protected, so no release commit); stamp it for electron-builder.
-      - run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+      - name: Stamp version
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
         shell: bash
-      - run: npm run build:desktop -- --publish never
+      - name: Build desktop app
+        run: npm run build:desktop -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false # ponytail: unsigned; add signing secrets when needed
       - name: Upload to GitHub release
@@ -117,4 +140,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           shopt -s nullglob
-          gh release upload "$TAG" release/*.{exe,dmg,zip,AppImage} --clobber
+          files=(release/*.{exe,dmg,zip,AppImage})
+          gh release upload "$TAG" "${files[@]}" --clobber
+          { echo "### ${{ runner.os }} → $TAG"; printf -- '- %s\n' "${files[@]#release/}"; } >> "$GITHUB_STEP_SUMMARY"

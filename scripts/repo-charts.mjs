@@ -69,7 +69,7 @@ async function main([outDir]) {
   writeFileSync(`${outDir}/downloads-history.json`, JSON.stringify(history, null, 1) + "\n");
   writeFileSync(`${outDir}/downloads.json`, JSON.stringify({ schemaVersion: 1, label: "downloads", message: String(total), color: "blue" }) + "\n");
   writeFileSync(`${outDir}/downloads.svg`, lineChart(`⬇ ${total} installer downloads`, history.map((p) => ({ t: Date.parse(p.date), v: p.count })), "#58a6ff"));
-  console.log(`stars=${stars.length} downloads=${total} history=${history.length}`);
+  console.log(`**Stars:** ${stars.length} · **Installer downloads:** ${total} · history points: ${history.length}`);
 }
 
 function selftest() {

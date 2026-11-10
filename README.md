@@ -4,7 +4,7 @@
 >
 > ریویوی کد با هوش مصنوعی برای MRهای گیت‌لب، PRهای گیت‌هاب و Diffها؛ روی سرور خودت، با هر سرویس هوش مصنوعی که دوست داری و با سقف هزینه‌ای که خودت تعیین می‌کنی.
 
-[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/whossein/ai-platform-review/badges/downloads.json)](https://github.com/whossein/ai-platform-review/releases)
+[![CI](https://github.com/whossein/ai-platform-review/actions/workflows/ci.yml/badge.svg)](https://github.com/whossein/ai-platform-review/actions/workflows/ci.yml) [![Security](https://github.com/whossein/ai-platform-review/actions/workflows/security.yml/badge.svg)](https://github.com/whossein/ai-platform-review/actions/workflows/security.yml) [![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/whossein/ai-platform-review/badges/downloads.json)](https://github.com/whossein/ai-platform-review/releases)
 
 **[English](#-english) · [فارسی](#-فارسی) · [Landing page](https://whossein.github.io/ai-platform-review/) · [Changelog](CHANGELOG.md)**
 
