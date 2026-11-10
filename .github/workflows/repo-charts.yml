@@ -1,0 +1,46 @@
+# Self-hosted star history + downloads charts for the README (third-party star-history embeds lost
+# stargazer API access in 2026; GITHUB_TOKEN still has it). Output lives on the orphan `badges` branch
+# as a single force-pushed commit; downloads-history.json there is the only state, carried run to run.
+name: Repo charts
+
+on:
+  schedule:
+    - cron: "17 4 * * *" # daily, off the hour
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: repo-charts
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push to the badges branch
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc # no npm cache: this job writes to the repo
+      # The one piece of state that can't be recomputed; absent on the first run.
+      - name: Recover downloads history
+        run: |
+          mkdir -p badge-out
+          git fetch --quiet origin badges && git show FETCH_HEAD:downloads-history.json > badge-out/downloads-history.json || rm -f badge-out/downloads-history.json
+      - name: Build charts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: node scripts/repo-charts.mjs badge-out
+      - name: Publish to badges branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          tree=$(for f in badge-out/*; do printf '100644 blob %s\t%s\n' "$(git hash-object -w "$f")" "${f#badge-out/}"; done | git mktree)
+          if [ "$tree" = "$(git rev-parse -q --verify FETCH_HEAD^{tree} || true)" ]; then echo "unchanged"; exit 0; fi
+          git push --force origin "$(git commit-tree "$tree" -m 'chore: update repo charts [skip ci]'):refs/heads/badges"
