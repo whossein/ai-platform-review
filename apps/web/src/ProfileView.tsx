@@ -23,7 +23,7 @@ import {
 } from "./api.js";
 import { useAuth } from "./AuthContext.js";
 
-export function ProfileView(): JSX.Element {
+export function ProfileView(): React.JSX.Element {
   const { user, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState<"profile" | "password" | "git" | "sessions">("profile");
 

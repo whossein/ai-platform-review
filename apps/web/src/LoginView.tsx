@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Lock, Mail, ArrowRight, AlertCircle } from "lucide-react";
 import { useAuth } from "./AuthContext.js";
 
-export function LoginView(): JSX.Element {
+export function LoginView(): React.JSX.Element {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

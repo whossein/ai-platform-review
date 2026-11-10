@@ -28,7 +28,7 @@ const SEV_COLOR: Record<ScanSeverity, string> = {
   info: "#8b949e",
 };
 
-export function ProjectScanTab({ projectId, userRole, repositoryUrl }: ProjectScanTabProps): JSX.Element {
+export function ProjectScanTab({ projectId, userRole, repositoryUrl }: ProjectScanTabProps): React.JSX.Element {
   const [config] = useAppConfig();
   const gitEnv = resolveGitEnv(config, repositoryUrl);
   const gitToken = gitEnv.GITLAB_TOKEN || gitEnv.GITHUB_TOKEN || undefined;

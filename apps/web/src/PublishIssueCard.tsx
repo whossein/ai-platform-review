@@ -74,7 +74,7 @@ function CodeBlock({
   lines: readonly string[];
   startLine: number;
   highlight?: (n: number) => "flag" | "del" | "add" | undefined;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <pre
       dir="ltr"
@@ -126,7 +126,7 @@ function CodeBlock({
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }): JSX.Element {
+function SectionLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div
       style={{
@@ -209,7 +209,7 @@ export function PublishIssueCard({
   projectId,
   onRulesUpdated,
   getEnv,
-}: PublishIssueCardProps): JSX.Element {
+}: PublishIssueCardProps): React.JSX.Element {
   const dir = language === "fa" ? "rtl" : "ltr";
   const [ai, setAi] = useState<AiCodeSuggestion | null>(null);
   const [aiCode, setAiCode] = useState("");

@@ -19,7 +19,7 @@ interface Props {
 }
 
 /** Reviewer's task-completion grade for an MR, plus the system's suggestion. */
-export function MergeRequestGrade({ mr, canGrade, onUpdated }: Props): JSX.Element {
+export function MergeRequestGrade({ mr, canGrade, onUpdated }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   const [score, setScore] = useState<string>("");
   const [note, setNote] = useState("");

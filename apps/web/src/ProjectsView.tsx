@@ -63,7 +63,7 @@ export function ProjectsView({
   onNavigateToReview,
   subTab,
   onSubTabChange,
-}: ProjectsViewProps): JSX.Element {
+}: ProjectsViewProps): React.JSX.Element {
   const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");

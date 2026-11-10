@@ -55,7 +55,7 @@ function Switch({
   disabled?: boolean;
   label: string;
   onChange: (next: boolean) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <label
       style={{
@@ -99,7 +99,7 @@ function AgentCard({
   readOnly: boolean;
   onToggle: (next: boolean) => void;
   onInstructions: (text: string) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <div style={{ ...panel, padding: "1rem 1.25rem", opacity: enabled ? 1 : 0.75 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -169,7 +169,7 @@ function RuleRow({
   enabled: boolean;
   readOnly: boolean;
   onToggle: (next: boolean) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <div
       style={{
@@ -208,7 +208,7 @@ function RuleRow({
   );
 }
 
-export function SkillsView(): JSX.Element {
+export function SkillsView(): React.JSX.Element {
   const [catalog, setCatalog] = useState<ReviewCatalog | null>(null);
   const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [loading, setLoading] = useState(true);

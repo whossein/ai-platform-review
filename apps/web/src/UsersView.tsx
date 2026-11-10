@@ -25,7 +25,7 @@ import {
 } from "./api.js";
 import { useAuth } from "./AuthContext.js";
 
-export function UsersView(): JSX.Element {
+export function UsersView(): React.JSX.Element {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<SafeUser[]>([]);
   const [loading, setLoading] = useState(true);

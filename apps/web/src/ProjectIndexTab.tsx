@@ -22,7 +22,7 @@ interface ProjectIndexTabProps {
 const POLL_MS = 2000;
 const CUSTOM_REF = "__custom__";
 
-export function ProjectIndexTab({ projectId, userRole, repositoryUrl }: ProjectIndexTabProps): JSX.Element {
+export function ProjectIndexTab({ projectId, userRole, repositoryUrl }: ProjectIndexTabProps): React.JSX.Element {
   const [config] = useAppConfig();
   const gitEnv = resolveGitEnv(config, repositoryUrl);
   const gitToken = gitEnv.GITLAB_TOKEN || gitEnv.GITHUB_TOKEN || undefined;
@@ -330,7 +330,7 @@ export function ProjectIndexTab({ projectId, userRole, repositoryUrl }: ProjectI
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }): JSX.Element {
+function Stat({ label, value }: { label: string; value: string | number }): React.JSX.Element {
   return (
     <div>
       <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>{label}</div>

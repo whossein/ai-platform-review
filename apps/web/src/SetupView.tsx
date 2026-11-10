@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { UserCheck, Lock, Mail, ArrowRight, AlertCircle, Sparkles } from "lucide-react";
 import { useAuth } from "./AuthContext.js";
 
-export function SetupView(): JSX.Element {
+export function SetupView(): React.JSX.Element {
   const { setupAdmin } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

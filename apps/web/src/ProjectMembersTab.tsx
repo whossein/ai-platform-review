@@ -26,7 +26,7 @@ interface ProjectMembersTabProps {
 export function ProjectMembersTab({
   projectId,
   userRole,
-}: ProjectMembersTabProps): JSX.Element {
+}: ProjectMembersTabProps): React.JSX.Element {
   const { user: currentUser } = useAuth();
   const [members, setMembers] = useState<ProjectMemberWithUser[]>([]);
   const [allUsers, setAllUsers] = useState<SafeUser[]>([]);
