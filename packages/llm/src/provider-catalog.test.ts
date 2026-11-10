@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import { providerFromEnv } from "./openai-provider.js";
-import { PROVIDER_CATALOG, resolveProviderPreset } from "./provider-catalog.js";
+import { PROVIDER_CATALOG, hostMatches, resolveProviderPreset } from "./provider-catalog.js";
 
 /** Reach the private baseUrl for assertions without widening the public type. */
 function baseUrlOf(p: unknown): string {
@@ -118,5 +118,16 @@ describe("providerFromEnv — custom base URL (third-party proxy)", () => {
       AI_REVIEW_LLM_MODEL: "ignored",
     });
     expect(p?.models()[0]?.id).toBe("gemini-1.5-pro");
+  });
+});
+
+describe("hostMatches", () => {
+  it("matches the domain and its subdomains only", () => {
+    expect(hostMatches("https://api.anthropic.com/v1", "anthropic.com")).toBe(true);
+    expect(hostMatches("https://anthropic.com", "anthropic.com")).toBe(true);
+    expect(hostMatches("https://evil.example/anthropic.com", "anthropic.com")).toBe(false);
+    expect(hostMatches("https://anthropic.com.evil.example", "anthropic.com")).toBe(false);
+    expect(hostMatches("https://notanthropic.com", "anthropic.com")).toBe(false);
+    expect(hostMatches("not a url", "anthropic.com")).toBe(false);
   });
 });

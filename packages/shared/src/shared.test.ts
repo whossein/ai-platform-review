@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { buildCacheKey, hashObject, sha256, stableStringify } from "./hash.js";
 import { InMemoryCache, CacheSet } from "./cache.js";
 import { ok, err, map, unwrapOr } from "./result.js";
+import { trimSlashes, trimTrailingSlashes } from "./text.js";
 
 describe("hashing", () => {
   it("sha256 is stable and order-independent for objects", () => {
@@ -141,5 +142,18 @@ describe("Result helpers", () => {
   it("unwrapOr returns fallback on error", () => {
     const e = err({ category: "io", code: "x", message: "m" } as const);
     expect(unwrapOr(e, 99)).toBe(99);
+  });
+});
+
+describe("slash trimming", () => {
+  it("trims leading/trailing slashes in linear time", () => {
+    expect(trimTrailingSlashes("https://x.io///")).toBe("https://x.io");
+    expect(trimTrailingSlashes("///")).toBe("");
+    expect(trimSlashes("//group/repo//")).toBe("group/repo");
+    expect(trimSlashes("a/b")).toBe("a/b");
+    const evil = "/".repeat(200_000) + "x";
+    const t = Date.now();
+    expect(trimTrailingSlashes(evil)).toBe(evil);
+    expect(Date.now() - t).toBeLessThan(100);
   });
 });

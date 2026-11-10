@@ -23,6 +23,7 @@ import type {
   PlatformError,
 } from "@ai-review/core";
 import type { HttpClient, HttpRequest } from "./http.js";
+import { trimTrailingSlashes } from "@ai-review/shared";
 
 export interface GitLabOptions {
   /** Base URL of the GitLab instance, e.g. https://gitlab.example.com */
@@ -74,7 +75,7 @@ export class GitLabProvider implements GitProvider {
     opts: GitLabOptions,
   ) {
     // Normalize: strip any trailing slash so path joins are predictable.
-    this.baseUrl = opts.baseUrl.replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(opts.baseUrl);
     this.token = opts.token;
   }
 

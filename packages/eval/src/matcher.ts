@@ -5,6 +5,7 @@ import type {
   MatchingResult,
   MatchedPair,
 } from "./types.js";
+import { trimSlashes } from "@ai-review/shared";
 
 export const MAX_EDGE_WEIGHT = 1_000_000;
 export const BASE_FEASIBILITY_SCORE = 500_000;
@@ -31,7 +32,7 @@ export function normalizeRepoPath(
     p = p.replace(/^(a|b)\//, "");
   }
 
-  p = p.replace(/^\.\//, "").replace(/^\/+/, "").replace(/\/+$/, "");
+  p = trimSlashes(p.replace(/^\.\//, ""));
 
   const parts = p.split("/").filter(Boolean);
   const stack: string[] = [];

@@ -10,6 +10,7 @@
  *  - Atomic persistent writes.
  */
 
+import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { AuditLogEntry, AuditAction, IsoTimestamp } from "@ai-review/core";
@@ -104,7 +105,7 @@ export class AuditStore {
     await this.ensureLoaded();
     const now = new Date().toISOString() as IsoTimestamp;
     const logEntry: AuditLogEntry = {
-      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: `audit_${Date.now()}_${randomBytes(4).toString("hex")}`,
       actorUserId: entry.actorUserId || null,
       actorName: entry.actorName,
       actorEmail: entry.actorEmail,

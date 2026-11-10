@@ -8,6 +8,7 @@
 
 import { resolveProviderPreset } from "@ai-review/llm";
 import { parseChangeRequestUrl } from "@ai-review/git";
+import { trimTrailingSlashes } from "@ai-review/shared";
 
 /** Orchestrator defaults, used as the budget ceiling when the server sets none. */
 const BUDGET_DEFAULTS = {
@@ -40,7 +41,7 @@ function parseBudget(raw: string | undefined, integer: boolean): number | undefi
 }
 
 function normUrl(url: string): string {
-  return url.trim().replace(/\/+$/, "").toLowerCase();
+  return trimTrailingSlashes(url.trim()).toLowerCase();
 }
 
 /**

@@ -28,8 +28,9 @@ import type {
   PlatformError,
   ProviderId,
 } from "@ai-review/core";
-import { resolveProviderPreset } from "./provider-catalog.js";
+import { hostMatches, resolveProviderPreset } from "./provider-catalog.js";
 import { rateLimitWaitMs } from "./rate-limit.js";
+import { trimTrailingSlashes } from "@ai-review/shared";
 
 /** One entry per model the caller wants to expose from this provider. */
 export interface OpenAICompatibleModel {
@@ -100,7 +101,7 @@ export function normalizeBaseUrl(input: string | undefined): string {
   }
 
   // 2. Remove trailing slashes
-  url = url.replace(/\/+$/, "");
+  url = trimTrailingSlashes(url);
 
   // 3. Remove accidental /chat/completions or /chat endpoint suffixes
   if (url.endsWith("/chat/completions")) {
@@ -110,7 +111,7 @@ export function normalizeBaseUrl(input: string | undefined): string {
   }
 
   // 4. Remove trailing slashes again
-  url = url.replace(/\/+$/, "");
+  url = trimTrailingSlashes(url);
 
   return url;
 }
@@ -198,23 +199,17 @@ export class OpenAICompatibleProvider implements LLMProvider {
         requestHeaders[this.customAuthHeaderName] = this.customAuthHeaderPrefix
           ? `${this.customAuthHeaderPrefix}${rawKey}`
           : rawKey;
-      } else if (this.baseUrl.includes("anthropic.com")) {
+      } else if (hostMatches(this.baseUrl, "anthropic.com")) {
         requestHeaders["x-api-key"] = rawKey;
         requestHeaders["anthropic-version"] = "2023-06-01";
-      } else if (
-        this.baseUrl.includes("googleapis.com") ||
-        this.baseUrl.includes("generativelanguage")
-      ) {
+      } else if (hostMatches(this.baseUrl, "googleapis.com")) {
         requestHeaders["x-goog-api-key"] = rawKey;
-      } else if (
-        this.baseUrl.includes("azure.com") ||
-        this.baseUrl.includes("openai.azure.com")
-      ) {
+      } else if (hostMatches(this.baseUrl, "azure.com")) {
         requestHeaders["api-key"] = rawKey;
       } else {
         // Standard RFC-6750 Authorization Bearer header (used by OpenAI, AvalAI, DeepSeek, etc.)
         requestHeaders["Authorization"] = `Bearer ${rawKey}`;
-        if (this.baseUrl.includes("openrouter.ai")) {
+        if (hostMatches(this.baseUrl, "openrouter.ai")) {
           requestHeaders["HTTP-Referer"] = "https://ai-review-platform.local";
           requestHeaders["X-Title"] = "AI Review Platform";
         }
@@ -224,8 +219,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     let targetEndpoint = `${this.baseUrl}/chat/completions`;
     if (
       rawKey &&
-      (this.baseUrl.includes("googleapis.com") ||
-        this.baseUrl.includes("generativelanguage")) &&
+      hostMatches(this.baseUrl, "googleapis.com") &&
       !targetEndpoint.includes("key=")
     ) {
       const separator = targetEndpoint.includes("?") ? "&" : "?";

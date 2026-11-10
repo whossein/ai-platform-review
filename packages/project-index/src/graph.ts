@@ -58,7 +58,7 @@ export function parseJsonc<T = unknown>(raw: string): T | undefined {
   } catch {
     try {
       const stripped = raw
-        .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
+        .replace(/\\"|"(?:\\.|[^"\\])*"|(\/\/.*|\/\*[\s\S]*?(?:\*\/|$))/g, (m, g) =>
           g ? "" : m,
         )
         .replace(/,\s*([}\]])/g, "$1");
@@ -280,7 +280,7 @@ function resolveImportSpecifier(
           trimmed.length - suffix.length,
         );
         for (const targetPattern of targets) {
-          const replaced = targetPattern.replace("*", matchedMiddle);
+          const replaced = targetPattern.replaceAll("*", matchedMiddle);
           const hit = resolveCandidateFile(replaced, knownFiles);
           if (hit) return hit;
         }

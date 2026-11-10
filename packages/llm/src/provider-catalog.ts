@@ -206,3 +206,14 @@ export function resolveProviderPreset(
   if (!value) return undefined;
   return BY_KEY.get(value.trim().toLowerCase());
 }
+
+/** True if `url`'s hostname is `domain` or a subdomain of it (never a substring match). */
+export function hostMatches(url: string, ...domains: string[]): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return domains.some((d) => host === d || host.endsWith(`.${d}`));
+}

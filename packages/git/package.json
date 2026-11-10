@@ -16,7 +16,8 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@ai-review/core": "*"
+    "@ai-review/core": "*",
+    "@ai-review/shared": "*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

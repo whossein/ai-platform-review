@@ -2432,7 +2432,9 @@ export function ReviewView({
                   cursor: "pointer",
                 });
                 const mr = result.mergeRequest || associatedMr;
-                const mrUrl = mr?.url || (inputMode === "pr" ? prUrl.trim() : "");
+                const rawMrUrl = mr?.url || (inputMode === "pr" ? prUrl.trim() : "");
+                // Only http(s): a typed "javascript:..." URL must never become a clickable href.
+                const mrUrl = /^https?:\/\//i.test(rawMrUrl) ? rawMrUrl : "";
                 const sevs = ["critical", "high", "medium", "low", "info"] as const;
                 const sevCount = (list: typeof all, sev: string): number =>
                   list.filter((i) => i.severity === sev).length;

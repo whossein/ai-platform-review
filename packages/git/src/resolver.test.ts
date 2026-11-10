@@ -79,7 +79,7 @@ describe("resolveDiffInput", () => {
           text: async () => mockDiff,
         };
       }
-      if (urlStr.includes("api.github.com")) {
+      if (new URL(urlStr).hostname === "api.github.com") {
         return {
           ok: true,
           status: 200,

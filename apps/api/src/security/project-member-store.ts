@@ -10,6 +10,7 @@
  *  - Global ADMIN privilege evaluation: system administrators inherit full access across all projects.
  */
 
+import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type {
@@ -83,7 +84,7 @@ export class ProjectMemberStore {
     }
 
     const now = new Date().toISOString() as IsoTimestamp;
-    const memberId = `pm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const memberId = `pm_${Date.now()}_${randomBytes(4).toString("hex")}`;
 
     const member: ProjectMember = {
       id: memberId,

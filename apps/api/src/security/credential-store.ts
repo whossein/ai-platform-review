@@ -10,6 +10,7 @@
  *  - Decryption is strictly scoped to internal Git operations.
  */
 
+import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type {
@@ -86,7 +87,7 @@ export class CredentialStore {
     const key = this.makeKey(userId, provider);
 
     const record: GitCredentialRecord = {
-      id: `cred_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: `cred_${Date.now()}_${randomBytes(4).toString("hex")}`,
       userId,
       provider,
       encryptedToken: encrypted,

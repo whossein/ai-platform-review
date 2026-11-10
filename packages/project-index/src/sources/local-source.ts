@@ -92,7 +92,9 @@ export class LocalRepositorySource implements RepositorySource {
           : refPath;
 
         try {
-          const refFile = path.join(gitDir, targetRefPath);
+          const refFile = path.resolve(gitDir, targetRefPath);
+          // A ref like "../../etc/passwd" must not read outside .git/.
+          if (!refFile.startsWith(path.resolve(gitDir) + path.sep)) return undefined;
           const sha = (await fs.readFile(refFile, "utf8")).trim();
           if (/^[0-9a-f]{40}$/i.test(sha)) {
             return {

@@ -11,6 +11,7 @@
  *  - Session listing never exposes secret session tokens to the client.
  */
 
+import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { AuthSession, SafeSession, IsoTimestamp } from "@ai-review/core";
@@ -67,7 +68,7 @@ export class SessionStore {
   ): Promise<AuthSession> {
     await this.ensureLoaded();
     const token = generateSessionToken();
-    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const sessionId = `sess_${Date.now()}_${randomBytes(4).toString("hex")}`;
     const now = Date.now();
     const expiresAt = new Date(now + (meta?.ttlMs || DEFAULT_SESSION_TTL_MS)).toISOString() as IsoTimestamp;
     const nowIso = new Date(now).toISOString() as IsoTimestamp;

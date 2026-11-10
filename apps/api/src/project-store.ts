@@ -32,6 +32,7 @@ import {
   extractMergeRequestNumber,
 } from "@ai-review/git";
 import { suggestGrade } from "./grading.js";
+import { trimSlashes } from "@ai-review/shared";
 
 export interface FeedbackRecord {
   readonly id: string;
@@ -82,14 +83,19 @@ interface StorageData {
   gradeScale?: number;
 }
 
+/** Null-prototype map: keys from URLs (e.g. a `__proto__` project id) can never reach Object.prototype. */
+function dict<T>(from?: Record<string, T>): Record<string, T> {
+  return Object.assign(Object.create(null) as Record<string, T>, from);
+}
+
 export class ProjectStore {
   private readonly filePath: string;
   private readonly dirPath: string;
   private data: StorageData = {
-    projects: {},
-    identityIndex: {},
-    mergeRequests: {},
-    reviews: {},
+    projects: dict(),
+    identityIndex: dict(),
+    mergeRequests: dict(),
+    reviews: dict(),
     gradeScale: 10,
   };
   private loaded = false;
@@ -107,12 +113,12 @@ export class ProjectStore {
       const raw = await fs.readFile(this.filePath, "utf-8");
       const parsed = JSON.parse(raw);
       this.data = {
-        projects: parsed.projects || {},
-        identityIndex: parsed.identityIndex || {},
-        mergeRequests: parsed.mergeRequests || {},
-        reviews: parsed.reviews || {},
-        feedback: parsed.feedback || {},
-        developers: parsed.developers || {},
+        projects: dict(parsed.projects),
+        identityIndex: dict(parsed.identityIndex),
+        mergeRequests: dict(parsed.mergeRequests),
+        reviews: dict(parsed.reviews),
+        feedback: dict(parsed.feedback),
+        developers: dict(parsed.developers),
       };
       if (parsed.gradeScale !== 10) {
         // One-time migration of MR grades from the old 0-100 scale to 0-10.
@@ -136,10 +142,10 @@ export class ProjectStore {
     } catch {
       // File not found or empty, initialize clean store
       this.data = {
-        projects: {},
-        identityIndex: {},
-        mergeRequests: {},
-        reviews: {},
+        projects: dict(),
+        identityIndex: dict(),
+        mergeRequests: dict(),
+        reviews: dict(),
       };
     }
     this.loaded = true;
@@ -249,7 +255,7 @@ export class ProjectStore {
     repositoryPath: string,
   ): Promise<Project | undefined> {
     await this.ensureLoaded();
-    const key = `${gitHost.toLowerCase()}/${repositoryPath.toLowerCase().replace(/^\/+|\/+$/g, "")}`;
+    const key = `${gitHost.toLowerCase()}/${trimSlashes(repositoryPath.toLowerCase())}`;
     const id = this.data.identityIndex[key];
     if (!id) return undefined;
     return this.data.projects[id];
@@ -428,7 +434,7 @@ export class ProjectStore {
       timestamp: Date.now(),
       ruleAdded: Boolean(cleanRule) || Boolean(suppression),
     };
-    const list = (this.data.feedback ??= {})[projectId] ?? [];
+    const list = (this.data.feedback ??= dict())[projectId] ?? [];
     list.unshift(record);
     if (list.length > MAX_FEEDBACK) list.length = MAX_FEEDBACK;
     this.data.feedback[projectId] = list;
@@ -747,7 +753,7 @@ export class ProjectStore {
     mrs[idx] = updated;
 
     if (meta.author) {
-      const devs = (this.data.developers ??= {});
+      const devs = (this.data.developers ??= dict());
       const id = `${project.gitHost}/${meta.author.username}`.toLowerCase();
       const existing = devs[id];
       devs[id] = {

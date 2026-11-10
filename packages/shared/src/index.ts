@@ -31,3 +31,4 @@ export {
   type InstructionSection,
   type InstructionTopic,
 } from "./instructions.js";
+export { trimSlashes, trimTrailingSlashes } from "./text.js";

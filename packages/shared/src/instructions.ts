@@ -82,7 +82,7 @@ const AGENT_TOPICS: Readonly<Record<string, readonly InstructionTopic[]>> = {
 };
 
 const KNOWN_TOPICS = new Set<string>(TOPIC_PATTERNS.map((p) => p.topic));
-const HEADING = /^#{1,4}\s+(.+?)\s*$/;
+const HEADING = /^#{1,4}\s+(\S.*)$/;
 const LEARNED_HEADING = /^learned from reviewer feedback:?\s*$/i;
 
 export function topicsOf(heading: string): InstructionTopic[] {

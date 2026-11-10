@@ -7,6 +7,7 @@
  */
 
 import type { ChangeRequestRef, ProjectRepositoryIdentity } from "@ai-review/core";
+import { trimTrailingSlashes } from "@ai-review/shared";
 
 /**
  * Parses a GitLab MR URL into a `ChangeRequestRef`.
@@ -176,7 +177,7 @@ export function extractRepositoryIdentity(
   }
 
   // Strip trailing slashes
-  cleanPath = cleanPath.replace(/\/+$/, "");
+  cleanPath = trimTrailingSlashes(cleanPath);
 
   // Strip .git extension
   if (cleanPath.toLowerCase().endsWith(".git")) {

@@ -31,6 +31,7 @@ export { CachingLLMClient, llmRequestKey } from "./cache.js";
 export {
   PROVIDER_CATALOG,
   resolveProviderPreset,
+  hostMatches,
   type ProviderKey,
   type ProviderPreset,
 } from "./provider-catalog.js";
