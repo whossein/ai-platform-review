@@ -58,7 +58,8 @@ export function parseJsonc<T = unknown>(raw: string): T | undefined {
   } catch {
     try {
       const stripped = raw
-        .replace(/\\"|"(?:\\.|[^"\\])*"|(\/\/.*|\/\*[\s\S]*?(?:\*\/|$))/g, (m, g) =>
+        // Unterminated strings/comments run to end of input (linear; JSON.parse rejects them).
+        .replace(/\\"|"(?:\\.|[^"\\])*(?:"|$)|(\/\/.*|\/\*[\s\S]*?(?:\*\/|$))/g, (m, g) =>
           g ? "" : m,
         )
         .replace(/,\s*([}\]])/g, "$1");
