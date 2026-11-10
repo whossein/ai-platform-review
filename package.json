@@ -39,7 +39,7 @@
     "@ai-review/project-index": "*",
     "@ai-review/shared": "*",
     "@ai-review/workflow-engine": "*",
-    "express": "^4.21.2",
+    "express": "^4.22.3",
     "lucide-react": "^1.31.0",
     "turbo": "^2.11.10"
   },
