@@ -4,6 +4,8 @@
  * review context describe files the (older) index does not know about.
  */
 
+import ts from "typescript";
+
 export interface DiffFileChange {
   readonly path: string;
   readonly oldPath?: string | undefined;
@@ -113,15 +115,8 @@ export function isScriptFile(path: string): boolean {
 
 /** Module specifiers referenced by import/export-from/require/dynamic import in the given source lines. */
 export function extractImportSpecifiers(lines: readonly string[]): string[] {
-  const text = lines.join("\n");
-  const found = new Set<string>();
-  const patterns = [
-    /\b(?:import|export)\s+(?:type\s+)?(?:[^'"`;]*?\s+from\s+)?['"]([^'"\n]+)['"]/g,
-    /\brequire\(\s*['"]([^'"\n]+)['"]\s*\)/g,
-    /\bimport\(\s*['"]([^'"\n]+)['"]\s*\)/g,
-  ];
-  for (const re of patterns) {
-    for (const m of text.matchAll(re)) found.add(m[1]!);
-  }
-  return [...found];
+  // TypeScript's own scanner: linear (no regex backtracking) and handles
+  // import / export-from / require / dynamic import, skipping comments and strings.
+  const { importedFiles } = ts.preProcessFile(lines.join("\n"), true, true);
+  return [...new Set(importedFiles.map((f) => f.fileName))];
 }
