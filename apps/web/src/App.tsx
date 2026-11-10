@@ -30,7 +30,7 @@ import { SetupView } from "./SetupView.js";
 import { useAuth } from "./AuthContext.js";
 import { useAppConfig } from "./Settings.js";
 
-export function App(): JSX.Element {
+export function App(): React.JSX.Element {
   const { user, isLoading, isFirstRun, logout } = useAuth();
   const initialRoute = parseRoute(window.location.hash);
   const [activeTab, setActiveTab] = useState(initialRoute.tab);

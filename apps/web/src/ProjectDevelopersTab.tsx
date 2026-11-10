@@ -26,7 +26,7 @@ const scoreColor = (n: number): string =>
   n >= 8 ? "var(--low)" : n >= 6 ? "var(--medium)" : "var(--critical)";
 
 /** Developers (MR authors) of a project with their MR counts and grades. */
-export function ProjectDevelopersTab({ mergeRequests, onNavigateToReview }: Props): JSX.Element {
+export function ProjectDevelopersTab({ mergeRequests, onNavigateToReview }: Props): React.JSX.Element {
   const [open, setOpen] = useState<string | null>(null);
 
   const { rows, unknownCount } = useMemo(() => {
@@ -176,7 +176,7 @@ export function ProjectDevelopersTab({ mergeRequests, onNavigateToReview }: Prop
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string | number; color?: string | undefined }): JSX.Element {
+function Stat({ label, value, color }: { label: string; value: string | number; color?: string | undefined }): React.JSX.Element {
   return (
     <div style={{ textAlign: "center", minWidth: "4.5rem" }}>
       <div style={{ fontWeight: 700, color: color ?? "var(--text)" }}>{value}</div>

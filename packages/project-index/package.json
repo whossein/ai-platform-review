@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --dir src",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
@@ -24,6 +24,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
-    "vitest": "^2.0.0"
+    "vitest": "^5.1.0"
   }
 }

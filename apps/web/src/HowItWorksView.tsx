@@ -14,7 +14,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-export function HowItWorksView(): JSX.Element {
+export function HowItWorksView(): React.JSX.Element {
   const [activeStep, setActiveStep] = useState<number>(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [lang, setLang] = useState<"en" | "fa">("en");

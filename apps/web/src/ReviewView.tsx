@@ -48,7 +48,7 @@ const SEVERITY_ORDER: Record<string, number> = {
   info: 4,
 };
 
-function IssueCard({ issue }: { issue: ReviewIssue }): JSX.Element {
+function IssueCard({ issue }: { issue: ReviewIssue }): React.JSX.Element {
   return (
     <li
       className={`issue sev-${issue.severity}`}
@@ -88,7 +88,7 @@ export function ReviewView({
   initialPrUrl,
   initialMode,
   onNavigateToProjects,
-}: ReviewViewProps = {}): JSX.Element {
+}: ReviewViewProps = {}): React.JSX.Element {
   const [inputMode, setInputMode] = useState<InputMode>(
     () => initialMode || (localStorage.getItem("rv_inputMode") as InputMode) || "diff",
   );
@@ -2442,7 +2442,7 @@ export function ReviewView({
                   count > 0
                     ? Math.round((selected.reduce((a, i) => a + i.confidence, 0) / count) * 100)
                     : 0;
-                const stat = (label: string, value: React.ReactNode): JSX.Element => (
+                const stat = (label: string, value: React.ReactNode): React.JSX.Element => (
                   <div style={{ minWidth: 90 }}>
                     <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text)" }}>{value}</div>
                     <div style={{ fontSize: "0.72rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>

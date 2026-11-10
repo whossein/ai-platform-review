@@ -217,7 +217,7 @@ export class ListFilesTool implements Tool {
         if (entry.isDirectory()) {
           await walk(full);
         } else if (entry.isFile()) {
-          files.push(path.relative(this.root, full));
+          files.push(path.relative(this.root, full).split(path.sep).join("/"));
           if (files.length >= maxEntries) truncated = true;
         }
       }
@@ -346,7 +346,7 @@ export class SearchFilesTool implements Tool {
             for (let i = 0; i < lines.length; i++) {
               if (regex.test(lines[i]!)) {
                 matches.push({
-                  path: path.relative(this.root, full),
+                  path: path.relative(this.root, full).split(path.sep).join("/"),
                   line: i + 1,
                   text: lines[i]!.trim().slice(0, 200),
                 });

@@ -14,7 +14,7 @@ import {
 import type { AuditLogEntry, AuditAction } from "@ai-review/core";
 import { fetchAuditLogs } from "./api.js";
 
-export function AuditLogsView(): JSX.Element {
+export function AuditLogsView(): React.JSX.Element {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);

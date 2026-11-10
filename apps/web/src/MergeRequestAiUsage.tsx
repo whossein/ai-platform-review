@@ -15,7 +15,7 @@ const LEVEL_COLOR = { low: "var(--low)", medium: "var(--medium)", high: "var(--h
  * Estimated chance the MR was written with AI (rules + AI judge). Runs only
  * when the reviewer clicks the button; independent of the review run.
  */
-export function MergeRequestAiUsage({ mr, canEstimate, getEnv, onUpdated }: Props): JSX.Element | null {
+export function MergeRequestAiUsage({ mr, canEstimate, getEnv, onUpdated }: Props): React.JSX.Element | null {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const usage = mr.aiUsage;
