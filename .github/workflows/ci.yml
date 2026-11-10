@@ -24,6 +24,12 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+      # Turbo's local cache: unchanged packages skip typecheck/test/build.
+      - uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
       - run: npm run lint
       - run: npm test
       - run: npm run build

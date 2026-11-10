@@ -1,24 +1,40 @@
 name: Release
 
-# Manual: Actions > Release > Run workflow (on main). semantic-release skips other branches.
+# Manual only: Actions > Release > Run workflow (on main).
+#   1. action: release           → lint + test, then semantic-release tags vX.Y.Z and creates the GitHub Release.
+#   2. action: build-installers  → build desktop apps for a tag and attach them to its release
+#                                  (version blank = latest release).
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: What to run
+        type: choice
+        options: [release, build-installers]
+        default: release
+      version:
+        description: Version for build-installers, e.g. 0.4.0 (blank = latest release)
+        type: string
+        required: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
-  HUSKY: 0 # no git hooks in CI; semantic-release's own release commit must not be linted
+  HUSKY: 0 # no git hooks in CI
 
 jobs:
   release:
+    if: inputs.action == 'release'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # tag, GitHub release, version commit
+      contents: write # tag, GitHub release
       issues: write # comment on released issues
       pull-requests: write # comment on released PRs
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -30,19 +46,35 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+      - uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
       - run: npm run lint
       - run: npm test
       - run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Empty when semantic-release found nothing to release.
-      - id: tag
-        run: echo "tag=$(git tag --points-at HEAD)" >> "$GITHUB_OUTPUT"
 
-  # Runs in the same workflow because releases/tags created with GITHUB_TOKEN don't trigger other workflows.
+  resolve:
+    if: inputs.action == 'build-installers'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then TAG="v${VERSION#v}"; else TAG=$(gh release view --json tagName -q .tagName); fi
+          gh release view "$TAG" >/dev/null # fail early if the release doesn't exist
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
   desktop:
-    needs: release
-    if: needs.release.outputs.tag != ''
+    needs: resolve
     strategy:
       fail-fast: false
       matrix:
@@ -50,22 +82,32 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write # upload release assets
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      # Keep Electron + electron-builder downloads inside the workspace so one cache step covers every OS.
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release.outputs.tag }}
+          ref: ${{ env.TAG }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
+      - uses: actions/cache@v6
+        with:
+          path: |
+            .cache
+            .turbo/cache
+          key: desktop-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ env.TAG }}
+          restore-keys: desktop-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1 # electron-builder fetches its own Electron
       # Version lives only in the tag (main is PR-protected, so no release commit); stamp it for electron-builder.
       - run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
         shell: bash
-        env:
-          TAG: ${{ needs.release.outputs.tag }}
       - run: npm run build:desktop -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false # ponytail: unsigned; add signing secrets when needed
@@ -73,7 +115,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release.outputs.tag }}
         run: |
           shopt -s nullglob
           gh release upload "$TAG" release/*.{exe,dmg,zip,AppImage} --clobber
