@@ -21,6 +21,7 @@ import {
   DollarSign,
   X,
   Power,
+  RefreshCw,
 } from "lucide-react";
 import { routingNotices } from "./provider-routing.js";
 import { ModelPicker } from "./ModelPicker.js";
@@ -122,6 +123,97 @@ const PRESET_DEFAULTS: Record<
 interface TestState {
   loading: boolean;
   result?: TestProviderResult;
+}
+
+type UpdateState =
+  | { status: "idle" | "checking" | "latest" | "error" }
+  | { status: "ready"; version: string };
+
+function UpdatesCard({ hasUnsavedChanges }: { hasUnsavedChanges: boolean }) {
+  const [state, setState] = useState<UpdateState>({ status: "idle" });
+  const updater = window.desktopUpdater;
+  if (!updater) return null;
+
+  const check = async () => {
+    setState({ status: "checking" });
+    try {
+      const version = await updater.check();
+      setState(version ? { status: "ready", version } : { status: "latest" });
+    } catch {
+      setState({ status: "error" });
+    }
+  };
+
+  const message = {
+    idle: "",
+    checking: "Checking and downloading any new version...",
+    latest: "You're on the latest version.",
+    error: "Couldn't check for updates. Try again later.",
+    ready:
+      state.status === "ready"
+        ? `Version ${state.version} is ready to install.${hasUnsavedChanges ? " Save or discard your changes first." : ""}`
+        : "",
+  }[state.status];
+
+  return (
+    <div
+      className="settings-card"
+      style={{
+        background: "var(--panel)",
+        padding: "1.5rem",
+        borderRadius: "12px",
+        border: "1px solid var(--border)",
+        marginBottom: "1.5rem",
+      }}
+    >
+      <h2 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem", color: "var(--text)" }}>
+        App Updates
+      </h2>
+      <p style={{ fontSize: "0.85rem", color: "var(--muted)", marginBottom: "1rem" }}>
+        Current version: v{__APP_VERSION__}. New versions also download
+        automatically at launch and install when you quit.
+      </p>
+      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={check}
+          disabled={state.status === "checking"}
+          className="secondary-button"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            padding: "0.5rem 0.9rem",
+            fontSize: "0.85rem",
+          }}
+        >
+          <RefreshCw size={15} />
+          {state.status === "checking" ? "Checking..." : "Check for Updates"}
+        </button>
+        {state.status === "ready" && (
+          // Unsaved changes make beforeunload cancel the quit after the installer has started.
+          <button
+            type="button"
+            onClick={() => updater.install().catch(() => setState({ status: "error" }))}
+            disabled={hasUnsavedChanges}
+            style={{ padding: "0.5rem 0.9rem", fontSize: "0.85rem" }}
+          >
+            Restart and Install
+          </button>
+        )}
+      </div>
+      <div
+        role="status"
+        style={{
+          marginTop: message ? "0.75rem" : 0,
+          fontSize: "0.85rem",
+          color: state.status === "error" ? "var(--critical)" : "var(--muted)",
+        }}
+      >
+        {message}
+      </div>
+    </div>
+  );
 }
 
 export function SettingsView() {
@@ -2010,6 +2102,8 @@ export function SettingsView() {
           </div>
         )}
       </div>
+
+      <UpdatesCard hasUnsavedChanges={hasUnsavedChanges} />
 
       {/* Sticky Floating Bar for Unsaved Changes */}
       {hasUnsavedChanges && (
