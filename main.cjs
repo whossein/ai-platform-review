@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
 const { fork } = require("child_process");
@@ -8,6 +8,15 @@ let mainWindow;
 let serverProcess;
 
 const DEFAULT_PORT = process.env.PORT || "4000";
+// ponytail: macOS builds are unsigned and Squirrel.Mac rejects them; drop the platform check once signing is added.
+const canAutoUpdate = app.isPackaged && process.platform !== "darwin";
+
+// The preload also runs in any page this window navigates to, so only our own UI may drive the updater.
+function assertAppPage(event) {
+  if (!event.senderFrame?.url.startsWith(`http://localhost:${DEFAULT_PORT}/`)) {
+    throw new Error("Forbidden");
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -16,6 +25,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: canAutoUpdate ? path.join(__dirname, "preload.cjs") : undefined,
     },
   });
 
@@ -58,8 +68,19 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-  // ponytail: macOS builds are unsigned and Squirrel.Mac rejects them; drop this check once signing is added.
-  if (process.platform !== "darwin") {
+  if (canAutoUpdate) {
+    // Resolves with the downloaded version, or null when already up to date.
+    ipcMain.handle("update:check", async (event) => {
+      assertAppPage(event);
+      const result = await autoUpdater.checkForUpdates();
+      if (!result?.isUpdateAvailable) return null;
+      await result.downloadPromise;
+      return result.updateInfo.version;
+    });
+    ipcMain.handle("update:install", (event) => {
+      assertAppPage(event);
+      autoUpdater.quitAndInstall(true, true); // silent, relaunch afterwards
+    });
     // Rejects while a release has no installers attached yet; the next launch retries.
     autoUpdater.checkForUpdatesAndNotify().catch(console.error);
   }
