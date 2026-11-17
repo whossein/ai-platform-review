@@ -40,7 +40,7 @@
     "@ai-review/shared": "*",
     "@ai-review/workflow-engine": "*",
     "electron-updater": "^6.8.11",
-    "express": "^4.22.3",
+    "express": "^5.3.0",
     "express-rate-limit": "^8.7.4",
     "lucide-react": "^1.31.0",
     "turbo": "^2.11.10"
@@ -48,7 +48,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
     "concurrently": "^10.0.7",
     "electron": "^45.2.3",
