@@ -21,7 +21,7 @@
     "@ai-review/git": "*",
     "@ai-review/repository": "*",
     "@ai-review/shared": "*",
-    "typescript": "^5.5.0"
+    "typescript": "^7.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
